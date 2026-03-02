@@ -280,6 +280,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const resultType = result.type ?? "final";
 
     if (resultType === "partial") {
+      // 关闭实时预览时忽略 partial 结果
+      if (!this.settings.aggregation.realtimePreview) return;
+
       const now = new Date();
       this.lastPartialText = text;
       this.lastPartialLanguage = normalizedLanguage;

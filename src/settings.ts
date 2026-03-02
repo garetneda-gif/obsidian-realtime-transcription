@@ -256,8 +256,20 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           }),
       );
 
-    // ── VAD 设置 ──
+    // ── 高级设置 ──
     containerEl.createEl("h2", { text: "高级设置" });
+
+    new Setting(containerEl)
+      .setName("实时预览")
+      .setDesc("开启后边说边显示文字（但可能出现重复）；关闭后等说完一句再显示（精度更高）")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.aggregation.realtimePreview)
+          .onChange(async (value) => {
+            this.plugin.settings.aggregation.realtimePreview = value;
+            await this.plugin.saveSettings();
+          }),
+      );
 
     new Setting(containerEl)
       .setName("VAD 静音阈值")

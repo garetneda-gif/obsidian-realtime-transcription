@@ -21,6 +21,7 @@ export interface VadSettings {
 export interface AggregationSettings {
   flushWindowSec: number;
   maxChars: number;
+  realtimePreview: boolean;
 }
 
 export interface PluginSettings {
@@ -61,6 +62,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   aggregation: {
     flushWindowSec: 4,
     maxChars: 320,
+    realtimePreview: true,
   },
 };
 
