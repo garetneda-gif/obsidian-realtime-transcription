@@ -101,9 +101,11 @@ class TranscriptionServer:
         realtime_buffer = np.array([], dtype=np.float32)
         last_partial_text = ""
         last_partial_at = 0.0
-        partial_interval_sec = 0.9
-        partial_min_samples = int(self.sample_rate * 0.8)
-        partial_max_samples = int(self.sample_rate * 8.0)
+        partial_interval_sec = 1.5
+        partial_min_samples = int(self.sample_rate * 1.5)
+        partial_max_samples = int(self.sample_rate * 10.0)
+        # 静音能量阈值：低于此值认为无语音，跳过解码
+        energy_threshold = 0.005
 
         print(f"客户端连接: {websocket.remote_address}")
         try:
@@ -123,24 +125,31 @@ class TranscriptionServer:
                         len(realtime_buffer) >= partial_min_samples
                         and (now - last_partial_at) >= partial_interval_sec
                     ):
-                        partial_raw = self._decode_text(realtime_buffer)
-                        if partial_raw:
-                            partial_lang = self._parse_language(partial_raw)
-                            partial_text = self._clean_text(partial_raw)
-                            if partial_lang == "zh":
-                                partial_lang = self._guess_language_from_text(partial_text)
-                            if partial_text and partial_text != last_partial_text:
-                                partial_resp = {
-                                    "type": "partial",
-                                    "text": partial_text,
-                                    "language": partial_lang,
-                                    "timestamps": {
-                                        "start": 0,
-                                        "duration": round(len(realtime_buffer) / self.sample_rate, 2),
-                                    },
-                                }
-                                await websocket.send(json.dumps(partial_resp, ensure_ascii=False))
-                                last_partial_text = partial_text
+                        # 能量检测：如果缓冲区音量太低，跳过解码节省 CPU
+                        rms = float(np.sqrt(np.mean(realtime_buffer[-partial_min_samples:] ** 2)))
+                        if rms < energy_threshold:
+                            last_partial_at = now
+                        else:
+                            partial_raw = self._decode_text(realtime_buffer)
+                            if partial_raw:
+                                partial_lang = self._parse_language(partial_raw)
+                                partial_text = self._clean_text(partial_raw)
+                                if partial_lang == "zh":
+                                    partial_lang = self._guess_language_from_text(partial_text)
+                                if partial_text and not self._is_similar(partial_text, last_partial_text):
+                                    partial_resp = {
+                                        "type": "partial",
+                                        "text": partial_text,
+                                        "language": partial_lang,
+                                        "timestamps": {
+                                            "start": 0,
+                                            "duration": round(len(realtime_buffer) / self.sample_rate, 2),
+                                        },
+                                    }
+                                    await websocket.send(json.dumps(partial_resp, ensure_ascii=False))
+                                    last_partial_text = partial_text
+                                    last_partial_at = now
+                            else:
                                 last_partial_at = now
 
                     client_vad.accept_waveform(samples)
@@ -222,6 +231,25 @@ class TranscriptionServer:
         # 移除语言标签、情感标签、事件标签
         text = re.sub(r"<\|[^|]*\|>", "", text)
         return text.strip()
+
+    @staticmethod
+    def _is_similar(new_text: str, old_text: str) -> bool:
+        """判断新 partial 是否与上一次过于相似，避免无意义刷新"""
+        if not old_text:
+            return False
+        if new_text == old_text:
+            return True
+        # 新文本是旧文本的子串，或旧文本是新文本的子串
+        if new_text in old_text or old_text in new_text:
+            # 只有长度差异很小时才算相似（避免过滤掉真正更长的更新）
+            if abs(len(new_text) - len(old_text)) <= 3:
+                return True
+        # 编辑距离过小（仅差 1-2 个字符）也跳过
+        if abs(len(new_text) - len(old_text)) <= 2:
+            common = sum(1 for a, b in zip(new_text, old_text) if a == b)
+            if common >= min(len(new_text), len(old_text)) * 0.9:
+                return True
+        return False
 
     def _guess_language_from_text(self, text: str) -> str:
         """当模型未返回语言标签时，基于文本字符做轻量兜底判断"""
