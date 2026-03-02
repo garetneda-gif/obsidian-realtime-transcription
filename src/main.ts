@@ -16,6 +16,7 @@ interface PendingTranscript {
   texts: string[];
   wallTime: Date;
   lastUpdatedAt: number;
+  partialOnly: boolean;
 }
 
 export default class RealtimeTranscriptionPlugin extends Plugin {
@@ -251,6 +252,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         texts: [this.lastPartialText.trim()],
         wallTime: this.lastPartialWallTime ?? new Date(),
         lastUpdatedAt: Date.now(),
+        partialOnly: false,
       };
     }
     await this.flushPendingTranscript();
@@ -295,7 +297,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
           texts: [text],
           wallTime: now,
           lastUpdatedAt: Date.now(),
+          partialOnly: true,
         };
+      } else if (this.pendingTranscript.partialOnly) {
+        // 同一 VAD 段的后续 partial：覆盖而非追加
+        this.pendingTranscript.texts = [text];
+        this.pendingTranscript.language = normalizedLanguage;
+        this.pendingTranscript.lastUpdatedAt = Date.now();
       } else {
         this.pendingTranscript.language = normalizedLanguage;
         this.pendingTranscript.wallTime = this.pendingTranscript.wallTime ?? now;
@@ -326,7 +334,24 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         texts: [text],
         wallTime: new Date(),
         lastUpdatedAt: now,
+        partialOnly: false,
       };
+      view.upsertStreamingTranscript(
+        this.pendingTranscript.id,
+        text,
+        normalizedLanguage,
+        this.pendingTranscript.wallTime,
+      );
+      this.scheduleFlush();
+      return;
+    }
+
+    // partial 创建的 pending：final 覆盖 partial 文本（同一段音频）
+    if (this.pendingTranscript.partialOnly) {
+      this.pendingTranscript.texts = [text];
+      this.pendingTranscript.language = normalizedLanguage;
+      this.pendingTranscript.lastUpdatedAt = now;
+      this.pendingTranscript.partialOnly = false;
       view.upsertStreamingTranscript(
         this.pendingTranscript.id,
         text,
@@ -353,6 +378,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         texts: [text],
         wallTime: new Date(),
         lastUpdatedAt: now,
+        partialOnly: false,
       };
       view.upsertStreamingTranscript(
         this.pendingTranscript.id,
