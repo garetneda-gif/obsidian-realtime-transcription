@@ -1,5 +1,5 @@
-import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS } from "../constants";
+import { ItemView, Notice, WorkspaceLeaf, setIcon, createDiv } from "obsidian";
+import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS, PLUGIN_ID } from "../constants";
 import { TranscriptEntry, TranscriptionResult } from "../types";
 
 export class TranscriptionView extends ItemView {
@@ -7,15 +7,23 @@ export class TranscriptionView extends ItemView {
   private statusBar!: HTMLElement;
   private transcriptContainer!: HTMLElement;
   private recordBtn!: HTMLButtonElement;
+  private summaryBtn!: HTMLButtonElement;
   private exportBtn!: HTMLButtonElement;
   private clearBtn!: HTMLButtonElement;
   private statusDot!: HTMLElement;
   private statusText!: HTMLElement;
+  private streamingCard: HTMLElement | null = null;
+  private streamingEntryId: string | null = null;
+  private streamingTimeEl: HTMLElement | null = null;
+  private streamingLangBadgeEl: HTMLElement | null = null;
+  private streamingOriginalEl: HTMLElement | null = null;
   private entries: TranscriptEntry[] = [];
 
   // 外部注入的回调
-  onToggleRecording: (() => void) | null = null;
+  onToggleRecording: (() => void | Promise<void>) | null = null;
+  onToggleSummary: (() => void | Promise<void>) | null = null;
   onExport: (() => void) | null = null;
+  onFormalize: ((entryId: string, text: string) => Promise<string>) | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -62,19 +70,44 @@ export class TranscriptionView extends ItemView {
 
   async onClose(): Promise<void> {
     this.entries = [];
+    this.streamingCard = null;
+    this.streamingEntryId = null;
+    this.streamingTimeEl = null;
+    this.streamingLangBadgeEl = null;
+    this.streamingOriginalEl = null;
   }
 
   private buildControlBar(): void {
+    const triggerRecordingToggle = () => {
+      this.setConnectionStatus(false, "按钮已点击，准备启动...");
+      if (this.onToggleRecording) {
+        void this.onToggleRecording();
+        return;
+      }
+
+      // 兜底：即使回调丢失，也尝试通过命令触发录音切换
+      void this.app.commands.executeCommandById(`${PLUGIN_ID}:toggle-recording`);
+      new Notice("录音按钮回调未绑定，已尝试命令兜底触发");
+    };
+
     // 录制按钮
     this.recordBtn = this.controlBar.createEl("button", {
       cls: "record-btn",
-      attr: { "aria-label": "开始录制" },
+      attr: { "aria-label": "开始录制", type: "button" },
     });
     const recordIcon = this.recordBtn.createDiv("record-btn-icon");
     setIcon(recordIcon, "microphone");
 
-    this.recordBtn.addEventListener("click", () => {
-      this.onToggleRecording?.();
+    this.recordBtn.addEventListener("click", triggerRecordingToggle);
+
+    // 自动摘要开关
+    this.summaryBtn = this.controlBar.createEl("button", {
+      cls: "action-btn summary-btn",
+      attr: { "aria-label": "开启自动摘要", type: "button" },
+    });
+    setIcon(this.summaryBtn, "sparkles");
+    this.summaryBtn.addEventListener("click", () => {
+      void this.onToggleSummary?.();
     });
 
     // 导出按钮
@@ -108,6 +141,17 @@ export class TranscriptionView extends ItemView {
     }
   }
 
+  setSummaryState(enabled: boolean): void {
+    if (!this.summaryBtn) return;
+    if (enabled) {
+      this.summaryBtn.addClass("active");
+      this.summaryBtn.setAttribute("aria-label", "关闭自动摘要");
+    } else {
+      this.summaryBtn.removeClass("active");
+      this.summaryBtn.setAttribute("aria-label", "开启自动摘要");
+    }
+  }
+
   setConnectionStatus(connected: boolean, detail?: string): void {
     this.statusDot.className = "status-dot";
     if (connected) {
@@ -123,6 +167,95 @@ export class TranscriptionView extends ItemView {
       this.statusDot.className = "status-dot recording";
       this.statusText.setText("正在聆听...");
     }
+  }
+
+  upsertStreamingTranscript(
+    entryId: string,
+    text: string,
+    language: string,
+    wallTime: Date,
+  ): void {
+    const empty = this.transcriptContainer.querySelector(".empty-state");
+    if (empty) empty.remove();
+
+    if (!this.streamingCard || this.streamingEntryId !== entryId) {
+      this.streamingCard = this.transcriptContainer.createDiv({
+        cls: "transcript-card",
+        attr: { "data-entry-id": entryId },
+      });
+      this.streamingEntryId = entryId;
+      const header = this.streamingCard.createDiv("card-header");
+      this.streamingTimeEl = header.createEl("span", { cls: "card-timestamp" });
+      this.streamingLangBadgeEl = header.createEl("span", { cls: "card-lang-badge" });
+      this.streamingOriginalEl = this.streamingCard.createDiv("card-original");
+    }
+
+    if (this.streamingTimeEl) {
+      this.streamingTimeEl.setText(this.formatWallTime(wallTime));
+    }
+    if (this.streamingLangBadgeEl) {
+      this.streamingLangBadgeEl.className = "card-lang-badge";
+      this.streamingLangBadgeEl.addClass(`lang-${language}`);
+      this.streamingLangBadgeEl.setText(LANG_LABELS[language] ?? language);
+    }
+    if (this.streamingOriginalEl) {
+      this.streamingOriginalEl.setText(text);
+    }
+    this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
+  }
+
+  commitStreamingTranscript(entry: TranscriptEntry): void {
+    if (!this.streamingCard || this.streamingEntryId !== entry.id) {
+      this.addTranscript(entry);
+      return;
+    }
+
+    this.streamingCard.setAttr("data-entry-id", entry.id);
+    if (entry.result.language === "summary") {
+      this.streamingCard.addClass("summary-card");
+      const title = this.streamingCard.querySelector(".summary-title");
+      if (!title) {
+        this.streamingCard.createDiv("summary-title").setText("AI 摘要");
+      }
+    } else {
+      this.streamingCard.removeClass("summary-card");
+      const title = this.streamingCard.querySelector(".summary-title");
+      if (title) title.remove();
+    }
+
+    if (this.streamingTimeEl) {
+      this.streamingTimeEl.setText(this.formatWallTime(entry.wallTime));
+    }
+    if (this.streamingLangBadgeEl) {
+      this.streamingLangBadgeEl.className = "card-lang-badge";
+      this.streamingLangBadgeEl.addClass(`lang-${entry.result.language}`);
+      this.streamingLangBadgeEl.setText(
+        LANG_LABELS[entry.result.language] ?? entry.result.language,
+      );
+    }
+    if (this.streamingOriginalEl) {
+      this.streamingOriginalEl.setText(entry.result.text);
+    }
+
+    if (!this.entries.find((e) => e.id === entry.id)) {
+      this.entries.push(entry);
+    }
+    this.streamingCard = null;
+    this.streamingEntryId = null;
+    this.streamingTimeEl = null;
+    this.streamingLangBadgeEl = null;
+    this.streamingOriginalEl = null;
+  }
+
+  clearStreamingTranscript(): void {
+    if (this.streamingCard) {
+      this.streamingCard.remove();
+    }
+    this.streamingCard = null;
+    this.streamingEntryId = null;
+    this.streamingTimeEl = null;
+    this.streamingLangBadgeEl = null;
+    this.streamingOriginalEl = null;
   }
 
   addTranscript(entry: TranscriptEntry): void {
@@ -159,6 +292,7 @@ export class TranscriptionView extends ItemView {
 
   clearTranscripts(): void {
     this.entries = [];
+    this.clearStreamingTranscript();
     this.transcriptContainer.empty();
     this.showEmptyState();
   }
@@ -167,11 +301,52 @@ export class TranscriptionView extends ItemView {
     return [...this.entries];
   }
 
+  updateFormalText(entryId: string, formalText: string): void {
+    const entry = this.entries.find((e) => e.id === entryId);
+    if (entry) {
+      entry.formalText = formalText;
+    }
+
+    const card = this.transcriptContainer.querySelector(
+      `[data-entry-id="${entryId}"]`,
+    );
+    if (!card) return;
+
+    // 移除加载状态
+    const loading = card.querySelector(".card-formal-loading");
+    if (loading) loading.remove();
+
+    // 更新按钮状态
+    const btn = card.querySelector(".formalize-btn") as HTMLElement | null;
+    if (btn) {
+      btn.classList.add("done");
+      btn.textContent = "已润色";
+    }
+
+    // 插入或更新润色文本
+    let formalEl = card.querySelector(".card-formal") as HTMLElement | null;
+    if (!formalEl) {
+      // 在原文之后、翻译之前插入
+      const originalEl = card.querySelector(".card-original");
+      formalEl = createDiv({ cls: "card-formal" });
+      if (originalEl?.nextSibling) {
+        card.insertBefore(formalEl, originalEl.nextSibling);
+      } else {
+        card.appendChild(formalEl);
+      }
+    }
+    formalEl.setText(formalText);
+  }
+
   private renderCard(entry: TranscriptEntry): void {
     const card = this.transcriptContainer.createDiv({
       cls: "transcript-card",
       attr: { "data-entry-id": entry.id },
     });
+    const isSummary = entry.result.language === "summary";
+    if (isSummary) {
+      card.addClass("summary-card");
+    }
 
     // 卡片头部：时间 + 语言
     const cardHeader = card.createDiv("card-header");
@@ -182,19 +357,95 @@ export class TranscriptionView extends ItemView {
     langBadge.setText(LANG_LABELS[entry.result.language] ?? entry.result.language);
     langBadge.addClass(`lang-${entry.result.language}`);
 
+    // 摘要标题
+    if (isSummary) {
+      const titleRow = card.createDiv("summary-title-row");
+      const iconEl = titleRow.createDiv("summary-title-icon");
+      setIcon(iconEl, "sparkles");
+      titleRow.createEl("span", { cls: "summary-title", text: "AI 摘要" });
+    }
+
     // 原文
     const originalEl = card.createDiv("card-original");
     originalEl.setText(entry.result.text);
+
+    // 润色文本（已有则直接显示）
+    if (entry.formalText) {
+      card.createDiv({ cls: "card-formal", text: entry.formalText });
+    }
+
+    // 润色按钮（非摘要卡片显示）
+    if (!isSummary) {
+      const footer = card.createDiv("card-footer");
+      const formalizeBtn = footer.createEl("button", {
+        cls: entry.formalText ? "formalize-btn done" : "formalize-btn",
+        text: entry.formalText ? "已润色" : "润色",
+        attr: { type: "button" },
+      });
+      const btnIcon = formalizeBtn.createDiv("formalize-btn-icon");
+      setIcon(btnIcon, "wand-2");
+      // 将图标放到文字前面
+      formalizeBtn.insertBefore(btnIcon, formalizeBtn.firstChild);
+
+      formalizeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (formalizeBtn.classList.contains("loading") || formalizeBtn.classList.contains("done")) {
+          return;
+        }
+        void this.handleFormalizeClick(entry.id, entry.result.text, formalizeBtn, card as HTMLElement);
+      });
+    }
 
     // 译文
     if (entry.translation) {
       const translationEl = card.createDiv("card-translation");
       translationEl.setText(entry.translation);
-    } else if (entry.result.language !== "zh" && entry.result.language !== "yue") {
-      // 翻译中占位
+    } else if (this.shouldShowTranslationPlaceholder(entry.result.language)) {
       const loadingEl = card.createDiv("card-translation-loading");
       loadingEl.setText("翻译中...");
     }
+  }
+
+  private async handleFormalizeClick(
+    entryId: string,
+    text: string,
+    btn: HTMLElement,
+    card: HTMLElement,
+  ): Promise<void> {
+    if (!this.onFormalize) {
+      new Notice("润色功能未配置");
+      return;
+    }
+
+    btn.classList.add("loading");
+    btn.textContent = "润色中...";
+
+    // 添加加载占位
+    const originalEl = card.querySelector(".card-original");
+    const loadingEl = createDiv({ cls: "card-formal-loading", text: "正在润色..." });
+    if (originalEl?.nextSibling) {
+      card.insertBefore(loadingEl, originalEl.nextSibling);
+    } else {
+      card.appendChild(loadingEl);
+    }
+
+    try {
+      const result = await this.onFormalize(entryId, text);
+      this.updateFormalText(entryId, result);
+    } catch (err) {
+      loadingEl.remove();
+      btn.classList.remove("loading");
+      btn.textContent = "润色";
+      const btnIcon = btn.createDiv("formalize-btn-icon");
+      setIcon(btnIcon, "wand-2");
+      btn.insertBefore(btnIcon, btn.firstChild);
+      const detail = err instanceof Error ? err.message : "未知错误";
+      new Notice(`润色失败: ${detail}`);
+    }
+  }
+
+  private shouldShowTranslationPlaceholder(language: string): boolean {
+    return language === "en" || language === "ja" || language === "ko";
   }
 
   private formatWallTime(date: Date): string {

@@ -9,4 +9,5 @@ export const LANG_LABELS: Record<string, string> = {
   ko: "韩文",
   yue: "粤语",
   auto: "自动",
+  summary: "摘要",
 };

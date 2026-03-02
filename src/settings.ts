@@ -1,5 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
+import { resolvePluginDir } from "./utils/pluginPaths";
 
 export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
@@ -7,6 +8,10 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   constructor(app: App, plugin: RealtimeTranscriptionPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+
+  private getPluginDir(): string {
+    return resolvePluginDir(this.app, this.plugin.manifest);
   }
 
   display(): void {
@@ -81,7 +86,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         btn.setButtonText("检测环境").onClick(async () => {
           btn.setButtonText("检测中...");
           btn.setDisabled(true);
-          const pluginDir = (this.plugin.manifest as { dir?: string }).dir ?? "";
+          const pluginDir = this.getPluginDir();
           const { BackendManager } = await import("./services/BackendManager");
           const mgr = new BackendManager(pluginDir, this.plugin.settings);
           const ok = await mgr.checkEnvironment();
@@ -112,7 +117,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           btn.setDisabled(true);
           new Notice("开始下载模型，请耐心等待...");
 
-          const pluginDir = (this.plugin.manifest as { dir?: string }).dir ?? "";
+          const pluginDir = this.getPluginDir();
           const { BackendManager } = await import("./services/BackendManager");
           const mgr = new BackendManager(pluginDir, this.plugin.settings);
           const ok = await mgr.downloadModel(modelDir);
@@ -150,7 +155,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .setPlaceholder("https://api.openai.com/v1/chat/completions")
           .setValue(this.plugin.settings.translation.apiUrl)
           .onChange(async (value) => {
-            this.plugin.settings.translation.apiUrl = value;
+            this.plugin.settings.translation.apiUrl = value.trim();
             await this.plugin.saveSettings();
           }),
       );
@@ -177,7 +182,76 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .setPlaceholder("gpt-4o-mini")
           .setValue(this.plugin.settings.translation.model)
           .onChange(async (value) => {
-            this.plugin.settings.translation.model = value;
+            this.plugin.settings.translation.model = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    // ── AI 摘要设置 ──
+    containerEl.createEl("h2", { text: "AI 摘要设置" });
+
+    new Setting(containerEl)
+      .setName("启用自动 AI 摘要")
+      .setDesc("录音过程中按字数阈值自动生成摘要")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.summary.enabled)
+          .onChange(async (value) => {
+            this.plugin.settings.summary.enabled = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("摘要 API 端点")
+      .setDesc("用于 AI 摘要的独立 API URL（不与翻译共用）")
+      .addText((text) =>
+        text
+          .setPlaceholder("https://api.openai.com/v1/chat/completions")
+          .setValue(this.plugin.settings.summary.apiUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.summary.apiUrl = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("摘要 API Key")
+      .setDesc("用于 AI 摘要服务的 API 密钥")
+      .addText((text) => {
+        text
+          .setPlaceholder("sk-...")
+          .setValue(this.plugin.settings.summary.apiKey)
+          .onChange(async (value) => {
+            this.plugin.settings.summary.apiKey = value;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.type = "password";
+      });
+
+    new Setting(containerEl)
+      .setName("摘要模型名称")
+      .setDesc("用于 AI 摘要的模型 ID")
+      .addText((text) =>
+        text
+          .setPlaceholder("gpt-4o-mini")
+          .setValue(this.plugin.settings.summary.model)
+          .onChange(async (value) => {
+            this.plugin.settings.summary.model = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("摘要触发字数")
+      .setDesc("累计到该字数后自动执行一次摘要")
+      .addSlider((slider) =>
+        slider
+          .setLimits(1000, 10000, 100)
+          .setValue(this.plugin.settings.summary.thresholdChars)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.summary.thresholdChars = value;
             await this.plugin.saveSettings();
           }),
       );
@@ -187,14 +261,42 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("VAD 静音阈值")
-      .setDesc("语音活动检测的静音持续时间（秒），越小分句越频繁")
+      .setDesc("语音活动检测的静音持续时间（秒），越大分句越少")
       .addSlider((slider) =>
         slider
-          .setLimits(0.2, 2.0, 0.1)
+          .setLimits(0.2, 4.0, 0.1)
           .setValue(this.plugin.settings.vad.minSilenceDuration)
           .setDynamicTooltip()
           .onChange(async (value) => {
             this.plugin.settings.vad.minSilenceDuration = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("聚合输出窗口")
+      .setDesc("同语种短句会在该时长内合并后再输出，越大段落越长（同时有少量延迟）")
+      .addSlider((slider) =>
+        slider
+          .setLimits(1, 12, 1)
+          .setValue(this.plugin.settings.aggregation.flushWindowSec)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.aggregation.flushWindowSec = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("单段最大字数")
+      .setDesc("达到该长度会提前换段，避免单条过长")
+      .addSlider((slider) =>
+        slider
+          .setLimits(120, 1200, 20)
+          .setValue(this.plugin.settings.aggregation.maxChars)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.aggregation.maxChars = value;
             await this.plugin.saveSettings();
           }),
       );

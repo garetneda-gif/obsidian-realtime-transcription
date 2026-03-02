@@ -73,11 +73,17 @@ export class BackendManager {
 
     // 4. 启动 Python 后端
     const serverScript = path.join(this.pluginDir, "backend", "server.py");
+    if (!existsSync(serverScript)) {
+      new Notice(`后端脚本不存在: ${serverScript}`);
+      return false;
+    }
 
     const args = [
       serverScript,
       "--model-dir", modelDir,
       "--port", String(this.settings.backendPort),
+      "--vad-threshold", String(this.settings.vad.threshold),
+      "--vad-min-silence", String(this.settings.vad.minSilenceDuration),
     ];
     if (this.settings.useInt8) {
       args.push("--use-int8");
@@ -86,6 +92,7 @@ export class BackendManager {
     }
 
     return new Promise<boolean>((resolve) => {
+      let lastStderr = "";
       this.process = spawn(this.settings.pythonPath, args, {
         stdio: ["pipe", "pipe", "pipe"],
         cwd: this.pluginDir,
@@ -111,7 +118,9 @@ export class BackendManager {
       });
 
       this.process!.stderr!.on("data", (data: Buffer) => {
-        console.error("[Transcription Backend Error]", data.toString());
+        const msg = data.toString();
+        lastStderr = msg.trim() || lastStderr;
+        console.error("[Transcription Backend Error]", msg);
       });
 
       this.process!.on("error", (err: Error) => {
@@ -130,6 +139,8 @@ export class BackendManager {
         if (!resolved) {
           resolved = true;
           clearTimeout(timeout);
+          const detail = lastStderr ? `\n${lastStderr}` : "";
+          new Notice(`后端启动失败（退出码: ${code ?? "null"}）${detail}`);
           resolve(false);
         }
       });

@@ -29,7 +29,15 @@ except ImportError:
 
 
 class TranscriptionServer:
-    def __init__(self, model_dir: str, use_int8: bool = True, num_threads: int = 4):
+    def __init__(
+        self,
+        model_dir: str,
+        use_int8: bool = True,
+        num_threads: int = 4,
+        vad_threshold: float = 0.5,
+        vad_min_silence: float = 1.0,
+        vad_min_speech: float = 0.25,
+    ):
         model_path = Path(model_dir)
 
         # 初始化 Silero VAD
@@ -40,9 +48,9 @@ class TranscriptionServer:
 
         vad_config = sherpa_onnx.VadModelConfig()
         vad_config.silero_vad.model = str(vad_model)
-        vad_config.silero_vad.threshold = 0.5
-        vad_config.silero_vad.min_silence_duration = 0.5
-        vad_config.silero_vad.min_speech_duration = 0.25
+        vad_config.silero_vad.threshold = vad_threshold
+        vad_config.silero_vad.min_silence_duration = vad_min_silence
+        vad_config.silero_vad.min_speech_duration = vad_min_speech
         vad_config.sample_rate = 16000
 
         self.vad = sherpa_onnx.VoiceActivityDetector(
@@ -74,6 +82,12 @@ class TranscriptionServer:
         self._recording_start_time: dict = {}
         print(f"模型加载完成: {model_onnx.name}")
 
+    def _decode_text(self, samples: np.ndarray) -> str:
+        stream = self.recognizer.create_stream()
+        stream.accept_waveform(self.sample_rate, samples)
+        self.recognizer.decode_stream(stream)
+        return stream.result.text.strip()
+
     async def handle_client(self, websocket):
         self.clients.add(websocket)
         client_id = id(websocket)
@@ -84,6 +98,12 @@ class TranscriptionServer:
         client_vad = sherpa_onnx.VoiceActivityDetector(
             vad_config, buffer_size_in_seconds=30
         )
+        realtime_buffer = np.array([], dtype=np.float32)
+        last_partial_text = ""
+        last_partial_at = 0.0
+        partial_interval_sec = 0.9
+        partial_min_samples = int(self.sample_rate * 0.8)
+        partial_max_samples = int(self.sample_rate * 8.0)
 
         print(f"客户端连接: {websocket.remote_address}")
         try:
@@ -94,19 +114,47 @@ class TranscriptionServer:
                         np.frombuffer(message, dtype=np.int16).astype(np.float32)
                         / 32768.0
                     )
+                    realtime_buffer = np.concatenate((realtime_buffer, samples))
+                    if len(realtime_buffer) > partial_max_samples:
+                        realtime_buffer = realtime_buffer[-partial_max_samples:]
+
+                    now = time.time()
+                    if (
+                        len(realtime_buffer) >= partial_min_samples
+                        and (now - last_partial_at) >= partial_interval_sec
+                    ):
+                        partial_raw = self._decode_text(realtime_buffer)
+                        if partial_raw:
+                            partial_lang = self._parse_language(partial_raw)
+                            partial_text = self._clean_text(partial_raw)
+                            if partial_lang == "zh":
+                                partial_lang = self._guess_language_from_text(partial_text)
+                            if partial_text and partial_text != last_partial_text:
+                                partial_resp = {
+                                    "type": "partial",
+                                    "text": partial_text,
+                                    "language": partial_lang,
+                                    "timestamps": {
+                                        "start": 0,
+                                        "duration": round(len(realtime_buffer) / self.sample_rate, 2),
+                                    },
+                                }
+                                await websocket.send(json.dumps(partial_resp, ensure_ascii=False))
+                                last_partial_text = partial_text
+                                last_partial_at = now
+
                     client_vad.accept_waveform(samples)
 
                     while not client_vad.empty():
                         speech = client_vad.front
-                        stream = self.recognizer.create_stream()
-                        stream.accept_waveform(self.sample_rate, speech.samples)
-                        self.recognizer.decode_stream(stream)
-                        text = stream.result.text.strip()
+                        text = self._decode_text(speech.samples)
 
                         if text:
                             # 解析 SenseVoice 输出的语言标签
                             language = self._parse_language(text)
                             clean_text = self._clean_text(text)
+                            if language == "zh":
+                                language = self._guess_language_from_text(clean_text)
 
                             elapsed = (
                                 speech.start / self.sample_rate
@@ -114,6 +162,7 @@ class TranscriptionServer:
                             duration = len(speech.samples) / self.sample_rate
 
                             response = {
+                                "type": "final",
                                 "text": clean_text,
                                 "language": language,
                                 "timestamps": {
@@ -122,6 +171,9 @@ class TranscriptionServer:
                                 },
                             }
                             await websocket.send(json.dumps(response, ensure_ascii=False))
+                            realtime_buffer = np.array([], dtype=np.float32)
+                            last_partial_text = ""
+                            last_partial_at = 0.0
 
                         client_vad.pop()
 
@@ -136,6 +188,9 @@ class TranscriptionServer:
                                 vad_config, buffer_size_in_seconds=30
                             )
                             self._recording_start_time[client_id] = time.time()
+                            realtime_buffer = np.array([], dtype=np.float32)
+                            last_partial_text = ""
+                            last_partial_at = 0.0
                     except json.JSONDecodeError:
                         pass
 
@@ -148,6 +203,7 @@ class TranscriptionServer:
 
     def _parse_language(self, text: str) -> str:
         """从 SenseVoice 输出解析语言标签（如 <|zh|>, <|en|>）"""
+        lower = text.lower()
         lang_map = {
             "<|zh|>": "zh",
             "<|en|>": "en",
@@ -156,7 +212,7 @@ class TranscriptionServer:
             "<|yue|>": "yue",
         }
         for tag, lang in lang_map.items():
-            if tag in text:
+            if tag in lower:
                 return lang
         return "zh"
 
@@ -167,6 +223,41 @@ class TranscriptionServer:
         text = re.sub(r"<\|[^|]*\|>", "", text)
         return text.strip()
 
+    def _guess_language_from_text(self, text: str) -> str:
+        """当模型未返回语言标签时，基于文本字符做轻量兜底判断"""
+        import re
+
+        if not text:
+            return "zh"
+
+        han_count = len(re.findall(r"[\u3400-\u9fff]", text))
+        latin_count = len(re.findall(r"[A-Za-z]", text))
+        kana_count = len(re.findall(r"[\u3040-\u30ff]", text))
+        hangul_count = len(re.findall(r"[\uac00-\ud7af]", text))
+
+        # 日文假名（平假名/片假名）
+        if kana_count > 0:
+            return "ja"
+        # 韩文
+        if hangul_count > 0:
+            return "ko"
+
+        # 中文为主但夹杂少量英文术语（如 VAD / API）时，仍判中文
+        if han_count > 0 and latin_count <= max(3, int(han_count * 0.25)):
+            return "zh"
+
+        # 英文判定：需要有一定连续英文占比，避免“有英文就误判”
+        if latin_count >= 6 and latin_count >= int(han_count * 0.6):
+            return "en"
+
+        if han_count > 0:
+            return "zh"
+        if latin_count > 0:
+            return "en"
+
+        # 默认中文（含汉字及其他情况）
+        return "zh"
+
 
 async def main():
     parser = argparse.ArgumentParser(description="实时语音转写 WebSocket 后端")
@@ -175,6 +266,9 @@ async def main():
     parser.add_argument("--use-int8", action="store_true", default=True, help="使用 int8 量化模型")
     parser.add_argument("--no-int8", action="store_true", help="不使用 int8 量化模型")
     parser.add_argument("--num-threads", type=int, default=4, help="推理线程数 (默认: 4)")
+    parser.add_argument("--vad-threshold", type=float, default=0.5, help="VAD 阈值")
+    parser.add_argument("--vad-min-silence", type=float, default=1.0, help="VAD 最小静音时长(秒)")
+    parser.add_argument("--vad-min-speech", type=float, default=0.25, help="VAD 最小语音时长(秒)")
     parser.add_argument("--idle-timeout", type=int, default=0, help="无连接超时退出秒数 (0=不超时)")
     args = parser.parse_args()
 
@@ -184,6 +278,9 @@ async def main():
         model_dir=args.model_dir,
         use_int8=use_int8,
         num_threads=args.num_threads,
+        vad_threshold=args.vad_threshold,
+        vad_min_silence=args.vad_min_silence,
+        vad_min_speech=args.vad_min_speech,
     )
 
     stop_event = asyncio.Event()
