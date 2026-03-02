@@ -237,6 +237,12 @@ export class TranscriptionView extends ItemView {
       this.streamingOriginalEl.setText(entry.result.text);
     }
 
+    // 提交时为非摘要卡片追加润色按钮
+    const isSummary = entry.result.language === "summary";
+    if (!isSummary && !this.streamingCard.querySelector(".card-footer")) {
+      this.appendFormalizeButton(this.streamingCard, entry);
+    }
+
     if (!this.entries.find((e) => e.id === entry.id)) {
       this.entries.push(entry);
     }
@@ -376,24 +382,7 @@ export class TranscriptionView extends ItemView {
 
     // 润色按钮（非摘要卡片显示）
     if (!isSummary) {
-      const footer = card.createDiv("card-footer");
-      const formalizeBtn = footer.createEl("button", {
-        cls: entry.formalText ? "formalize-btn done" : "formalize-btn",
-        text: entry.formalText ? "已润色" : "润色",
-        attr: { type: "button" },
-      });
-      const btnIcon = formalizeBtn.createDiv("formalize-btn-icon");
-      setIcon(btnIcon, "wand-2");
-      // 将图标放到文字前面
-      formalizeBtn.insertBefore(btnIcon, formalizeBtn.firstChild);
-
-      formalizeBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (formalizeBtn.classList.contains("loading") || formalizeBtn.classList.contains("done")) {
-          return;
-        }
-        void this.handleFormalizeClick(entry.id, entry.result.text, formalizeBtn, card as HTMLElement);
-      });
+      this.appendFormalizeButton(card as HTMLElement, entry);
     }
 
     // 译文
@@ -404,6 +393,26 @@ export class TranscriptionView extends ItemView {
       const loadingEl = card.createDiv("card-translation-loading");
       loadingEl.setText("翻译中...");
     }
+  }
+
+  private appendFormalizeButton(card: HTMLElement, entry: TranscriptEntry): void {
+    const footer = card.createDiv("card-footer");
+    const formalizeBtn = footer.createEl("button", {
+      cls: entry.formalText ? "formalize-btn done" : "formalize-btn",
+      text: entry.formalText ? "已润色" : "润色",
+      attr: { type: "button" },
+    });
+    const btnIcon = formalizeBtn.createDiv("formalize-btn-icon");
+    setIcon(btnIcon, "wand-2");
+    formalizeBtn.insertBefore(btnIcon, formalizeBtn.firstChild);
+
+    formalizeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (formalizeBtn.classList.contains("loading") || formalizeBtn.classList.contains("done")) {
+        return;
+      }
+      void this.handleFormalizeClick(entry.id, entry.result.text, formalizeBtn, card);
+    });
   }
 
   private async handleFormalizeClick(
