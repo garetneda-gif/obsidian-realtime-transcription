@@ -767,7 +767,6 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     try {
       const summaryText = await this.summaryService.summarize(source);
-      const sourceChars = source.length;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -778,7 +777,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const entry: TranscriptEntry = {
         id: `entry-${this.entryCounter}`,
         result: {
-          text: `来源文本约 ${sourceChars} 字\n${summaryText}`,
+          text: summaryText,
           language: "summary",
           timestamps: { start: 0, duration: 0 },
         },
