@@ -504,6 +504,11 @@
   -webkit-user-select: text !important;
 }
 
+/* ── 仅显示摘要模式 ── */
+.transcript-container.summary-only .transcript-card:not(.summary-card) {
+  display: none;
+}
+
 /* ── 旧状态栏（隐藏，已合并到控制栏） ── */
 .status-bar {
   display: none;

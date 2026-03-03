@@ -1,6 +1,6 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon, createDiv } from "obsidian";
 import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS, PLUGIN_ID } from "../constants";
-import { TranscriptEntry, TranscriptionResult } from "../types";
+import { TranscriptEntry, TranscriptionResult, SummaryDisplayMode } from "../types";
 
 export class TranscriptionView extends ItemView {
   private controlBar!: HTMLElement;
@@ -21,7 +21,7 @@ export class TranscriptionView extends ItemView {
 
   // 外部注入的回调
   onToggleRecording: (() => void | Promise<void>) | null = null;
-  onToggleSummary: (() => void | Promise<void>) | null = null;
+  onToggleDisplayMode: (() => void | Promise<void>) | null = null;
   onExport: (() => void) | null = null;
   onFormalize: ((entryId: string, text: string) => Promise<string>) | null = null;
 
@@ -103,14 +103,14 @@ export class TranscriptionView extends ItemView {
 
     this.recordBtn.addEventListener("click", triggerRecordingToggle);
 
-    // 自动摘要开关
+    // 显示模式切换（仅摘要 / 摘要+转录）
     this.summaryBtn = this.controlBar.createEl("button", {
       cls: "action-btn summary-btn",
-      attr: { "aria-label": "开启自动摘要", type: "button" },
+      attr: { "aria-label": "切换为仅显示摘要", type: "button" },
     });
     setIcon(this.summaryBtn, "sparkles");
     this.summaryBtn.addEventListener("click", () => {
-      void this.onToggleSummary?.();
+      void this.onToggleDisplayMode?.();
     });
 
     // 导出按钮
@@ -144,14 +144,16 @@ export class TranscriptionView extends ItemView {
     }
   }
 
-  setSummaryState(enabled: boolean): void {
+  setDisplayMode(mode: SummaryDisplayMode): void {
     if (!this.summaryBtn) return;
-    if (enabled) {
+    if (mode === "summaryOnly") {
       this.summaryBtn.addClass("active");
-      this.summaryBtn.setAttribute("aria-label", "关闭自动摘要");
+      this.summaryBtn.setAttribute("aria-label", "切换为摘要+转录");
+      this.transcriptContainer.addClass("summary-only");
     } else {
       this.summaryBtn.removeClass("active");
-      this.summaryBtn.setAttribute("aria-label", "开启自动摘要");
+      this.summaryBtn.setAttribute("aria-label", "切换为仅显示摘要");
+      this.transcriptContainer.removeClass("summary-only");
     }
   }
 

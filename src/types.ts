@@ -5,8 +5,18 @@ export interface TranslationSettings {
   model: string;
 }
 
+export interface FormalizeSettings {
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export type SummaryDisplayMode = "summaryOnly" | "both";
+export type ExportMode = "summaryOnly" | "full";
+
 export interface SummarySettings {
   enabled: boolean;
+  displayMode: SummaryDisplayMode;
   apiUrl: string;
   apiKey: string;
   model: string;
@@ -17,6 +27,9 @@ export interface VadSettings {
   threshold: number;
   minSilenceDuration: number;
 }
+
+export type RealtimeProfile = "stable" | "fast";
+export type RecognitionMode = "zh-en" | "zh" | "en";
 
 export interface AggregationSettings {
   flushWindowSec: number;
@@ -30,8 +43,12 @@ export interface PluginSettings {
   modelDir: string;
   useInt8: boolean;
   autoStartBackend: boolean;
+  realtimeProfile: RealtimeProfile;
+  recognitionMode: RecognitionMode;
   translation: TranslationSettings;
+  formalize: FormalizeSettings;
   summary: SummarySettings;
+  exportMode: ExportMode;
   vad: VadSettings;
   aggregation: AggregationSettings;
 }
@@ -42,19 +59,28 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   modelDir: "",
   useInt8: true,
   autoStartBackend: true,
+  realtimeProfile: "stable",
+  recognitionMode: "zh-en",
   translation: {
     enabled: false,
     apiUrl: "https://api.openai.com/v1/chat/completions",
     apiKey: "",
     model: "gpt-4o-mini",
   },
+  formalize: {
+    apiUrl: "https://api.openai.com/v1/chat/completions",
+    apiKey: "",
+    model: "gpt-4o-mini",
+  },
   summary: {
     enabled: false,
+    displayMode: "both",
     apiUrl: "https://api.openai.com/v1/chat/completions",
     apiKey: "",
     model: "gpt-4o-mini",
     thresholdChars: 3000,
   },
+  exportMode: "full",
   vad: {
     threshold: 0.5,
     minSilenceDuration: 1.0,

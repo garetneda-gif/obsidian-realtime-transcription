@@ -6,6 +6,7 @@ import { WebSocketClient } from "./services/WebSocketClient";
 import { AudioCapture } from "./services/AudioCapture";
 import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
+import { FormalizeService } from "./services/FormalizeService";
 import { TranscriptionSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult } from "./types";
 import { resolvePluginDir } from "./utils/pluginPaths";
@@ -26,6 +27,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private audioCapture!: AudioCapture;
   private translationService!: TranslationService;
   private summaryService!: SummaryService;
+  private formalizeService!: FormalizeService;
   private recording = false;
   private entryCounter = 0;
   private pendingTranscript: PendingTranscript | null = null;
@@ -33,6 +35,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private summaryBuffer = "";
   private summaryInFlight = false;
   private lastPartialText = "";
+  private lastStablePartialText = "";
+  private renderedPartialText = "";
+  private rollbackCandidateText = "";
+  private rollbackCandidateCount = 0;
+  private rollbackCandidateAt = 0;
   private lastPartialLanguage = "zh";
   private lastPartialWallTime: Date | null = null;
 
@@ -43,7 +50,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.registerView(VIEW_TYPE_TRANSCRIPTION, (leaf) => {
       const view = new TranscriptionView(leaf);
       view.onToggleRecording = () => this.toggleRecording();
-      view.onToggleSummary = () => this.toggleSummary();
+      view.onToggleDisplayMode = () => this.toggleDisplayMode();
       view.onExport = () => this.exportToNote();
       view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
       return view;
@@ -74,6 +81,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.audioCapture = new AudioCapture();
     this.translationService = new TranslationService(this.settings.translation);
     this.summaryService = new SummaryService(this.settings.summary);
+    this.formalizeService = new FormalizeService(this.settings.formalize);
 
     // WebSocket 结果回调
     this.wsClient.setOnResult((result) => this.handleTranscriptionResult(result));
@@ -102,7 +110,22 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const raw = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+
+    // 兼容旧配置：未拆分润色接口前，沿用翻译配置作为润色默认值
+    const hasFormalizeConfig = Boolean(
+      raw &&
+      typeof raw === "object" &&
+      Object.prototype.hasOwnProperty.call(raw as Record<string, unknown>, "formalize"),
+    );
+    if (!hasFormalizeConfig) {
+      this.settings.formalize = {
+        apiUrl: this.settings.translation.apiUrl,
+        apiKey: this.settings.translation.apiKey,
+        model: this.settings.translation.model,
+      };
+    }
   }
 
   async saveSettings(): Promise<void> {
@@ -110,9 +133,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.backendManager?.updateSettings(this.settings);
     this.translationService?.updateSettings(this.settings.translation);
     this.summaryService?.updateSettings(this.settings.summary);
+    this.formalizeService?.updateSettings(this.settings.formalize);
     const view = this.getView();
     if (view) {
-      view.setSummaryState(this.settings.summary.enabled);
+      view.setDisplayMode(this.settings.summary.displayMode);
     }
   }
 
@@ -164,18 +188,15 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
   }
 
-  async toggleSummary(): Promise<void> {
-    this.settings.summary.enabled = !this.settings.summary.enabled;
+  async toggleDisplayMode(): Promise<void> {
+    this.settings.summary.displayMode =
+      this.settings.summary.displayMode === "both" ? "summaryOnly" : "both";
     await this.saveSettings();
 
-    if (!this.settings.summary.enabled) {
-      this.summaryBuffer = "";
-      new Notice("自动 AI 摘要已关闭");
-      return;
-    }
-
-    new Notice("自动 AI 摘要已开启");
-    void this.maybeRunSummary();
+    const label = this.settings.summary.displayMode === "summaryOnly"
+      ? "仅显示摘要"
+      : "摘要 + 转录";
+    new Notice(`显示模式: ${label}`);
   }
 
   private async startRecording(): Promise<void> {
@@ -194,6 +215,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.pendingTranscript = null;
     this.clearFlushTimer();
     this.lastPartialText = "";
+    this.lastStablePartialText = "";
+    this.renderedPartialText = "";
+    this.resetRollbackCandidate();
     this.lastPartialLanguage = "zh";
     this.lastPartialWallTime = null;
     currentView.clearStreamingTranscript();
@@ -212,7 +236,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     console.log("[Transcription] 正在连接 WebSocket...");
     currentView.setConnectionStatus(false, "连接中...");
     try {
-      await this.wsClient.connect(this.settings.backendPort);
+      await this.connectBackendWithRetry(this.settings.backendPort);
     } catch (err) {
       console.error("[Transcription] WebSocket 连接失败:", err);
       new Notice("无法连接到转写后端");
@@ -244,12 +268,16 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
   private async stopRecording(): Promise<void> {
     this.audioCapture.stop();
-    if (!this.pendingTranscript && this.lastPartialText.trim()) {
+    const fallbackPartial =
+      this.lastStablePartialText.trim() ||
+      this.renderedPartialText.trim() ||
+      this.lastPartialText.trim();
+    if (!this.pendingTranscript && fallbackPartial) {
       this.entryCounter++;
       this.pendingTranscript = {
         id: `entry-${this.entryCounter}`,
         language: this.lastPartialLanguage,
-        texts: [this.lastPartialText.trim()],
+        texts: [fallbackPartial],
         wallTime: this.lastPartialWallTime ?? new Date(),
         lastUpdatedAt: Date.now(),
         partialOnly: false,
@@ -259,6 +287,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.clearFlushTimer();
     this.recording = false;
     this.lastPartialText = "";
+    this.lastStablePartialText = "";
+    this.renderedPartialText = "";
+    this.resetRollbackCandidate();
     this.lastPartialLanguage = "zh";
     this.lastPartialWallTime = null;
 
@@ -286,22 +317,30 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       if (!this.settings.aggregation.realtimePreview) return;
 
       const now = new Date();
+      const stabilizedText = this.stabilizePartialText(text);
       this.lastPartialText = text;
       this.lastPartialLanguage = normalizedLanguage;
       this.lastPartialWallTime = now;
+      if (!stabilizedText) {
+        return;
+      }
+      if (stabilizedText === this.renderedPartialText) return;
+      this.renderedPartialText = stabilizedText;
+      this.lastStablePartialText = stabilizedText;
       if (!this.pendingTranscript) {
         this.entryCounter++;
         this.pendingTranscript = {
           id: `entry-${this.entryCounter}`,
           language: normalizedLanguage,
-          texts: [text],
+          texts: [stabilizedText],
           wallTime: now,
           lastUpdatedAt: Date.now(),
           partialOnly: true,
         };
       } else if (this.pendingTranscript.partialOnly) {
         // 同一 VAD 段的后续 partial：覆盖而非追加
-        this.pendingTranscript.texts = [text];
+        if (this.pendingTranscript.texts[0] === stabilizedText) return;
+        this.pendingTranscript.texts = [stabilizedText];
         this.pendingTranscript.language = normalizedLanguage;
         this.pendingTranscript.lastUpdatedAt = Date.now();
       } else {
@@ -311,7 +350,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       }
       view.upsertStreamingTranscript(
         this.pendingTranscript.id,
-        text,
+        stabilizedText,
         normalizedLanguage,
         this.pendingTranscript.wallTime,
       );
@@ -319,6 +358,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
 
     this.lastPartialText = "";
+    this.lastStablePartialText = "";
+    this.renderedPartialText = "";
+    this.resetRollbackCandidate();
     this.lastPartialLanguage = "zh";
     this.lastPartialWallTime = null;
 
@@ -434,6 +476,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         texts: [mergedText],
         wallTime: pending.wallTime,
         lastUpdatedAt: Date.now(),
+        partialOnly: false,
       };
       this.scheduleFlush();
       return;
@@ -471,16 +514,14 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private normalizeLanguage(rawLanguage: string, text: string): string {
+    const mode = this.settings.recognitionMode ?? "zh-en";
+    if (mode === "zh") return "zh";
+    if (mode === "en") return "en";
+
     const language = (rawLanguage || "zh").toLowerCase();
-    if (language === "yue") return "yue";
 
     const hanCount = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
     const latinCount = (text.match(/[A-Za-z]/g) ?? []).length;
-    const kanaCount = (text.match(/[\u3040-\u30ff]/g) ?? []).length;
-    const hangulCount = (text.match(/[\uac00-\ud7af]/g) ?? []).length;
-
-    if (kanaCount > 0) return "ja";
-    if (hangulCount > 0) return "ko";
 
     // 中文主导且仅包含少量英文术语，保留中文标签，避免误触发翻译
     if (hanCount > 0 && latinCount <= Math.max(3, Math.floor(hanCount * 0.25))) {
@@ -494,20 +535,162 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       return "en";
     }
 
-    if (language === "ja" || language === "ko") {
-      return language;
-    }
-
     if (language === "zh") return "zh";
     if (latinCount >= 6 && latinCount >= Math.floor(hanCount * 0.6)) return "en";
     if (hanCount > 0) return "zh";
 
-    return language || "zh";
+    return "zh";
+  }
+
+  private stabilizePartialText(currentRaw: string): string | null {
+    const current = currentRaw.replace(/\s+/g, " ").trim();
+    if (!current) return null;
+
+    const profile = this.settings.realtimeProfile ?? "stable";
+    const previousDisplay = this.renderedPartialText.trim();
+    const hanCount = (current.match(/[\u3400-\u9fff]/g) ?? []).length;
+    const latinCount = (current.match(/[A-Za-z]/g) ?? []).length;
+    const minLen = hanCount > 0
+      ? profile === "fast" ? 3 : 4
+      : latinCount > 0
+        ? profile === "fast" ? 6 : 8
+        : profile === "fast" ? 5 : 6;
+    const endsSentence = /[。！？.!?]$/.test(current);
+
+    if (!previousDisplay) {
+      this.resetRollbackCandidate();
+      if (endsSentence || current.length >= minLen) return current;
+      return null;
+    }
+
+    if (current === previousDisplay) return null;
+
+    const lcp = this.longestCommonPrefixLength(previousDisplay, current);
+
+    // 最稳定情况：只在尾部增长，立即放行，保证低延迟。
+    if (current.startsWith(previousDisplay)) {
+      this.resetRollbackCandidate();
+      const grew = current.length - previousDisplay.length;
+      if (grew >= 1 || endsSentence) return current;
+      return null;
+    }
+
+    // 允许受控回滚：只在短回滚且高前缀一致时，并采用“候选二次确认”。
+    if (current.length < previousDisplay.length) {
+      const shrink = previousDisplay.length - current.length;
+      const maxRollback = hanCount > 0
+        ? (profile === "fast" ? 8 : 6)
+        : (profile === "fast" ? 14 : 12);
+      const prefixNeed = Math.max(
+        4,
+        Math.floor(previousDisplay.length * (profile === "fast" ? 0.62 : 0.72)),
+      );
+      if (lcp < prefixNeed || shrink > maxRollback) {
+        this.resetRollbackCandidate();
+        return null;
+      }
+      if (!this.shouldAcceptRollbackCandidate(current, endsSentence, shrink, profile)) {
+        return null;
+      }
+      return current;
+    }
+
+    // 同长改写：句尾时允许一次修正，否则容易抖动。
+    if (current.length === previousDisplay.length) {
+      const sameLenAnchor = Math.max(
+        4,
+        Math.floor(previousDisplay.length * (profile === "fast" ? 0.65 : 0.75)),
+      );
+      if (endsSentence && lcp >= sameLenAnchor) {
+        this.resetRollbackCandidate();
+        return current;
+      }
+      return null;
+    }
+
+    // 增长但带改写：保护前缀，仅允许在尾部窗口内修正。
+    this.resetRollbackCandidate();
+    const revisionWindow = hanCount > 0
+      ? (profile === "fast" ? 12 : 8)
+      : (profile === "fast" ? 18 : 14);
+    const protectedPrefix = Math.max(3, previousDisplay.length - revisionWindow);
+    if (lcp < protectedPrefix && !endsSentence) {
+      return null;
+    }
+
+    if (!endsSentence && current.length < minLen) return null;
+    return current;
+  }
+
+  private longestCommonPrefixLength(a: string, b: string): number {
+    const n = Math.min(a.length, b.length);
+    let i = 0;
+    while (i < n && a.charCodeAt(i) === b.charCodeAt(i)) {
+      i += 1;
+    }
+    return i;
+  }
+
+  private shouldAcceptRollbackCandidate(
+    candidate: string,
+    endsSentence: boolean,
+    shrink: number,
+    profile: "stable" | "fast",
+  ): boolean {
+    // 极小回滚（常见错尾修正）立即放行。
+    if (shrink <= (profile === "fast" ? 3 : 2)) {
+      this.resetRollbackCandidate();
+      return true;
+    }
+
+    const now = Date.now();
+    if (this.rollbackCandidateText === candidate && now - this.rollbackCandidateAt <= 1800) {
+      this.rollbackCandidateCount += 1;
+      this.rollbackCandidateAt = now;
+    } else {
+      this.rollbackCandidateText = candidate;
+      this.rollbackCandidateCount = 1;
+      this.rollbackCandidateAt = now;
+    }
+
+    // 句尾优先一次确认，其它情况需要连续两次命中才回滚。
+    if (endsSentence) {
+      this.resetRollbackCandidate();
+      return true;
+    }
+    const confirmHits = profile === "fast" ? 1 : 2;
+    if (this.rollbackCandidateCount >= confirmHits) {
+      this.resetRollbackCandidate();
+      return true;
+    }
+    return false;
+  }
+
+  private resetRollbackCandidate(): void {
+    this.rollbackCandidateText = "";
+    this.rollbackCandidateCount = 0;
+    this.rollbackCandidateAt = 0;
+  }
+
+  private async connectBackendWithRetry(port: number): Promise<void> {
+    const maxAttempts = 4;
+    let lastError: unknown = null;
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        await this.wsClient.connect(port);
+        return;
+      } catch (err) {
+        lastError = err;
+        if (i === maxAttempts - 1) break;
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("WebSocket 连接失败");
   }
 
   private syncViewControlStates(view: TranscriptionView): void {
     view.setRecordingState(this.recording);
-    view.setSummaryState(this.settings.summary.enabled);
+    view.setDisplayMode(this.settings.summary.displayMode);
   }
 
   private enqueueSummaryText(text: string, wallTime: Date): void {
@@ -576,10 +759,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private async formalizeEntry(entryId: string, text: string): Promise<string> {
-    if (!this.translationService.canFormalize()) {
-      throw new Error("请先在设置中配置翻译 API");
+    if (!this.formalizeService.canFormalize()) {
+      throw new Error("请先在设置中配置润色 API");
     }
-    const result = await this.translationService.formalize(text);
+    const result = await this.formalizeService.formalize(text);
     const view = this.getView();
     if (view) {
       view.updateFormalText(entryId, result);
@@ -591,9 +774,16 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const view = this.getView();
     if (!view) return;
 
-    const entries = view.getEntries();
+    const allEntries = view.getEntries();
+    const entries = this.settings.exportMode === "summaryOnly"
+      ? allEntries.filter((e) => e.result.language === "summary")
+      : allEntries;
     if (entries.length === 0) {
-      new Notice("没有可导出的转写记录");
+      new Notice(
+        this.settings.exportMode === "summaryOnly"
+          ? "没有可导出的摘要记录"
+          : "没有可导出的转写记录",
+      );
       return;
     }
 

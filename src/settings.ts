@@ -1,6 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
+import type { RealtimeProfile, RecognitionMode, ExportMode } from "./types";
 
 export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
@@ -77,6 +78,21 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+    new Setting(containerEl)
+      .setName("识别语言范围")
+      .setDesc("限制识别语言，避免误判成日语/韩语")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("zh-en", "中英混杂")
+          .addOption("zh", "纯中文")
+          .addOption("en", "纯英文")
+          .setValue(this.plugin.settings.recognitionMode)
+          .onChange(async (value: RecognitionMode) => {
+            this.plugin.settings.recognitionMode = value;
+            await this.plugin.saveSettings();
+          });
+      });
 
     // 环境检测按钮
     new Setting(containerEl)
@@ -187,6 +203,49 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           }),
       );
 
+    // ── 润色设置 ──
+    containerEl.createEl("h2", { text: "润色设置" });
+
+    new Setting(containerEl)
+      .setName("润色 API 端点")
+      .setDesc("用于文本润色的独立 API URL（不与翻译/摘要共用）")
+      .addText((text) =>
+        text
+          .setPlaceholder("https://api.openai.com/v1/chat/completions")
+          .setValue(this.plugin.settings.formalize.apiUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.formalize.apiUrl = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("润色 API Key")
+      .setDesc("用于润色服务的 API 密钥")
+      .addText((text) => {
+        text
+          .setPlaceholder("sk-...")
+          .setValue(this.plugin.settings.formalize.apiKey)
+          .onChange(async (value) => {
+            this.plugin.settings.formalize.apiKey = value;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.type = "password";
+      });
+
+    new Setting(containerEl)
+      .setName("润色模型名称")
+      .setDesc("用于文本润色的模型 ID")
+      .addText((text) =>
+        text
+          .setPlaceholder("gpt-4o-mini")
+          .setValue(this.plugin.settings.formalize.model)
+          .onChange(async (value) => {
+            this.plugin.settings.formalize.model = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
     // ── AI 摘要设置 ──
     containerEl.createEl("h2", { text: "AI 摘要设置" });
 
@@ -256,8 +315,41 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           }),
       );
 
+    // ── 导出设置 ──
+    containerEl.createEl("h2", { text: "导出设置" });
+
+    new Setting(containerEl)
+      .setName("导出内容范围")
+      .setDesc("点击导出按钮时，选择导出仅摘要还是全部内容（转录 + 摘要）")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("full", "全部内容（转录 + 摘要）")
+          .addOption("summaryOnly", "仅摘要")
+          .setValue(this.plugin.settings.exportMode)
+          .onChange(async (value: ExportMode) => {
+            this.plugin.settings.exportMode = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
     // ── 高级设置 ──
     containerEl.createEl("h2", { text: "高级设置" });
+
+    new Setting(containerEl)
+      .setName("实时模式预设")
+      .setDesc("在“稳态档 / 极速档”之间切换，会自动应用一组推荐参数")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("stable", "稳态档（更稳、更准）")
+          .addOption("fast", "极速档（更快、略激进）")
+          .setValue(this.plugin.settings.realtimeProfile)
+          .onChange(async (value: RealtimeProfile) => {
+            this.applyRealtimePreset(value);
+            await this.plugin.saveSettings();
+            new Notice(`已切换到${value === "stable" ? "稳态档" : "极速档"}`);
+            this.display();
+          });
+      });
 
     new Setting(containerEl)
       .setName("实时预览")
@@ -312,5 +404,21 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+  }
+
+  private applyRealtimePreset(profile: RealtimeProfile): void {
+    this.plugin.settings.realtimeProfile = profile;
+    if (profile === "stable") {
+      this.plugin.settings.vad.minSilenceDuration = 1.6;
+      this.plugin.settings.aggregation.flushWindowSec = 6;
+      this.plugin.settings.aggregation.maxChars = 520;
+      this.plugin.settings.aggregation.realtimePreview = true;
+      return;
+    }
+
+    this.plugin.settings.vad.minSilenceDuration = 0.9;
+    this.plugin.settings.aggregation.flushWindowSec = 3;
+    this.plugin.settings.aggregation.maxChars = 260;
+    this.plugin.settings.aggregation.realtimePreview = true;
   }
 }
