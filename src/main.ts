@@ -55,13 +55,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     // 注册侧边栏视图
     this.registerView(VIEW_TYPE_TRANSCRIPTION, (leaf) => {
       const view = new TranscriptionView(leaf);
-      view.onToggleRecording = () => this.toggleRecording();
-      view.onToggleDisplayMode = () => this.toggleDisplayMode();
-      view.onExport = () => this.exportToNote();
-      view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
-      view.onClearTranscripts = () => this.clearEntries();
+      this.bindViewCallbacks(view);
       return view;
     });
+
+    await this.refreshLegacyTranscriptionViews();
 
     // 添加 Ribbon 图标
     this.addRibbonIcon("microphone", "实时语音转写", () => {
@@ -104,6 +102,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     const view = this.getView();
     if (view) {
+      this.bindViewCallbacks(view);
       this.syncViewControlStates(view);
       view.restoreEntries(this.transcriptEntries);
     }
@@ -174,6 +173,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       workspace.revealLeaf(leaf);
       const view = this.getView();
       if (view) {
+        this.bindViewCallbacks(view);
         this.syncViewControlStates(view);
         view.restoreEntries(this.transcriptEntries);
       }
@@ -249,7 +249,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     console.log("[Transcription] 正在连接 WebSocket...");
     currentView.setConnectionStatus(false, "连接中...");
     try {
-      await this.connectBackendWithRetry(this.settings.backendPort);
+      await this.connectBackendWithRetry(this.backendManager.activePort || this.settings.backendPort);
     } catch (err) {
       console.error("[Transcription] WebSocket 连接失败:", err);
       new Notice("无法连接到转写后端");
@@ -706,6 +706,34 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private syncViewControlStates(view: TranscriptionView): void {
     view.setRecordingState(this.recording);
     view.setDisplayMode(this.settings.summary.displayMode);
+  }
+
+  private bindViewCallbacks(view: TranscriptionView): void {
+    view.onToggleRecording = () => this.toggleRecording();
+    view.onToggleDisplayMode = () => this.toggleDisplayMode();
+    view.onExport = () => this.exportToNote();
+    view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
+    view.onClearTranscripts = () => this.clearEntries();
+  }
+
+  private async refreshLegacyTranscriptionViews(): Promise<void> {
+    const leaves = [...this.app.workspace.getLeavesOfType(VIEW_TYPE_TRANSCRIPTION)];
+    if (leaves.length === 0) return;
+
+    for (const leaf of leaves) {
+      if (leaf.view instanceof TranscriptionView) continue;
+      const wasActive = this.app.workspace.getMostRecentLeaf() === leaf;
+      leaf.detach();
+      const targetLeaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf(false);
+      if (!targetLeaf) continue;
+      await targetLeaf.setViewState({
+        type: VIEW_TYPE_TRANSCRIPTION,
+        active: wasActive,
+      });
+      if (wasActive) {
+        this.app.workspace.revealLeaf(targetLeaf);
+      }
+    }
   }
 
   private enqueueSummaryText(text: string, wallTime: Date): void {
