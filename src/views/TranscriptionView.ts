@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf, setIcon, createDiv } from "obsidian";
+import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf, setIcon, createDiv } from "obsidian";
 import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS, PLUGIN_ID } from "../constants";
 import { TranscriptEntry, TranscriptionResult, SummaryDisplayMode } from "../types";
 
@@ -240,7 +240,13 @@ export class TranscriptionView extends ItemView {
       );
     }
     if (this.streamingOriginalEl) {
-      this.streamingOriginalEl.setText(entry.result.text);
+      const isSummaryEntry = entry.result.language === "summary";
+      if (isSummaryEntry) {
+        this.streamingOriginalEl.empty();
+        void MarkdownRenderer.render(this.app, entry.result.text, this.streamingOriginalEl, "", this);
+      } else {
+        this.streamingOriginalEl.setText(entry.result.text);
+      }
     }
 
     // 提交时为非摘要卡片追加润色按钮
@@ -398,7 +404,11 @@ export class TranscriptionView extends ItemView {
 
     // 原文
     const originalEl = card.createDiv("card-original");
-    originalEl.setText(entry.result.text);
+    if (isSummary) {
+      void MarkdownRenderer.render(this.app, entry.result.text, originalEl, "", this);
+    } else {
+      originalEl.setText(entry.result.text);
+    }
 
     // 润色文本（已有则直接显示）
     if (entry.formalText) {
