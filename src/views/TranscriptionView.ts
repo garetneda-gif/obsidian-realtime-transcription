@@ -51,15 +51,18 @@ export class TranscriptionView extends ItemView {
     const titleEl = header.createEl("span", { cls: "transcription-title" });
     titleEl.setText("文字转写");
 
-    // 控制栏
+    // 控制栏（含状态指示器）
     this.controlBar = container.createDiv("control-bar");
     this.buildControlBar();
 
-    // 状态栏
-    this.statusBar = container.createDiv("status-bar");
-    this.statusDot = this.statusBar.createDiv("status-dot");
-    this.statusText = this.statusBar.createEl("span", { cls: "status-text" });
+    // 状态指示器嵌入控制栏右侧
+    const statusIndicator = this.controlBar.createDiv("status-indicator");
+    this.statusDot = statusIndicator.createDiv("status-dot");
+    this.statusText = statusIndicator.createEl("span", { cls: "status-text" });
     this.statusText.setText("未连接");
+
+    // 保留隐藏的 statusBar 引用以兼容
+    this.statusBar = statusIndicator;
 
     // 转写结果区域
     this.transcriptContainer = container.createDiv("transcript-container");
@@ -325,8 +328,12 @@ export class TranscriptionView extends ItemView {
     // 更新按钮状态
     const btn = card.querySelector(".formalize-btn") as HTMLElement | null;
     if (btn) {
+      btn.classList.remove("loading");
       btn.classList.add("done");
-      btn.textContent = "已润色";
+      btn.empty();
+      const checkIcon = btn.createDiv("formalize-btn-icon");
+      setIcon(checkIcon, "check");
+      btn.appendText("已润色");
     }
 
     // 插入或更新润色文本
@@ -454,7 +461,7 @@ export class TranscriptionView extends ItemView {
   }
 
   private shouldShowTranslationPlaceholder(language: string): boolean {
-    return language === "en" || language === "ja" || language === "ko";
+    return language === "en";
   }
 
   private formatWallTime(date: Date): string {
