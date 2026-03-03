@@ -1,5 +1,7 @@
-import { requestUrl } from "obsidian";
+import { requestUrl, RequestUrlResponse } from "obsidian";
 import { FormalizeSettings } from "../types";
+
+const FORMALIZE_TIMEOUT_MS = 30000;
 
 export class FormalizeService {
   private settings: FormalizeSettings;
@@ -34,7 +36,8 @@ export class FormalizeService {
     if (!apiUrl) throw new Error("未配置润色 API 端点");
     if (!model) throw new Error("未配置润色模型");
 
-    const response = await requestUrl({
+    const response = await Promise.race<RequestUrlResponse>([
+      requestUrl({
       url: apiUrl,
       method: "POST",
       headers: {
@@ -54,7 +57,11 @@ export class FormalizeService {
         temperature: 0.3,
         max_tokens: 1024,
       }),
-    });
+    }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`润色请求超时（>${Math.floor(FORMALIZE_TIMEOUT_MS / 1000)} 秒）`)), FORMALIZE_TIMEOUT_MS),
+      ),
+    ]);
 
     const data = response.json;
     if (data?.error) {
