@@ -1,6 +1,8 @@
-import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf, setIcon, createDiv } from "obsidian";
+import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS, PLUGIN_ID } from "../constants";
 import { TranscriptEntry, TranscriptionResult, SummaryDisplayMode } from "../types";
+
+const FORMALIZE_UI_TIMEOUT_MS = 35000;
 
 export class TranscriptionView extends ItemView {
   private controlBar!: HTMLElement;
@@ -365,7 +367,8 @@ export class TranscriptionView extends ItemView {
     if (!formalEl) {
       // 在原文之后、翻译之前插入
       const originalEl = card.querySelector(".card-original");
-      formalEl = createDiv({ cls: "card-formal" });
+      formalEl = document.createElement("div");
+      formalEl.className = "card-formal";
       if (originalEl?.nextSibling) {
         card.insertBefore(formalEl, originalEl.nextSibling);
       } else {
@@ -465,16 +468,35 @@ export class TranscriptionView extends ItemView {
     btn.textContent = "润色中...";
 
     // 添加加载占位
+    const oldLoading = card.querySelector(".card-formal-loading");
+    if (oldLoading) oldLoading.remove();
     const originalEl = card.querySelector(".card-original");
-    const loadingEl = createDiv({ cls: "card-formal-loading", text: "正在润色..." });
+    const loadingEl = document.createElement("div");
+    loadingEl.className = "card-formal-loading";
+    loadingEl.textContent = "正在润色...";
     if (originalEl?.nextSibling) {
       card.insertBefore(loadingEl, originalEl.nextSibling);
     } else {
       card.appendChild(loadingEl);
     }
 
+    let watchdog: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      if (!btn.classList.contains("loading")) return;
+      loadingEl.remove();
+      btn.classList.remove("loading");
+      btn.textContent = "润色";
+      const btnIcon = btn.createDiv("formalize-btn-icon");
+      setIcon(btnIcon, "wand-2");
+      btn.insertBefore(btnIcon, btn.firstChild);
+      new Notice(`润色超时（>${Math.floor(FORMALIZE_UI_TIMEOUT_MS / 1000)} 秒），请检查 API 配置或网络`);
+    }, FORMALIZE_UI_TIMEOUT_MS + 1000);
+
     try {
-      const result = await this.onFormalize(entryId, text);
+      const result = await withTimeout(
+        Promise.resolve().then(() => this.onFormalize!(entryId, text)),
+        FORMALIZE_UI_TIMEOUT_MS,
+        `润色超时（>${Math.floor(FORMALIZE_UI_TIMEOUT_MS / 1000)} 秒），请检查 API 配置或网络`,
+      );
       this.updateFormalText(entryId, result);
     } catch (err) {
       loadingEl.remove();
@@ -485,6 +507,11 @@ export class TranscriptionView extends ItemView {
       btn.insertBefore(btnIcon, btn.firstChild);
       const detail = err instanceof Error ? err.message : "未知错误";
       new Notice(`润色失败: ${detail}`);
+    } finally {
+      if (watchdog) {
+        clearTimeout(watchdog);
+        watchdog = null;
+      }
     }
   }
 
@@ -509,4 +536,20 @@ export class TranscriptionView extends ItemView {
       cls: "empty-subtitle",
     });
   }
+}
+
+function withTimeout<T>(task: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    task.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
