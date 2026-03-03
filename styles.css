@@ -467,27 +467,25 @@
 /* ── 润色文本 ── */
 .card-formal {
   font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-accent);
-  padding: 7px 10px;
-  margin-top: 6px;
-  background: rgba(52, 152, 219, 0.05);
-  border-radius: 6px;
-  border-left: 2px solid var(--text-accent);
+  line-height: 1.65;
+  color: var(--text-normal);
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(139, 92, 246, 0.04));
+  border-radius: 8px;
+  border: none;
   position: relative;
 }
 
 .card-formal::before {
-  content: "润色";
-  position: absolute;
-  top: -8px;
-  left: 8px;
-  font-size: 9px;
-  padding: 0 5px;
-  background: var(--background-secondary);
-  color: var(--text-faint);
-  border-radius: 3px;
-  letter-spacing: 0.3px;
+  content: "✦ 润色";
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  margin-bottom: 4px;
+  color: rgba(99, 102, 241, 0.75);
+  letter-spacing: 0.5px;
 }
 
 .card-formal-loading {
