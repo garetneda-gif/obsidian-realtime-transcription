@@ -24,6 +24,7 @@ export class TranscriptionView extends ItemView {
   onToggleDisplayMode: (() => void | Promise<void>) | null = null;
   onExport: (() => void) | null = null;
   onFormalize: ((entryId: string, text: string) => Promise<string>) | null = null;
+  onClearTranscripts: (() => void | Promise<void>) | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -72,7 +73,7 @@ export class TranscriptionView extends ItemView {
   }
 
   async onClose(): Promise<void> {
-    this.entries = [];
+    // 不清空 entries，数据由 plugin 实例持久化管理
     this.streamingCard = null;
     this.streamingEntryId = null;
     this.streamingTimeEl = null;
@@ -306,10 +307,25 @@ export class TranscriptionView extends ItemView {
     this.clearStreamingTranscript();
     this.transcriptContainer.empty();
     this.showEmptyState();
+    void this.onClearTranscripts?.();
   }
 
   getEntries(): TranscriptEntry[] {
     return [...this.entries];
+  }
+
+  /** 从持久化数据恢复 entries（插件加载或视图重新打开时调用） */
+  restoreEntries(entries: TranscriptEntry[]): void {
+    this.entries = [...entries];
+    this.transcriptContainer.empty();
+    if (this.entries.length === 0) {
+      this.showEmptyState();
+      return;
+    }
+    for (const entry of this.entries) {
+      this.renderCard(entry);
+    }
+    this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
   }
 
   updateFormalText(entryId: string, formalText: string): void {

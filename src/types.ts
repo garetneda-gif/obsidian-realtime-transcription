@@ -13,6 +13,7 @@ export interface FormalizeSettings {
 
 export type SummaryDisplayMode = "summaryOnly" | "both";
 export type ExportMode = "summaryOnly" | "full";
+export type ExportTitleMode = "timestamp" | "ai" | "manual";
 
 export interface SummarySettings {
   enabled: boolean;
@@ -49,6 +50,7 @@ export interface PluginSettings {
   formalize: FormalizeSettings;
   summary: SummarySettings;
   exportMode: ExportMode;
+  exportTitleMode: ExportTitleMode;
   vad: VadSettings;
   aggregation: AggregationSettings;
 }
@@ -81,6 +83,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     thresholdChars: 3000,
   },
   exportMode: "full",
+  exportTitleMode: "timestamp",
   vad: {
     threshold: 0.5,
     minSilenceDuration: 1.0,
@@ -108,4 +111,13 @@ export interface TranscriptEntry {
   translation: string | null;
   formalText: string | null;
   wallTime: Date;
+}
+
+/** JSON 持久化用序列化版本，wallTime 为 ISO 字符串 */
+export interface SerializedTranscriptEntry {
+  id: string;
+  result: TranscriptionResult;
+  translation: string | null;
+  formalText: string | null;
+  wallTime: string;
 }

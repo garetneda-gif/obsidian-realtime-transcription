@@ -8,8 +8,10 @@ import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
 import { TranscriptionSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult } from "./types";
+import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult, SerializedTranscriptEntry } from "./types";
 import { resolvePluginDir } from "./utils/pluginPaths";
+import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
+import { TitleInputModal } from "./views/TitleInputModal";
 
 interface PendingTranscript {
   id: string;
@@ -42,9 +44,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private rollbackCandidateAt = 0;
   private lastPartialLanguage = "zh";
   private lastPartialWallTime: Date | null = null;
+  private transcriptEntries: TranscriptEntry[] = [];
+  private saveEntriesTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly ENTRIES_FILE = "transcript-entries.json";
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    await this.loadEntries();
 
     // 注册侧边栏视图
     this.registerView(VIEW_TYPE_TRANSCRIPTION, (leaf) => {
@@ -53,6 +59,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       view.onToggleDisplayMode = () => this.toggleDisplayMode();
       view.onExport = () => this.exportToNote();
       view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
+      view.onClearTranscripts = () => this.clearEntries();
       return view;
     });
 
@@ -98,12 +105,17 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const view = this.getView();
     if (view) {
       this.syncViewControlStates(view);
+      view.restoreEntries(this.transcriptEntries);
     }
   }
 
   async onunload(): Promise<void> {
     await this.flushPendingTranscript();
     this.clearFlushTimer();
+    if (this.saveEntriesTimer) {
+      clearTimeout(this.saveEntriesTimer);
+    }
+    await this.saveEntriesToDisk();
     this.audioCapture.stop();
     this.wsClient.disconnect();
     await this.backendManager.stop();
@@ -163,6 +175,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const view = this.getView();
       if (view) {
         this.syncViewControlStates(view);
+        view.restoreEntries(this.transcriptEntries);
       }
     }
   }
@@ -495,6 +508,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     };
 
     view.commitStreamingTranscript(entry);
+    this.addEntry(entry);
     this.enqueueSummaryText(entry.result.text, entry.wallTime);
 
     if (this.translationService.shouldTranslate(entry.result.language)) {
@@ -505,6 +519,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         );
         entry.translation = translation;
         view.updateTranslation(entry.id, translation);
+        this.updateEntry(entry.id, { translation });
       } catch (err) {
         console.error("翻译失败:", err);
         const detail = err instanceof Error && err.message ? err.message : "未知错误";
@@ -744,6 +759,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         wallTime,
       };
       view.addTranscript(entry);
+      this.addEntry(entry);
     } catch (err) {
       console.error("AI 摘要失败:", err);
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
@@ -767,6 +783,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (view) {
       view.updateFormalText(entryId, result);
     }
+    this.updateEntry(entryId, { formalText: result });
     return result;
   }
 
@@ -787,12 +804,53 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       return;
     }
 
-    // 生成 Markdown 内容
+    // 生成时间戳（默认值和 fallback）
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const timeStr = `${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+    const timestampTitle = `语音转写-${dateStr}-${timeStr}`;
 
-    let md = `# 语音转写记录 ${dateStr} ${timeStr}\n\n`;
+    // 根据 exportTitleMode 决定文件名
+    let title: string;
+    const mode = this.settings.exportTitleMode ?? "timestamp";
+
+    switch (mode) {
+      case "manual": {
+        const modal = new TitleInputModal(this.app, timestampTitle);
+        const userInput = await modal.waitForInput();
+        if (userInput === null) return;
+        title = this.sanitizeFileName(userInput) || timestampTitle;
+        break;
+      }
+      case "ai": {
+        if (!this.summaryService.isConfigured()) {
+          new Notice("AI 命名需要先配置摘要 API");
+          title = timestampTitle;
+          break;
+        }
+        try {
+          new Notice("正在生成标题...");
+          const contentSnippet = entries
+            .map((e) => e.result.text)
+            .join("\n")
+            .slice(0, 2000);
+          const aiTitle = await this.summaryService.generateTitle(contentSnippet);
+          title = this.sanitizeFileName(aiTitle) || timestampTitle;
+        } catch (err) {
+          console.error("[Transcription] AI 命名失败:", err);
+          new Notice("AI 命名失败，使用时间戳命名");
+          title = timestampTitle;
+        }
+        break;
+      }
+      case "timestamp":
+      default:
+        title = timestampTitle;
+        break;
+    }
+
+    // 生成 Markdown 内容
+    let md = `# ${title}\n\n`;
 
     for (const entry of entries) {
       const time = this.formatTime(entry.wallTime);
@@ -809,11 +867,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
 
     // 创建笔记文件
-    const fileName = `语音转写-${dateStr}-${timeStr}.md`;
+    const fileName = `${title}.md`;
     try {
       await this.app.vault.create(fileName, md);
       new Notice(`已导出到: ${fileName}`);
-      // 打开新笔记
       const file = this.app.vault.getAbstractFileByPath(fileName);
       if (file) {
         const leaf = this.app.workspace.getLeaf(false);
@@ -821,6 +878,95 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       }
     } catch {
       new Notice("导出失败，文件可能已存在");
+    }
+  }
+
+  private sanitizeFileName(name: string): string {
+    return name
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 100);
+  }
+
+  // ── entries 持久化 ──
+
+  private getEntriesFilePath(): string {
+    const dir = this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
+    return `${dir}/${this.ENTRIES_FILE}`;
+  }
+
+  private async loadEntries(): Promise<void> {
+    const path = this.getEntriesFilePath();
+    try {
+      const exists = await this.app.vault.adapter.exists(path);
+      if (!exists) {
+        this.transcriptEntries = [];
+        return;
+      }
+      const raw = await this.app.vault.adapter.read(path);
+      const parsed: SerializedTranscriptEntry[] = JSON.parse(raw);
+      this.transcriptEntries = parsed.map(deserializeEntry);
+      // 恢复 entryCounter 以避免 ID 冲突
+      for (const e of this.transcriptEntries) {
+        const num = parseInt(e.id.replace("entry-", ""), 10);
+        if (!isNaN(num) && num > this.entryCounter) {
+          this.entryCounter = num;
+        }
+      }
+    } catch (err) {
+      console.error("[Transcription] 加载历史记录失败:", err);
+      this.transcriptEntries = [];
+    }
+  }
+
+  private debouncedSaveEntries(): void {
+    if (this.saveEntriesTimer) {
+      clearTimeout(this.saveEntriesTimer);
+    }
+    this.saveEntriesTimer = setTimeout(() => {
+      void this.saveEntriesToDisk();
+    }, 1000);
+  }
+
+  private async saveEntriesToDisk(): Promise<void> {
+    const path = this.getEntriesFilePath();
+    try {
+      const serialized = this.transcriptEntries.map(serializeEntry);
+      await this.app.vault.adapter.write(path, JSON.stringify(serialized));
+    } catch (err) {
+      console.error("[Transcription] 保存历史记录失败:", err);
+    }
+  }
+
+  private addEntry(entry: TranscriptEntry): void {
+    const idx = this.transcriptEntries.findIndex((e) => e.id === entry.id);
+    if (idx >= 0) {
+      this.transcriptEntries[idx] = entry;
+    } else {
+      this.transcriptEntries.push(entry);
+    }
+    this.debouncedSaveEntries();
+  }
+
+  private updateEntry(entryId: string, updates: Partial<Pick<TranscriptEntry, "translation" | "formalText">>): void {
+    const entry = this.transcriptEntries.find((e) => e.id === entryId);
+    if (entry) {
+      Object.assign(entry, updates);
+      this.debouncedSaveEntries();
+    }
+  }
+
+  private async clearEntries(): Promise<void> {
+    this.transcriptEntries = [];
+    const path = this.getEntriesFilePath();
+    try {
+      const exists = await this.app.vault.adapter.exists(path);
+      if (exists) {
+        await this.app.vault.adapter.remove(path);
+      }
+    } catch (err) {
+      console.error("[Transcription] 删除历史记录失败:", err);
     }
   }
 

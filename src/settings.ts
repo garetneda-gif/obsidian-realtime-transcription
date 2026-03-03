@@ -1,7 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
-import type { RealtimeProfile, RecognitionMode, ExportMode } from "./types";
+import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode } from "./types";
 
 export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
@@ -328,6 +328,21 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.exportMode)
           .onChange(async (value: ExportMode) => {
             this.plugin.settings.exportMode = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("导出文件命名方式")
+      .setDesc("导出笔记时如何命名文件")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("timestamp", "时间戳命名（默认）")
+          .addOption("ai", "AI 智能命名")
+          .addOption("manual", "手动命名")
+          .setValue(this.plugin.settings.exportTitleMode ?? "timestamp")
+          .onChange(async (value: ExportTitleMode) => {
+            this.plugin.settings.exportTitleMode = value;
             await this.plugin.saveSettings();
           });
       });

@@ -62,6 +62,45 @@ export class SummaryService {
     }
     return summary;
   }
+
+  async generateTitle(contentSnippet: string): Promise<string> {
+    const apiUrl = normalizeApiUrl(this.settings.apiUrl);
+    const model = this.settings.model?.trim();
+    const apiKey = this.settings.apiKey?.trim();
+
+    if (!apiKey) throw new Error("未配置摘要 API Key");
+    if (!apiUrl) throw new Error("未配置摘要 API 端点");
+    if (!model) throw new Error("未配置摘要模型");
+
+    const response = await requestUrl({
+      url: apiUrl,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是标题生成助手。根据语音转写内容拟定一个简短标题，10字以内，不带标点符号。只输出标题本身。",
+          },
+          { role: "user", content: contentSnippet },
+        ],
+        temperature: 0.3,
+        max_tokens: 50,
+      }),
+    });
+
+    const data = response.json;
+    const title = extractTextFromResponse(data);
+    if (!title) {
+      throw new Error("AI 命名返回格式不受支持");
+    }
+    return title.replace(/[。！？.!?"'""'']/g, "").trim();
+  }
 }
 
 function normalizeApiUrl(url: string): string {
