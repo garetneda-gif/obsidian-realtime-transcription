@@ -181,13 +181,13 @@ mkdir C:\Users\你的用户名\obsidian-models
 
 #### 方法二：手动下载
 
-将以下三个文件下载到同一目录：
+将以下三个文件**分别下载**到同一目录（每个都是独立文件，无需解压）：
 
-| 文件 | 直接下载链接 | 大小 |
-|------|------------|------|
-| `model.int8.onnx` | [下载（需解压 tar.bz2）](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2) | ~229 MB |
-| `tokens.txt` | 同上压缩包内 | <1 MB |
-| `silero_vad.onnx` | [直接下载](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx) | ~1.8 MB |
+| 文件 | 下载链接（点击直接下载） | 大小 |
+|------|------------------------|------|
+| `model.int8.onnx` | [HuggingFace 下载](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx) · [国内镜像](https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx) | ~229 MB |
+| `tokens.txt` | [HuggingFace 下载](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt) · [国内镜像](https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt) | <1 MB |
+| `silero_vad.onnx` | [GitHub 下载](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx) | ~1.8 MB |
 
 > **提示**：建议保持「使用 Int8 量化模型」为开启状态（默认已开启），可将模型体积从 895 MB 压缩至 229 MB，精度基本无损。
 
@@ -515,13 +515,13 @@ mkdir C:\Users\YourUsername\obsidian-models
 
 #### Method 2: Manual download
 
-Download all three files into the same directory:
+Download each file **individually** into the same directory (all are standalone files, no extraction needed):
 
-| File | Download | Size |
-|------|----------|------|
-| `model.int8.onnx` | [Download (extract from tar.bz2)](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2) | ~229 MB |
-| `tokens.txt` | Inside the same archive | <1 MB |
-| `silero_vad.onnx` | [Direct download](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx) | ~1.8 MB |
+| File | Download Link | Size |
+|------|---------------|------|
+| `model.int8.onnx` | [HuggingFace](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx) · [Mirror (China)](https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx) | ~229 MB |
+| `tokens.txt` | [HuggingFace](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt) · [Mirror (China)](https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt) | <1 MB |
+| `silero_vad.onnx` | [GitHub](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx) | ~1.8 MB |
 
 > **Tip**: Keep `Use Int8 quantized model` enabled (default). It reduces model size from 895 MB to 229 MB with negligible quality loss.
 
