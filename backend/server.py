@@ -12,6 +12,12 @@ import sys
 import time
 from pathlib import Path
 
+# Windows 控制台 UTF-8 编码（解决中文显示为 ???? 的问题）
+if sys.platform == "win32":
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
 import numpy as np
 
 try:
@@ -21,8 +27,12 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import websockets
-    from websockets.server import serve
+    # websockets ≥14.0: 推荐使用 websockets.asyncio.server.serve
+    # websockets <14.0: 使用 websockets.server.serve（已弃用但仍可用）
+    try:
+        from websockets.asyncio.server import serve
+    except ImportError:
+        from websockets.server import serve
 except ImportError:
     print("错误: 请先安装 websockets: pip3 install websockets", file=sys.stderr)
     sys.exit(1)
