@@ -334,6 +334,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (!text) return;
     const normalizedLanguage = this.normalizeLanguage(result.language, text);
     const resultType = result.type ?? "final";
+    console.log(`[Transcription] recv ${resultType}: lang=${normalizedLanguage} "${text.slice(0, 60)}..."`);
 
     if (resultType === "partial") {
       // 关闭实时预览时忽略 partial 结果
@@ -595,7 +596,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     if (!previousDisplay) {
       this.resetRollbackCandidate();
-      if (endsSentence || current.length >= minLen) return current;
+      // 首个 partial 降低门槛（2 字即显示），避免用户长时间看不到任何内容
+      if (current.length >= 2 || endsSentence) return current;
       return null;
     }
 

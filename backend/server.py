@@ -104,8 +104,8 @@ class TranscriptionServer:
         partial_interval_sec = 1.5
         partial_min_samples = int(self.sample_rate * 1.5)
         partial_max_samples = int(self.sample_rate * 10.0)
-        # 静音能量阈值：低于此值认为无语音，跳过解码
-        energy_threshold = 0.005
+        audio_chunk_count = 0
+        last_stats_at = 0.0
 
         print(f"客户端连接: {websocket.remote_address}")
         try:
@@ -119,38 +119,41 @@ class TranscriptionServer:
                     realtime_buffer = np.concatenate((realtime_buffer, samples))
                     if len(realtime_buffer) > partial_max_samples:
                         realtime_buffer = realtime_buffer[-partial_max_samples:]
+                    audio_chunk_count += 1
 
                     now = time.time()
+
+                    # 每 10 秒打印一次音频统计，帮助诊断"不出字"问题
+                    if now - last_stats_at >= 10.0:
+                        rms = float(np.sqrt(np.mean(realtime_buffer[-min(len(realtime_buffer), partial_min_samples):] ** 2)))
+                        print(f"[stats] chunks={audio_chunk_count} buf={len(realtime_buffer)} rms={rms:.5f}", flush=True)
+                        last_stats_at = now
+
                     if (
                         len(realtime_buffer) >= partial_min_samples
                         and (now - last_partial_at) >= partial_interval_sec
                     ):
-                        # 能量检测：如果缓冲区音量太低，跳过解码节省 CPU
-                        rms = float(np.sqrt(np.mean(realtime_buffer[-partial_min_samples:] ** 2)))
-                        if rms < energy_threshold:
-                            last_partial_at = now
-                        else:
-                            partial_raw = self._decode_text(realtime_buffer)
-                            if partial_raw:
-                                partial_lang = self._parse_language(partial_raw)
-                                partial_text = self._clean_text(partial_raw)
-                                if partial_lang == "zh":
-                                    partial_lang = self._guess_language_from_text(partial_text)
-                                if partial_text and not self._is_similar(partial_text, last_partial_text):
-                                    partial_resp = {
-                                        "type": "partial",
-                                        "text": partial_text,
-                                        "language": partial_lang,
-                                        "timestamps": {
-                                            "start": 0,
-                                            "duration": round(len(realtime_buffer) / self.sample_rate, 2),
-                                        },
-                                    }
-                                    await websocket.send(json.dumps(partial_resp, ensure_ascii=False))
-                                    last_partial_text = partial_text
-                                    last_partial_at = now
-                            else:
+                        partial_raw = self._decode_text(realtime_buffer)
+                        if partial_raw:
+                            partial_lang = self._parse_language(partial_raw)
+                            partial_text = self._clean_text(partial_raw)
+                            if partial_lang == "zh":
+                                partial_lang = self._guess_language_from_text(partial_text)
+                            if partial_text and not self._is_similar(partial_text, last_partial_text):
+                                partial_resp = {
+                                    "type": "partial",
+                                    "text": partial_text,
+                                    "language": partial_lang,
+                                    "timestamps": {
+                                        "start": 0,
+                                        "duration": round(len(realtime_buffer) / self.sample_rate, 2),
+                                    },
+                                }
+                                await websocket.send(json.dumps(partial_resp, ensure_ascii=False))
+                                last_partial_text = partial_text
                                 last_partial_at = now
+                        else:
+                            last_partial_at = now
 
                     client_vad.accept_waveform(samples)
 
