@@ -93,7 +93,17 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.wsClient.setOnStatusChange((connected) => {
       const view = this.getView();
       if (view) {
-        view.setConnectionStatus(connected);
+        if (connected && this.recording) {
+          view.setListeningStatus(true);
+        } else {
+          view.setConnectionStatus(connected);
+        }
+      }
+    });
+    this.wsClient.setOnReconnecting((attempt) => {
+      const view = this.getView();
+      if (view) {
+        view.setConnectionStatus(false, `重连中... (${attempt})`);
       }
     });
 

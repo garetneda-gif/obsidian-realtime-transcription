@@ -5,8 +5,10 @@ export class WebSocketClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private onResult: ((result: TranscriptionResult) => void) | null = null;
   private onStatusChange: ((connected: boolean) => void) | null = null;
+  private onReconnecting: ((attempt: number) => void) | null = null;
   private shouldReconnect = false;
   private port = 0;
+  private reconnectAttempt = 0;
 
   setOnResult(cb: (result: TranscriptionResult) => void): void {
     this.onResult = cb;
@@ -14,6 +16,10 @@ export class WebSocketClient {
 
   setOnStatusChange(cb: (connected: boolean) => void): void {
     this.onStatusChange = cb;
+  }
+
+  setOnReconnecting(cb: (attempt: number) => void): void {
+    this.onReconnecting = cb;
   }
 
   connect(port: number): Promise<void> {
@@ -36,6 +42,7 @@ export class WebSocketClient {
 
       this.ws.onopen = () => {
         clearTimeout(timeout);
+        this.reconnectAttempt = 0;
         this.onStatusChange?.(true);
         resolve();
       };
@@ -72,6 +79,7 @@ export class WebSocketClient {
 
   disconnect(): void {
     this.shouldReconnect = false;
+    this.reconnectAttempt = 0;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -100,13 +108,15 @@ export class WebSocketClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
+    this.reconnectAttempt++;
+    this.onReconnecting?.(this.reconnectAttempt);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       if (this.shouldReconnect) {
         this.connect(this.port).catch(() => {
-          // 重连失败，继续尝试
+          // 重连失败，onclose 会继续触发下一轮
         });
       }
-    }, 3000);
+    }, 1500);
   }
 }
