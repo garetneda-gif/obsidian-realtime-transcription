@@ -3,9 +3,11 @@
 下载 SenseVoice-Small 模型文件和 Silero VAD 模型
 逐文件下载，支持多源回退和断点重试
 """
+from __future__ import annotations  # Python 3.9 兼容 str | None 语法
 
 import argparse
 import shutil
+import socket
 import ssl
 import sys
 import time
@@ -19,10 +21,11 @@ HF_SOURCES = [
     "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main",
 ]
 
-# Silero VAD：GitHub + 国内 ghgo 镜像
+# Silero VAD：GitHub + 国内镜像（多备用源）
 VAD_SOURCES = [
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
-    "https://ghgo.xyz/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+    "https://ghproxy.net/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+    "https://mirror.ghproxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
 ]
 
 REQUIRED_FILES = [
@@ -103,6 +106,12 @@ def download_file(filename: str, sources: list, url_template: str | None, dest_d
 
 
 def main():
+    # 强制 stdout 无缓冲，确保 Obsidian 插件能实时读到进度
+    sys.stdout.reconfigure(line_buffering=True)  # type: ignore[attr-defined]
+
+    # 每次连接/读取最多等 60 秒，避免无限挂起
+    socket.setdefaulttimeout(60)
+
     parser = argparse.ArgumentParser(description="下载 SenseVoice 模型文件")
     parser.add_argument("--output-dir", type=str, required=True, help="模型存放目录")
     args = parser.parse_args()
