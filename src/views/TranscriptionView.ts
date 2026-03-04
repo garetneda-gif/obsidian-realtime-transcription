@@ -188,7 +188,7 @@ export class TranscriptionView extends ItemView {
 
     if (!this.streamingCard || this.streamingEntryId !== entryId) {
       this.streamingCard = this.transcriptContainer.createDiv({
-        cls: "transcript-card",
+        cls: "transcript-card streaming",
         attr: { "data-entry-id": entryId },
       });
       this.streamingEntryId = entryId;

@@ -334,11 +334,14 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (!text) return;
     const normalizedLanguage = this.normalizeLanguage(result.language, text);
     const resultType = result.type ?? "final";
-    console.log(`[Transcription] recv ${resultType}: lang=${normalizedLanguage} "${text.slice(0, 60)}..."`);
+    console.log(`[Transcription] recv ${resultType}: lang=${normalizedLanguage} "${text.slice(0, 60)}"`);
 
     if (resultType === "partial") {
       // 关闭实时预览时忽略 partial 结果
-      if (!this.settings.aggregation.realtimePreview) return;
+      if (!this.settings.aggregation.realtimePreview) {
+        console.log("[Transcription] ✗ realtimePreview 已关闭，丢弃 partial");
+        return;
+      }
 
       const now = new Date();
       const stabilizedText = this.stabilizePartialText(text);
@@ -346,9 +349,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       this.lastPartialLanguage = normalizedLanguage;
       this.lastPartialWallTime = now;
       if (!stabilizedText) {
+        console.log(`[Transcription] ✗ stabilize 拒绝: prev="${this.renderedPartialText}" cur="${text}"`);
         return;
       }
-      if (stabilizedText === this.renderedPartialText) return;
+      if (stabilizedText === this.renderedPartialText) {
+        console.log("[Transcription] ✗ 与上次相同，跳过");
+        return;
+      }
       this.renderedPartialText = stabilizedText;
       this.lastStablePartialText = stabilizedText;
       if (!this.pendingTranscript) {
@@ -372,6 +379,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         this.pendingTranscript.wallTime = this.pendingTranscript.wallTime ?? now;
         this.pendingTranscript.lastUpdatedAt = Date.now();
       }
+      console.log(`[Transcription] ✓ partial → upsert id=${this.pendingTranscript.id} "${stabilizedText}"`);
       view.upsertStreamingTranscript(
         this.pendingTranscript.id,
         stabilizedText,
@@ -402,6 +410,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         lastUpdatedAt: now,
         partialOnly: false,
       };
+      console.log(`[Transcription] ✓ final(new) → upsert id=${this.pendingTranscript.id} "${text.slice(0, 40)}"`);
       view.upsertStreamingTranscript(
         this.pendingTranscript.id,
         text,

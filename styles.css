@@ -487,7 +487,8 @@
 }
 
 /* ── 仅显示摘要模式 ── */
-.transcript-container.summary-only .transcript-card:not(.summary-card) {
+/* summary-only 模式隐藏非摘要卡片，但保留正在输入的 streaming 卡片 */
+.transcript-container.summary-only .transcript-card:not(.summary-card):not(.streaming) {
   display: none;
 }
 
