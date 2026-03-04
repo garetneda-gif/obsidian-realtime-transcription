@@ -137,6 +137,18 @@ pip3 install sherpa-onnx websockets numpy
 pip install sherpa-onnx websockets numpy
 ```
 
+> **国内用户注意**：清华镜像源（tuna.tsinghua.edu.cn）**未同步** `sherpa-onnx` 的 wheel 包。如果你配置了清华源作为默认 pip 源，安装时会报找不到包的错误。请使用以下命令**临时指定官方 PyPI 源**安装：
+>
+> ```bash
+> # macOS / Linux
+> pip3 install sherpa-onnx -i https://pypi.org/simple/
+>
+> # Windows
+> pip install sherpa-onnx -i https://pypi.org/simple/
+> ```
+>
+> `websockets` 和 `numpy` 在清华源中正常可用，无需特别处理。
+
 **验证安装成功：**
 
 ```bash
@@ -466,6 +478,12 @@ pip3 install sherpa-onnx websockets numpy
 # Windows
 pip install sherpa-onnx websockets numpy
 ```
+
+> **For users in China**: The Tsinghua mirror (tuna.tsinghua.edu.cn) does **not** sync `sherpa-onnx` wheel packages. If you have configured it as your default pip source, install from the official PyPI instead:
+>
+> ```bash
+> pip install sherpa-onnx -i https://pypi.org/simple/
+> ```
 
 **Verify the installation:**
 
