@@ -25,15 +25,16 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Python 路径")
       .setDesc("Python 可执行文件路径，确保已安装 sherpa-onnx")
-      .addText((text) =>
+      .addText((text) => {
+        const defaultPython = process.platform === "win32" ? "python" : "python3";
         text
-          .setPlaceholder("python3")
+          .setPlaceholder(defaultPython)
           .setValue(this.plugin.settings.pythonPath)
           .onChange(async (value) => {
-            this.plugin.settings.pythonPath = value || "python3";
+            this.plugin.settings.pythonPath = value || defaultPython;
             await this.plugin.saveSettings();
-          }),
-      );
+          });
+      });
 
     new Setting(containerEl)
       .setName("后端端口")
@@ -59,7 +60,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       .setDesc("包含 model.int8.onnx、tokens.txt、silero_vad.onnx 的目录路径")
       .addText((text) =>
         text
-          .setPlaceholder("/path/to/models")
+          .setPlaceholder(process.platform === "win32" ? "C:\\path\\to\\models" : "/path/to/models")
           .setValue(this.plugin.settings.modelDir)
           .onChange(async (value) => {
             this.plugin.settings.modelDir = value;
@@ -109,8 +110,9 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           if (ok) {
             new Notice("环境检测通过：Python + sherpa-onnx 可用");
           } else {
+            const pipCmd = process.platform === "win32" ? "pip" : "pip3";
             new Notice(
-              "环境检测失败，请执行:\npip3 install sherpa-onnx websockets numpy",
+              `环境检测失败，请执行:\n${pipCmd} install sherpa-onnx websockets numpy`,
             );
           }
           btn.setButtonText("检测环境");

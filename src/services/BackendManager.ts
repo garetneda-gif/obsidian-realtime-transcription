@@ -32,7 +32,11 @@ export class BackendManager {
       const alive = await this.isBackendReachable(checkPort, 1800);
       if (alive && this.lastLaunchSignature === desiredSignature) return true;
       try {
-        this.process.kill("SIGTERM");
+        if (process.platform === "win32" && this.process.pid) {
+          execSync(`taskkill /PID ${this.process.pid} /T /F 2>nul`, { timeout: 3000 });
+        } else {
+          this.process.kill("SIGTERM");
+        }
       } catch {
         // 忽略杀进程失败
       }
@@ -46,7 +50,8 @@ export class BackendManager {
     // 1. 检查 Python 环境
     const envOk = await this.checkEnvironment();
     if (!envOk) {
-      new Notice("Python 环境检测失败，请确认已安装 sherpa-onnx:\npip3 install sherpa-onnx websockets numpy");
+      const pipCmd = process.platform === "win32" ? "pip" : "pip3";
+      new Notice(`Python 环境检测失败，请确认已安装 sherpa-onnx:\n${pipCmd} install sherpa-onnx websockets numpy`);
       return false;
     }
 
@@ -189,12 +194,22 @@ export class BackendManager {
 
   async stop(): Promise<void> {
     if (this.process) {
-      this.process.kill("SIGTERM");
+      const pid = this.process.pid;
+      if (process.platform === "win32" && pid) {
+        // Windows: 使用 taskkill 强制终止进程树
+        try { execSync(`taskkill /PID ${pid} /T /F 2>nul`, { timeout: 5000 }); } catch { /* 忽略 */ }
+      } else {
+        this.process.kill("SIGTERM");
+      }
       // 等待进程退出，最多 5 秒
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
           if (this.process) {
-            this.process.kill("SIGKILL");
+            if (process.platform === "win32" && pid) {
+              try { execSync(`taskkill /PID ${pid} /T /F 2>nul`, { timeout: 3000 }); } catch { /* 忽略 */ }
+            } else {
+              this.process.kill("SIGKILL");
+            }
           }
           resolve();
         }, 5000);
@@ -274,15 +289,21 @@ export class BackendManager {
   /**
    * 清理孤儿后端进程：
    * 1. 优先读取 PID 文件，精确 kill
-   * 2. 兜底：通过 pgrep 查找同插件目录的 server.py 进程并全部 kill
+   * 2. 兜底：按命令行特征查找残留进程（跨平台）
    */
   private killOrphanedProcesses(): void {
+    const isWin = process.platform === "win32";
+
     // 策略 1：PID 文件
     if (existsSync(this.pidFile)) {
       try {
         const pid = parseInt(readFileSync(this.pidFile, "utf-8").trim(), 10);
         if (pid > 0) {
-          process.kill(pid, "SIGTERM");
+          if (isWin) {
+            execSync(`taskkill /PID ${pid} /F 2>nul`, { timeout: 3000 });
+          } else {
+            process.kill(pid, "SIGTERM");
+          }
           console.log(`[Transcription] 通过 PID 文件清理孤儿进程 ${pid}`);
         }
       } catch {
@@ -293,26 +314,49 @@ export class BackendManager {
 
     // 策略 2：兜底，按命令行特征查找残留进程
     try {
-      const serverScript = path.join(this.pluginDir, "backend", "server.py");
-      const output = execSync(
-        `pgrep -f "${serverScript}" 2>/dev/null || true`,
-        { encoding: "utf-8", timeout: 3000 },
-      ).trim();
-      if (output) {
+      if (isWin) {
+        // Windows: 使用 wmic 按命令行匹配查找 server.py 进程
+        const output = execSync(
+          `wmic process where "CommandLine like '%server.py%'" get ProcessId /format:list 2>nul`,
+          { encoding: "utf-8", timeout: 3000 },
+        ).trim();
         for (const line of output.split("\n")) {
-          const pid = parseInt(line.trim(), 10);
-          if (pid > 0) {
-            try {
-              process.kill(pid, "SIGTERM");
-              console.log(`[Transcription] 兜底清理残留进程 ${pid}`);
-            } catch {
-              // 忽略
+          const match = line.match(/ProcessId=(\d+)/);
+          if (match) {
+            const pid = parseInt(match[1], 10);
+            if (pid > 0) {
+              try {
+                execSync(`taskkill /PID ${pid} /F 2>nul`, { timeout: 3000 });
+                console.log(`[Transcription] 兜底清理残留进程 ${pid}`);
+              } catch {
+                // 忽略
+              }
+            }
+          }
+        }
+      } else {
+        // Unix: 使用 pgrep 查找
+        const serverScript = path.join(this.pluginDir, "backend", "server.py");
+        const output = execSync(
+          `pgrep -f "${serverScript}" 2>/dev/null || true`,
+          { encoding: "utf-8", timeout: 3000 },
+        ).trim();
+        if (output) {
+          for (const line of output.split("\n")) {
+            const pid = parseInt(line.trim(), 10);
+            if (pid > 0) {
+              try {
+                process.kill(pid, "SIGTERM");
+                console.log(`[Transcription] 兜底清理残留进程 ${pid}`);
+              } catch {
+                // 忽略
+              }
             }
           }
         }
       }
     } catch {
-      // pgrep 不可用或超时，忽略
+      // 命令不可用或超时，忽略
     }
   }
 

@@ -63,7 +63,7 @@ export interface PluginSettings {
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-  pythonPath: "python3",
+  pythonPath: process.platform === "win32" ? "python" : "python3",
   backendPort: 18888,
   modelDir: "",
   useInt8: true,

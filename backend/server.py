@@ -331,8 +331,13 @@ async def main():
         stop_event.set()
 
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, handle_signal)
+    if sys.platform != "win32":
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, handle_signal)
+    else:
+        # Windows 不支持 add_signal_handler，通过 signal 模块注册回调
+        signal.signal(signal.SIGINT, lambda *_: handle_signal())
+        signal.signal(signal.SIGTERM, lambda *_: handle_signal())
 
     async with serve(
         server.handle_client,
