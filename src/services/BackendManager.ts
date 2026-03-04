@@ -1,8 +1,8 @@
 import { Notice } from "obsidian";
 import { PluginSettings } from "../types";
 
-const { spawn, execFile } = require("child_process") as typeof import("child_process");
-const { existsSync } = require("fs") as typeof import("fs");
+const { spawn, execFile, execSync } = require("child_process") as typeof import("child_process");
+const { existsSync, writeFileSync, readFileSync, unlinkSync } = require("fs") as typeof import("fs");
 const path = require("path") as typeof import("path");
 type ChildProcess = import("child_process").ChildProcess;
 
@@ -13,10 +13,12 @@ export class BackendManager {
   private lastLaunchSignature: string | null = null;
   /** 实际使用的端口（可能因端口占用而与 settings.backendPort 不同） */
   activePort: number = 0;
+  private readonly pidFile: string;
 
   constructor(pluginDir: string, settings: PluginSettings) {
     this.pluginDir = pluginDir;
     this.settings = settings;
+    this.pidFile = path.join(pluginDir, "backend.pid");
   }
 
   updateSettings(settings: PluginSettings): void {
@@ -37,6 +39,9 @@ export class BackendManager {
       this.process = null;
       this.lastLaunchSignature = null;
     }
+
+    // 0. 清理孤儿进程（插件重载后 this.process 为 null，旧进程仍存活）
+    this.killOrphanedProcesses();
 
     // 1. 检查 Python 环境
     const envOk = await this.checkEnvironment();
@@ -144,6 +149,7 @@ export class BackendManager {
               resolve(false);
               return;
             }
+            this.writePidFile();
             this.lastLaunchSignature = desiredSignature;
             resolve(true);
           })();
@@ -206,6 +212,7 @@ export class BackendManager {
       this.process = null;
       this.lastLaunchSignature = null;
     }
+    this.removePidFile();
   }
 
   isRunning(): boolean {
@@ -243,6 +250,70 @@ export class BackendManager {
       });
       proc.on("error", () => resolve(false));
     });
+  }
+
+  /** 将当前后端进程的 PID 写入文件，供下次启动时清理 */
+  private writePidFile(): void {
+    if (!this.process?.pid) return;
+    try {
+      writeFileSync(this.pidFile, String(this.process.pid), "utf-8");
+    } catch {
+      // 写入失败不阻塞启动
+    }
+  }
+
+  /** 删除 PID 文件 */
+  private removePidFile(): void {
+    try {
+      if (existsSync(this.pidFile)) unlinkSync(this.pidFile);
+    } catch {
+      // 忽略
+    }
+  }
+
+  /**
+   * 清理孤儿后端进程：
+   * 1. 优先读取 PID 文件，精确 kill
+   * 2. 兜底：通过 pgrep 查找同插件目录的 server.py 进程并全部 kill
+   */
+  private killOrphanedProcesses(): void {
+    // 策略 1：PID 文件
+    if (existsSync(this.pidFile)) {
+      try {
+        const pid = parseInt(readFileSync(this.pidFile, "utf-8").trim(), 10);
+        if (pid > 0) {
+          process.kill(pid, "SIGTERM");
+          console.log(`[Transcription] 通过 PID 文件清理孤儿进程 ${pid}`);
+        }
+      } catch {
+        // 进程可能已退出，忽略
+      }
+      this.removePidFile();
+    }
+
+    // 策略 2：兜底，按命令行特征查找残留进程
+    try {
+      const serverScript = path.join(this.pluginDir, "backend", "server.py");
+      const output = execSync(
+        `pgrep -f "${serverScript}" 2>/dev/null || true`,
+        { encoding: "utf-8", timeout: 3000 },
+      ).trim();
+      if (output) {
+        for (const line of output.split("\n")) {
+          const pid = parseInt(line.trim(), 10);
+          if (pid > 0) {
+            try {
+              process.kill(pid, "SIGTERM");
+              console.log(`[Transcription] 兜底清理残留进程 ${pid}`);
+            } catch {
+              // 忽略
+            }
+          }
+        }
+      }
+    } catch {
+      // pgrep 不可用或超时，忽略
+    }
   }
 
   private isPortInUse(port: number): Promise<boolean> {
