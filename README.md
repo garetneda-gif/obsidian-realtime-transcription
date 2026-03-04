@@ -30,9 +30,11 @@
 | **实时预览模式** | 稳态档（更准）/ 极速档（更快）两档切换 |
 | **自动翻译** | 检测到非中文内容时，自动调用 OpenAI 兼容 API 翻译成中文 |
 | **AI 文本润色** | 手动触发，将口语化转写润色为规范书面语 |
-| **AI 自动摘要** | 按字数阈值自动生成摘要（默认每 3000 字触发一次） |
+| **AI 自动摘要** | 按字数阈值自动生成摘要（默认每 500 字触发一次） |
+| **二次摘要（综合总结）** | 累积多个摘要后自动生成一份综合总结 |
 | **导出为笔记** | 一键导出为 Obsidian Markdown 笔记，支持时间戳/AI/手动三种命名方式 |
 | **历史记录持久化** | 关闭 Obsidian 后转写记录不丢失 |
+| **跨平台支持** | macOS / Windows / Linux 全平台兼容 |
 
 ### 架构概览
 
@@ -104,7 +106,11 @@ npm run build
 **检查是否已安装 Python：**
 
 ```bash
+# macOS / Linux
 python3 --version
+
+# Windows（命令提示符或 PowerShell）
+python --version
 ```
 
 输出类似 `Python 3.11.x` 则已安装，可继续。否则按下方系统安装：
@@ -121,23 +127,25 @@ python3 --version
 
 ### 第三步：安装 Python 依赖
 
-在终端（macOS/Linux）或命令提示符（Windows）中，进入插件目录后执行：
+在终端（macOS/Linux）或命令提示符/PowerShell（Windows）中执行：
 
 ```bash
-pip3 install -r backend/requirements.txt
-```
+# macOS / Linux
+pip3 install sherpa-onnx websockets numpy
 
-或直接安装：
-
-```bash
-pip3 install sherpa-onnx>=1.10.0 websockets>=12.0 numpy>=1.24.0
+# Windows
+pip install sherpa-onnx websockets numpy
 ```
 
 **验证安装成功：**
 
 ```bash
-pip3 list | grep sherpa-onnx
-# 输出类似：sherpa-onnx   1.10.x  ← 看到版本号说明安装成功
+# macOS / Linux
+python3 -c "import sherpa_onnx; print('ok')"
+
+# Windows
+python -c "import sherpa_onnx; print('ok')"
+# 输出 ok 说明安装成功
 ```
 
 ---
@@ -194,11 +202,13 @@ ls ~/obsidian-models
 
 #### 后端设置
 
-- `Python 路径`：填写 Python 的路径（不确定时填 `python3`，Windows 可能需要填完整路径）
+- `Python 路径`：填写 Python 的路径
+  - macOS / Linux：填 `python3`（大多数情况下直接可用）
+  - Windows：填 `python`（插件会自动设置此默认值）
 
-  > 如何获取 Python 完整路径？
+  > 如果默认值不工作，需要获取 Python 完整路径：
   > - macOS/Linux：在终端运行 `which python3`
-  > - Windows：在命令提示符运行 `where python.exe`，复制第一行结果
+  > - Windows：在命令提示符运行 `where python`，复制第一行结果
 
   各平台路径示例：
 
@@ -262,10 +272,10 @@ ls ~/obsidian-models
 
 | 提示内容 | 可能原因 | 解决方案 |
 |---------|---------|---------|
-| 「环境检测失败，请执行 pip3 install...」| sherpa-onnx 依赖未安装 | 运行 `pip3 install sherpa-onnx websockets numpy` 后重试 |
-| 检测无反应，按钮灰色 | Python 路径字段为空 | 在设置中填入 `python3` |
-| 「No such file or directory」| Python 路径不存在 | 重新运行 `which python3` 获取正确路径 |
-| Windows 上找不到 python3 | Python 未加入系统 PATH | 重新安装 Python，安装时勾选「Add to PATH」|
+| 「环境检测失败，请执行 pip install...」| sherpa-onnx 依赖未安装 | 运行 `pip install sherpa-onnx websockets numpy`（macOS/Linux 用 `pip3`）后重试 |
+| 检测无反应，按钮灰色 | Python 路径字段为空 | macOS/Linux 填 `python3`；Windows 填 `python` |
+| 「No such file or directory」| Python 路径不存在 | macOS/Linux 运行 `which python3`；Windows 运行 `where python` 获取正确路径 |
+| Windows 上找不到 python | Python 未加入系统 PATH | 重新安装 Python，安装时勾选「Add Python to PATH」|
 
 #### 后端启动失败：错误信息对照表
 
@@ -307,6 +317,10 @@ https://api.example.com/v1/chat/completions
 - `VAD 静音阈值`（建议从 1.0 调到 1.5~2.0）
 - `聚合输出窗口`（建议从 4 调到 6~8）
 
+#### Windows 后端启动报 NotImplementedError
+
+如果在 v1.0.2 或更早版本遇到 `NotImplementedError: add_signal_handler` 错误，请升级至 v1.0.3+。此问题已在新版本中修复。
+
 #### macOS 首次运行弹出安全警告
 
 macOS 可能拦截未经公证的 Python 脚本，出现「无法验证开发者」提示：
@@ -347,9 +361,11 @@ Pull requests and issues are welcome! Please:
 | **Real-time profile** | Stable mode (more accurate) / Fast mode (lower latency) |
 | **Auto translation** | Automatically translate non-Chinese speech to Chinese via OpenAI-compatible API |
 | **AI text formalization** | On-demand polishing of colloquial transcriptions into formal written text |
-| **AI auto-summary** | Generate summaries after a configurable character threshold (default: 3000 chars) |
+| **AI auto-summary** | Generate summaries after a configurable character threshold (default: 500 chars) |
+| **Meta-summary** | Automatically generate a comprehensive summary after accumulating multiple summaries |
 | **Export to note** | One-click export to Obsidian Markdown note; timestamp / AI-generated / manual title |
 | **Persistent history** | Transcription history survives Obsidian restarts |
+| **Cross-platform** | Fully compatible with macOS / Windows / Linux |
 
 ### Architecture Overview
 
@@ -420,7 +436,11 @@ npm run build
 **Check if Python is installed:**
 
 ```bash
+# macOS / Linux
 python3 --version
+
+# Windows (Command Prompt or PowerShell)
+python --version
 ```
 
 If you see `Python 3.11.x` (or similar), you're good. Otherwise, install Python for your OS:
@@ -437,23 +457,25 @@ If you see `Python 3.11.x` (or similar), you're good. Otherwise, install Python 
 
 ### Step 3: Install Python Dependencies
 
-Open a terminal (macOS/Linux) or Command Prompt (Windows) and run:
+Open a terminal (macOS/Linux) or Command Prompt/PowerShell (Windows) and run:
 
 ```bash
-pip3 install -r backend/requirements.txt
-```
+# macOS / Linux
+pip3 install sherpa-onnx websockets numpy
 
-Or install manually:
-
-```bash
-pip3 install sherpa-onnx>=1.10.0 websockets>=12.0 numpy>=1.24.0
+# Windows
+pip install sherpa-onnx websockets numpy
 ```
 
 **Verify the installation:**
 
 ```bash
-pip3 list | grep sherpa-onnx
-# You should see: sherpa-onnx   1.10.x
+# macOS / Linux
+python3 -c "import sherpa_onnx; print('ok')"
+
+# Windows
+python -c "import sherpa_onnx; print('ok')"
+# Output "ok" means success
 ```
 
 ---
@@ -510,11 +532,13 @@ Open Obsidian → **Settings** → **Realtime Transcription** and configure in o
 
 #### Backend Settings
 
-- `Python Path`: Enter your Python path (try `python3` first; Windows may need the full path)
+- `Python Path`: Enter your Python path
+  - macOS / Linux: Enter `python3` (works in most cases)
+  - Windows: Enter `python` (the plugin auto-detects this default)
 
-  > How to find the full Python path:
+  > If the default doesn't work, find the full Python path:
   > - macOS/Linux: Run `which python3` in terminal
-  > - Windows: Run `where python.exe` in Command Prompt, use the first result
+  > - Windows: Run `where python` in Command Prompt, use the first result
 
   Path examples by OS:
 
@@ -578,9 +602,9 @@ These features require an AI API. Any **OpenAI-compatible API** works (OpenAI, D
 
 | Message | Likely Cause | Fix |
 |---------|-------------|-----|
-| "Environment check failed, please run pip3 install..." | sherpa-onnx not installed | Run `pip3 install sherpa-onnx websockets numpy` then retry |
-| No response, button stays gray | Python Path field is empty | Enter `python3` in the Python Path setting |
-| "No such file or directory" | Python path is wrong | Run `which python3` (macOS/Linux) or `where python.exe` (Windows) to get the correct path |
+| "Environment check failed, please run pip install..." | sherpa-onnx not installed | Run `pip install sherpa-onnx websockets numpy` (use `pip3` on macOS/Linux) then retry |
+| No response, button stays gray | Python Path field is empty | Enter `python3` (macOS/Linux) or `python` (Windows) |
+| "No such file or directory" | Python path is wrong | Run `which python3` (macOS/Linux) or `where python` (Windows) to get the correct path |
 | Python not found (Windows) | Python not added to PATH | Reinstall Python and check "Add Python to PATH" |
 
 #### Backend Startup Failures
@@ -622,6 +646,10 @@ https://api.example.com/v1/chat/completions
 Increase these two values in Advanced Settings:
 - `VAD Silence Threshold` (try 1.5–2.0 s)
 - `Aggregation Window` (try 6–8 s)
+
+#### Windows Backend Throws NotImplementedError
+
+If you encounter `NotImplementedError: add_signal_handler` on v1.0.2 or earlier, upgrade to v1.0.3+. This has been fixed.
 
 #### macOS Security Warning on First Run
 
