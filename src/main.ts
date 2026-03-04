@@ -35,6 +35,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private pendingTranscript: PendingTranscript | null = null;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private flushSeq = 0;
+  private lastCommittedPartialText = "";
   private summaryBuffer = "";
   private summaryInFlight = false;
   private lastPartialText = "";
@@ -338,18 +339,34 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     console.log(`[Transcription] recv ${resultType}: lang=${normalizedLanguage} "${text.slice(0, 60)}"`);
 
     if (resultType === "partial") {
-      // 过滤 flush_partial 竞态产生的过时 partial
-      const resultFlushSeq = result.flush_seq ?? 0;
-      if (resultFlushSeq < this.flushSeq) {
-        console.log(`[Transcription] ✗ stale partial (seq ${resultFlushSeq} < ${this.flushSeq})，跳过`);
-        return;
-      }
-
       const showStreaming = this.settings.aggregation.realtimePreview;
 
+      // 前端文本去重：flush 后后端缓冲区可能尚未清空，partial 包含已提交内容
+      let dedupedText = text;
+      if (this.lastCommittedPartialText) {
+        // 计算公共前缀长度
+        let commonLen = 0;
+        const maxCheck = Math.min(this.lastCommittedPartialText.length, text.length);
+        while (commonLen < maxCheck && text[commonLen] === this.lastCommittedPartialText[commonLen]) commonLen++;
+
+        if (commonLen >= this.lastCommittedPartialText.length * 0.5) {
+          // 与已提交文本重叠，提取新增部分
+          const newPart = text.slice(commonLen).trim();
+          if (!newPart || newPart.length < 2) {
+            console.log("[Transcription] ✗ 与已提交文本重复，跳过");
+            return;
+          }
+          dedupedText = newPart;
+          this.lastCommittedPartialText = "";
+        } else if (commonLen < 3 && text.length >= 4) {
+          // 无重叠，后端缓冲区已清空
+          this.lastCommittedPartialText = "";
+        }
+      }
+
       const now = new Date();
-      const stabilizedText = this.stabilizePartialText(text);
-      this.lastPartialText = text;
+      const stabilizedText = this.stabilizePartialText(dedupedText);
+      this.lastPartialText = dedupedText;
       this.lastPartialLanguage = normalizedLanguage;
       this.lastPartialWallTime = now;
       if (!stabilizedText) {
@@ -409,6 +426,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.resetRollbackCandidate();
     this.lastPartialLanguage = "zh";
     this.lastPartialWallTime = null;
+    this.lastCommittedPartialText = ""; // final 意味着后端缓冲区已清空
 
     const now = Date.now();
     const flushWindowMs = Math.max(1, this.settings.aggregation.flushWindowSec) * 1000;
@@ -526,6 +544,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     const mergedText = pending.texts.join(" ").trim();
     if (!mergedText) return;
+
+    // 保存已提交的 partial 文本，用于前端去重
+    if (pending.partialOnly) {
+      this.lastCommittedPartialText = mergedText;
+    }
 
     const view = this.getView();
     if (!view) {
