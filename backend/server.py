@@ -298,6 +298,8 @@ async def main():
     parser.add_argument("--vad-min-silence", type=float, default=1.0, help="VAD 最小静音时长(秒)")
     parser.add_argument("--vad-min-speech", type=float, default=0.25, help="VAD 最小语音时长(秒)")
     parser.add_argument("--idle-timeout", type=int, default=0, help="无连接超时退出秒数 (0=不超时)")
+    parser.add_argument("--partial-profile", default="stable", help="实时预览稳定性档位 (stable/fast)")
+    parser.add_argument("--recognition-mode", default="zh-en", help="识别语言模式 (zh/en/zh-en)")
     args = parser.parse_args()
 
     use_int8 = not args.no_int8
