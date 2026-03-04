@@ -20,6 +20,7 @@ export class TranscriptionView extends ItemView {
   private streamingLangBadgeEl: HTMLElement | null = null;
   private streamingOriginalEl: HTMLElement | null = null;
   private scrollToBottomBtn!: HTMLElement;
+  private pinnedToBottom = true;
   private entries: TranscriptEntry[] = [];
 
   // 外部注入的回调
@@ -68,16 +69,23 @@ export class TranscriptionView extends ItemView {
     // 保留隐藏的 statusBar 引用以兼容
     this.statusBar = statusIndicator;
 
-    // 转写结果区域
-    this.transcriptContainer = container.createDiv("transcript-container");
+    // 转写结果区域（需要 wrapper 定位浮动按钮）
+    const transcriptWrapper = container.createDiv("transcript-wrapper");
+    this.transcriptContainer = transcriptWrapper.createDiv("transcript-container");
 
-    // 滚动到底部浮动按钮（定位在 transcription-view 容器上）
-    this.scrollToBottomBtn = container.createDiv("scroll-to-bottom-btn");
+    // 滚动到底部浮动按钮
+    this.scrollToBottomBtn = transcriptWrapper.createDiv("scroll-to-bottom-btn");
     setIcon(this.scrollToBottomBtn, "chevron-down");
     this.scrollToBottomBtn.addEventListener("click", () => {
+      this.pinnedToBottom = true;
       this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
     });
     this.transcriptContainer.addEventListener("scroll", () => {
+      if (this.isNearBottom()) {
+        this.pinnedToBottom = true;
+      } else {
+        this.pinnedToBottom = false;
+      }
       this.updateScrollBtnVisibility();
     });
 
@@ -220,7 +228,7 @@ export class TranscriptionView extends ItemView {
     if (this.streamingOriginalEl) {
       this.streamingOriginalEl.setText(text);
     }
-    if (this.isNearBottom()) {
+    if (this.pinnedToBottom) {
       this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
     }
   }
@@ -300,8 +308,8 @@ export class TranscriptionView extends ItemView {
     this.entries.push(entry);
     this.renderCard(entry);
 
-    // 仅在用户未上翻浏览时自动滚动
-    if (this.isNearBottom()) {
+    // 仅在锁定底部时自动滚动
+    if (this.pinnedToBottom) {
       this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
     }
   }
