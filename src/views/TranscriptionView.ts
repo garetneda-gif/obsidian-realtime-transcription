@@ -19,6 +19,7 @@ export class TranscriptionView extends ItemView {
   private streamingTimeEl: HTMLElement | null = null;
   private streamingLangBadgeEl: HTMLElement | null = null;
   private streamingOriginalEl: HTMLElement | null = null;
+  private scrollToBottomBtn!: HTMLElement;
   private entries: TranscriptEntry[] = [];
 
   // 外部注入的回调
@@ -67,8 +68,19 @@ export class TranscriptionView extends ItemView {
     // 保留隐藏的 statusBar 引用以兼容
     this.statusBar = statusIndicator;
 
-    // 转写结果区域
-    this.transcriptContainer = container.createDiv("transcript-container");
+    // 转写结果区域（需要 wrapper 定位浮动按钮）
+    const transcriptWrapper = container.createDiv("transcript-wrapper");
+    this.transcriptContainer = transcriptWrapper.createDiv("transcript-container");
+
+    // 滚动到底部浮动按钮
+    this.scrollToBottomBtn = transcriptWrapper.createDiv("scroll-to-bottom-btn");
+    setIcon(this.scrollToBottomBtn, "chevron-down");
+    this.scrollToBottomBtn.addEventListener("click", () => {
+      this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
+    });
+    this.transcriptContainer.addEventListener("scroll", () => {
+      this.updateScrollBtnVisibility();
+    });
 
     // 空状态提示
     this.showEmptyState();
@@ -209,7 +221,9 @@ export class TranscriptionView extends ItemView {
     if (this.streamingOriginalEl) {
       this.streamingOriginalEl.setText(text);
     }
-    this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
+    if (this.isNearBottom()) {
+      this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
+    }
   }
 
   commitStreamingTranscript(entry: TranscriptEntry): void {
@@ -287,8 +301,10 @@ export class TranscriptionView extends ItemView {
     this.entries.push(entry);
     this.renderCard(entry);
 
-    // 自动滚动到底部
-    this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
+    // 仅在用户未上翻浏览时自动滚动
+    if (this.isNearBottom()) {
+      this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
+    }
   }
 
   updateTranslation(entryId: string, translation: string): void {
@@ -525,6 +541,20 @@ export class TranscriptionView extends ItemView {
     const m = String(date.getMinutes()).padStart(2, "0");
     const s = String(date.getSeconds()).padStart(2, "0");
     return `${h}:${m}:${s}`;
+  }
+
+  /** 用户是否已滚动到底部附近（未手动上翻浏览） */
+  private isNearBottom(threshold = 80): boolean {
+    const { scrollTop, scrollHeight, clientHeight } = this.transcriptContainer;
+    return scrollHeight - scrollTop - clientHeight <= threshold;
+  }
+
+  private updateScrollBtnVisibility(): void {
+    if (this.isNearBottom()) {
+      this.scrollToBottomBtn.removeClass("visible");
+    } else {
+      this.scrollToBottomBtn.addClass("visible");
+    }
   }
 
   private showEmptyState(): void {

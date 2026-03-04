@@ -332,41 +332,46 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const view = this.getView();
     if (!view) return;
 
-    const text = result.text.trim();
+    let text = result.text.trim();
     if (!text) return;
     const normalizedLanguage = this.normalizeLanguage(result.language, text);
     const resultType = result.type ?? "final";
     console.log(`[Transcription] recv ${resultType}: lang=${normalizedLanguage} "${text.slice(0, 60)}"`);
 
+    // 前端文本去重：flush 后后端缓冲区可能尚未清空，partial/final 都可能包含已提交内容
+    if (this.lastCommittedPartialText) {
+      let commonLen = 0;
+      const maxCheck = Math.min(this.lastCommittedPartialText.length, text.length);
+      while (commonLen < maxCheck && text[commonLen] === this.lastCommittedPartialText[commonLen]) commonLen++;
+
+      if (commonLen >= this.lastCommittedPartialText.length * 0.5) {
+        const newPart = text.slice(commonLen).trim();
+        if (!newPart || newPart.length < 2) {
+          console.log(`[Transcription] ✗ ${resultType} 与已提交文本重复，跳过`);
+          if (resultType === "final") {
+            this.lastPartialText = "";
+            this.lastStablePartialText = "";
+            this.renderedPartialText = "";
+            this.resetRollbackCandidate();
+            this.lastPartialLanguage = "zh";
+            this.lastPartialWallTime = null;
+            this.lastCommittedPartialText = "";
+          }
+          return;
+        }
+        text = newPart;
+        this.lastCommittedPartialText = "";
+      } else if (commonLen < 3 && text.length >= 4) {
+        this.lastCommittedPartialText = "";
+      }
+    }
+
     if (resultType === "partial") {
       const showStreaming = this.settings.aggregation.realtimePreview;
 
-      // 前端文本去重：flush 后后端缓冲区可能尚未清空，partial 包含已提交内容
-      let dedupedText = text;
-      if (this.lastCommittedPartialText) {
-        // 计算公共前缀长度
-        let commonLen = 0;
-        const maxCheck = Math.min(this.lastCommittedPartialText.length, text.length);
-        while (commonLen < maxCheck && text[commonLen] === this.lastCommittedPartialText[commonLen]) commonLen++;
-
-        if (commonLen >= this.lastCommittedPartialText.length * 0.5) {
-          // 与已提交文本重叠，提取新增部分
-          const newPart = text.slice(commonLen).trim();
-          if (!newPart || newPart.length < 2) {
-            console.log("[Transcription] ✗ 与已提交文本重复，跳过");
-            return;
-          }
-          dedupedText = newPart;
-          this.lastCommittedPartialText = "";
-        } else if (commonLen < 3 && text.length >= 4) {
-          // 无重叠，后端缓冲区已清空
-          this.lastCommittedPartialText = "";
-        }
-      }
-
       const now = new Date();
-      const stabilizedText = this.stabilizePartialText(dedupedText);
-      this.lastPartialText = dedupedText;
+      const stabilizedText = this.stabilizePartialText(text);
+      this.lastPartialText = text;
       this.lastPartialLanguage = normalizedLanguage;
       this.lastPartialWallTime = now;
       if (!stabilizedText) {
