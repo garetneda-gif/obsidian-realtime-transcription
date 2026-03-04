@@ -354,6 +354,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       }
       this.renderedPartialText = stabilizedText;
       this.lastStablePartialText = stabilizedText;
+      let isNewPending = false;
       if (!this.pendingTranscript) {
         this.entryCounter++;
         this.pendingTranscript = {
@@ -364,6 +365,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
           lastUpdatedAt: Date.now(),
           partialOnly: true,
         };
+        isNewPending = true;
       } else if (this.pendingTranscript.partialOnly) {
         // 同一 VAD 段的后续 partial：覆盖而非追加
         if (this.pendingTranscript.texts[0] === stabilizedText) return;
@@ -384,9 +386,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
           this.pendingTranscript.wallTime,
         );
       } else {
-        // realtimePreview 关闭：不显示流式卡片，但仍累积文本，定时提交
+        // realtimePreview 关闭：静默累积，仅在新建 pending 时启动定时器（不重置）
         console.log(`[Transcription] ✓ partial(静默) → pending id=${this.pendingTranscript.id} "${stabilizedText}"`);
-        this.scheduleFlush();
+        if (isNewPending) {
+          this.scheduleFlush();
+        }
       }
       return;
     }
