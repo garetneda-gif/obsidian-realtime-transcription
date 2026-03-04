@@ -63,6 +63,50 @@ export class SummaryService {
     return summary;
   }
 
+  async metaSummarize(summaries: string[]): Promise<string> {
+    const apiUrl = normalizeApiUrl(this.settings.apiUrl);
+    const model = this.settings.model?.trim();
+    const apiKey = this.settings.apiKey?.trim();
+
+    if (!apiKey) throw new Error("未配置摘要 API Key");
+    if (!apiUrl) throw new Error("未配置摘要 API 端点");
+    if (!model) throw new Error("未配置摘要模型");
+
+    const combined = summaries.map((s, i) => `【摘要 ${i + 1}】\n${s}`).join("\n\n");
+
+    const response = await requestUrl({
+      url: apiUrl,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是高级会议记录整理助手。下面是多段会议摘要，请将它们综合为一份结构化的总摘要。输出简体中文，按主题分组归纳，使用 Markdown 格式（二级标题 + 要点列表）。直接输出内容，不要加任何前言或说明。简洁准确，不要编造信息。",
+          },
+          { role: "user", content: combined },
+        ],
+        temperature: 0.2,
+        max_tokens: 1500,
+      }),
+    });
+
+    const data = response.json;
+    const result = extractTextFromResponse(data);
+    if (!result) {
+      const errMsg = typeof data?.error?.message === "string"
+        ? data.error.message
+        : "二次摘要 API 返回格式不受支持";
+      throw new Error(errMsg);
+    }
+    return result;
+  }
+
   async generateTitle(contentSnippet: string): Promise<string> {
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
     const model = this.settings.model?.trim();

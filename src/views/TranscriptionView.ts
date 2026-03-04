@@ -408,8 +408,13 @@ export class TranscriptionView extends ItemView {
       attr: { "data-entry-id": entry.id },
     });
     const isSummary = entry.result.language === "summary";
+    const isMetaSummary = entry.result.language === "meta-summary";
     if (isSummary) {
       card.addClass("summary-card");
+    }
+    if (isMetaSummary) {
+      card.addClass("summary-card");
+      card.addClass("meta-summary-card");
     }
 
     // 卡片头部：时间 + 语言
@@ -421,17 +426,22 @@ export class TranscriptionView extends ItemView {
     langBadge.setText(LANG_LABELS[entry.result.language] ?? entry.result.language);
     langBadge.addClass(`lang-${entry.result.language}`);
 
-    // 摘要标题
-    if (isSummary) {
+    // 摘要/二次摘要标题
+    if (isMetaSummary) {
+      const titleRow = card.createDiv("summary-title-row");
+      const iconEl = titleRow.createDiv("summary-title-icon meta-summary-title-icon");
+      setIcon(iconEl, "layers");
+      titleRow.createEl("span", { cls: "summary-title meta-summary-title", text: "AI \u7efc\u5408\u603b\u7ed3" });
+    } else if (isSummary) {
       const titleRow = card.createDiv("summary-title-row");
       const iconEl = titleRow.createDiv("summary-title-icon");
       setIcon(iconEl, "sparkles");
-      titleRow.createEl("span", { cls: "summary-title", text: "AI 摘要" });
+      titleRow.createEl("span", { cls: "summary-title", text: "AI \u6458\u8981" });
     }
 
     // 原文
     const originalEl = card.createDiv("card-original");
-    if (isSummary) {
+    if (isSummary || isMetaSummary) {
       void MarkdownRenderer.render(this.app, entry.result.text, originalEl, "", this);
     } else {
       originalEl.setText(entry.result.text);
@@ -443,7 +453,7 @@ export class TranscriptionView extends ItemView {
     }
 
     // 润色按钮（非摘要卡片显示）
-    if (!isSummary) {
+    if (!isSummary && !isMetaSummary) {
       this.appendFormalizeButton(card as HTMLElement, entry);
     }
 

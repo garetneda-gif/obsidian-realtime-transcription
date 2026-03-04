@@ -540,6 +540,35 @@
   -webkit-user-select: text !important;
 }
 
+/* ── 二次摘要（综合总结）卡片 ── */
+.transcript-card.meta-summary-card {
+  border-left-color: #7c3aed;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.06) 0%, rgba(59, 130, 246, 0.06) 100%);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-left-width: 3px;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.transcript-card.meta-summary-card:hover {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+  border-color: rgba(124, 58, 237, 0.35);
+  box-shadow: 0 2px 12px rgba(124, 58, 237, 0.1);
+}
+
+.meta-summary-title-icon {
+  color: #7c3aed;
+}
+
+.meta-summary-title {
+  color: #7c3aed;
+}
+
+.card-lang-badge.lang-meta-summary {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(59, 130, 246, 0.15));
+  color: #7c3aed;
+}
+
 /* ── 仅显示摘要模式 ── */
 .transcript-container.summary-only .transcript-card:not(.summary-card) {
   display: none;

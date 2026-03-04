@@ -315,6 +315,35 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           }),
       );
 
+    // ── 二次摘要设置 ──
+    containerEl.createEl("h2", { text: "二次摘要（综合总结）" });
+
+    new Setting(containerEl)
+      .setName("启用二次摘要")
+      .setDesc("每累积指定数量的摘要后，自动生成一份综合总结")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.metaSummary.enabled)
+          .onChange(async (value) => {
+            this.plugin.settings.metaSummary.enabled = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("触发摘要数量")
+      .setDesc("每累积多少个摘要后触发一次二次摘要")
+      .addSlider((slider) =>
+        slider
+          .setLimits(2, 10, 1)
+          .setValue(this.plugin.settings.metaSummary.triggerCount)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.metaSummary.triggerCount = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
     // ── 导出设置 ──
     containerEl.createEl("h2", { text: "导出设置" });
 

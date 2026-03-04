@@ -38,6 +38,12 @@ export interface AggregationSettings {
   realtimePreview: boolean;
 }
 
+export interface MetaSummarySettings {
+  enabled: boolean;
+  /** 每累积多少个摘要触发一次二次摘要 */
+  triggerCount: number;
+}
+
 export interface PluginSettings {
   pythonPath: string;
   backendPort: number;
@@ -49,6 +55,7 @@ export interface PluginSettings {
   translation: TranslationSettings;
   formalize: FormalizeSettings;
   summary: SummarySettings;
+  metaSummary: MetaSummarySettings;
   exportMode: ExportMode;
   exportTitleMode: ExportTitleMode;
   vad: VadSettings;
@@ -81,6 +88,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     apiKey: "",
     model: "gpt-4o-mini",
     thresholdChars: 500,
+  },
+  metaSummary: {
+    enabled: false,
+    triggerCount: 3,
   },
   exportMode: "full",
   exportTitleMode: "timestamp",

@@ -38,6 +38,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private lastCommittedPartialText = "";
   private summaryBuffer = "";
   private summaryInFlight = false;
+  private metaSummaryTexts: string[] = [];
+  private metaSummaryInFlight = false;
   private lastPartialText = "";
   private lastStablePartialText = "";
   private renderedPartialText = "";
@@ -866,6 +868,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       };
       view.addTranscript(entry);
       this.addEntry(entry);
+
+      // 二次摘要：累积摘要文本
+      this.enqueueMetaSummary(summaryText, wallTime);
     } catch (err) {
       console.error("AI 摘要失败:", err);
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
@@ -877,6 +882,57 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     if (this.summaryBuffer.trim().length >= threshold) {
       void this.maybeRunSummary(new Date());
+    }
+  }
+
+  private enqueueMetaSummary(summaryText: string, wallTime: Date): void {
+    if (!this.settings.metaSummary.enabled) return;
+    if (!this.summaryService.isConfigured()) return;
+
+    this.metaSummaryTexts.push(summaryText);
+    const triggerCount = Math.max(2, this.settings.metaSummary.triggerCount);
+    if (this.metaSummaryTexts.length >= triggerCount) {
+      void this.maybeRunMetaSummary(wallTime);
+    }
+  }
+
+  private async maybeRunMetaSummary(wallTime: Date = new Date()): Promise<void> {
+    if (this.metaSummaryInFlight) return;
+    if (this.metaSummaryTexts.length < 2) return;
+
+    const texts = [...this.metaSummaryTexts];
+    this.metaSummaryTexts = [];
+    this.metaSummaryInFlight = true;
+
+    try {
+      const metaText = await this.summaryService.metaSummarize(texts);
+      this.entryCounter++;
+      const view = this.getView();
+      if (!view) {
+        this.metaSummaryTexts.push(...texts);
+        return;
+      }
+
+      const entry: TranscriptEntry = {
+        id: `entry-${this.entryCounter}`,
+        result: {
+          text: metaText,
+          language: "meta-summary",
+          timestamps: { start: 0, duration: 0 },
+        },
+        translation: null,
+        formalText: null,
+        wallTime,
+      };
+      view.addTranscript(entry);
+      this.addEntry(entry);
+    } catch (err) {
+      console.error("二次摘要失败:", err);
+      const detail = err instanceof Error && err.message ? err.message : "未知错误";
+      new Notice(`二次摘要失败: ${detail}`);
+      this.metaSummaryTexts.push(...texts);
+    } finally {
+      this.metaSummaryInFlight = false;
     }
   }
 

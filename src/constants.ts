@@ -10,4 +10,5 @@ export const LANG_LABELS: Record<string, string> = {
   yue: "粤语",
   auto: "自动",
   summary: "摘要",
+  "meta-summary": "总结",
 };
