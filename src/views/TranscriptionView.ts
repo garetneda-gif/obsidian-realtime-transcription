@@ -219,6 +219,7 @@ export class TranscriptionView extends ItemView {
     }
 
     this.streamingCard.setAttr("data-entry-id", entry.id);
+    this.streamingCard.removeClass("streaming");
     if (entry.result.language === "summary") {
       this.streamingCard.addClass("summary-card");
       const title = this.streamingCard.querySelector(".summary-title");
