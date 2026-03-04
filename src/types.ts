@@ -80,7 +80,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     apiUrl: "https://api.openai.com/v1/chat/completions",
     apiKey: "",
     model: "gpt-4o-mini",
-    thresholdChars: 3000,
+    thresholdChars: 500,
   },
   exportMode: "full",
   exportTitleMode: "timestamp",
