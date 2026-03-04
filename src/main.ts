@@ -310,6 +310,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     await this.flushPendingTranscript();
     this.clearFlushTimer();
+    this.wsClient.disconnect();
+    await this.backendManager.stop();
     this.recording = false;
     this.lastPartialText = "";
     this.lastStablePartialText = "";
@@ -322,7 +324,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (view) {
       view.clearStreamingTranscript();
       this.syncViewControlStates(view);
-      view.setConnectionStatus(this.wsClient.isConnected);
+      view.setConnectionStatus(false);
     }
 
     new Notice("录制已停止");
