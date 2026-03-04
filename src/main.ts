@@ -34,6 +34,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private entryCounter = 0;
   private pendingTranscript: PendingTranscript | null = null;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private flushSeq = 0;
   private summaryBuffer = "";
   private summaryInFlight = false;
   private lastPartialText = "";
@@ -337,6 +338,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     console.log(`[Transcription] recv ${resultType}: lang=${normalizedLanguage} "${text.slice(0, 60)}"`);
 
     if (resultType === "partial") {
+      // 过滤 flush_partial 竞态产生的过时 partial
+      const resultFlushSeq = result.flush_seq ?? 0;
+      if (resultFlushSeq < this.flushSeq) {
+        console.log(`[Transcription] ✗ stale partial (seq ${resultFlushSeq} < ${this.flushSeq})，跳过`);
+        return;
+      }
+
       const showStreaming = this.settings.aggregation.realtimePreview;
 
       const now = new Date();
@@ -511,8 +519,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       this.lastStablePartialText = "";
       this.lastPartialText = "";
       this.resetRollbackCandidate();
-      // 通知后端清空 realtime_buffer，避免下一次 partial 重复已提交的文本
-      this.wsClient.sendCommand({ type: "flush_partial" });
+      // 通知后端清空 realtime_buffer，带序列号过滤竞态中的过时 partial
+      this.flushSeq++;
+      this.wsClient.sendCommand({ type: "flush_partial", seq: this.flushSeq });
     }
 
     const mergedText = pending.texts.join(" ").trim();

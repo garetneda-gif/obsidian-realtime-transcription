@@ -101,6 +101,7 @@ class TranscriptionServer:
         realtime_buffer = np.array([], dtype=np.float32)
         last_partial_text = ""
         last_partial_at = 0.0
+        flush_seq = 0
         partial_interval_sec = 1.5
         partial_min_samples = int(self.sample_rate * 1.5)
         partial_max_samples = int(self.sample_rate * 10.0)
@@ -144,6 +145,7 @@ class TranscriptionServer:
                                     "type": "partial",
                                     "text": partial_text,
                                     "language": partial_lang,
+                                    "flush_seq": flush_seq,
                                     "timestamps": {
                                         "start": 0,
                                         "duration": round(len(realtime_buffer) / self.sample_rate, 2),
@@ -208,6 +210,7 @@ class TranscriptionServer:
                             realtime_buffer = np.array([], dtype=np.float32)
                             last_partial_text = ""
                             last_partial_at = 0.0
+                            flush_seq = cmd.get("seq", flush_seq)
                     except json.JSONDecodeError:
                         pass
 

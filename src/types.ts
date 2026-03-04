@@ -103,6 +103,8 @@ export interface TranscriptionResult {
     duration: number;
   };
   language: string;
+  /** 后端回传的 flush 序列号，用于过滤 flush_partial 竞态产生的过时 partial */
+  flush_seq?: number;
 }
 
 export interface TranscriptEntry {
