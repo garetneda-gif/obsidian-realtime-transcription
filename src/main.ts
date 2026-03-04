@@ -337,11 +337,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     console.log(`[Transcription] recv ${resultType}: lang=${normalizedLanguage} "${text.slice(0, 60)}"`);
 
     if (resultType === "partial") {
-      // 关闭实时预览时忽略 partial 结果
-      if (!this.settings.aggregation.realtimePreview) {
-        console.log("[Transcription] ✗ realtimePreview 已关闭，丢弃 partial");
-        return;
-      }
+      const showStreaming = this.settings.aggregation.realtimePreview;
 
       const now = new Date();
       const stabilizedText = this.stabilizePartialText(text);
@@ -379,13 +375,19 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         this.pendingTranscript.wallTime = this.pendingTranscript.wallTime ?? now;
         this.pendingTranscript.lastUpdatedAt = Date.now();
       }
-      console.log(`[Transcription] ✓ partial → upsert id=${this.pendingTranscript.id} "${stabilizedText}"`);
-      view.upsertStreamingTranscript(
-        this.pendingTranscript.id,
-        stabilizedText,
-        normalizedLanguage,
-        this.pendingTranscript.wallTime,
-      );
+      if (showStreaming) {
+        console.log(`[Transcription] ✓ partial → upsert id=${this.pendingTranscript.id} "${stabilizedText}"`);
+        view.upsertStreamingTranscript(
+          this.pendingTranscript.id,
+          stabilizedText,
+          normalizedLanguage,
+          this.pendingTranscript.wallTime,
+        );
+      } else {
+        // realtimePreview 关闭：不显示流式卡片，但仍累积文本，定时提交
+        console.log(`[Transcription] ✓ partial(静默) → pending id=${this.pendingTranscript.id} "${stabilizedText}"`);
+        this.scheduleFlush();
+      }
       return;
     }
 
@@ -505,6 +507,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       this.lastStablePartialText = "";
       this.lastPartialText = "";
       this.resetRollbackCandidate();
+      // 通知后端清空 realtime_buffer，避免下一次 partial 重复已提交的文本
+      this.wsClient.sendCommand({ type: "flush_partial" });
     }
 
     const mergedText = pending.texts.join(" ").trim();

@@ -203,6 +203,11 @@ class TranscriptionServer:
                             realtime_buffer = np.array([], dtype=np.float32)
                             last_partial_text = ""
                             last_partial_at = 0.0
+                        elif cmd.get("type") == "flush_partial":
+                            # 前端已提交 partial 文本，清空缓冲区防止重复，但保留 VAD 状态
+                            realtime_buffer = np.array([], dtype=np.float32)
+                            last_partial_text = ""
+                            last_partial_at = 0.0
                     except json.JSONDecodeError:
                         pass
 
