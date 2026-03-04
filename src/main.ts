@@ -488,6 +488,15 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.pendingTranscript = null;
     this.clearFlushTimer();
 
+    // partialOnly 的 pending 由 timer flush 时，final 从未来过，
+    // renderedPartialText 残留旧值，会导致下一段 partial 被 stabilize 全部拒绝
+    if (pending.partialOnly) {
+      this.renderedPartialText = "";
+      this.lastStablePartialText = "";
+      this.lastPartialText = "";
+      this.resetRollbackCandidate();
+    }
+
     const mergedText = pending.texts.join(" ").trim();
     if (!mergedText) return;
 
