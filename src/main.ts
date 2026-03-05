@@ -630,8 +630,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     // 无汉字且英文字母足够多 → 修正模型将纯英文误标为中文的情况
     if (hanCount === 0 && latinCount >= 6) return "en";
-    if (language === "zh") return "zh";
+    // 英文内容显著多于中文 → 即使模型标为中文也修正（防止混合文本误标）
     if (latinCount >= 6 && latinCount >= Math.floor(hanCount * 0.6)) return "en";
+    if (language === "zh") return "zh";
     if (hanCount > 0) return "zh";
 
     return "zh";
