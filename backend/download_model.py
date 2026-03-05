@@ -3,11 +3,9 @@
 下载 SenseVoice-Small 模型文件和 Silero VAD 模型
 逐文件下载，支持多源回退和断点重试
 """
-from __future__ import annotations  # Python 3.9 兼容 str | None 语法
 
 import argparse
 import shutil
-import socket
 import ssl
 import sys
 import time
@@ -21,18 +19,19 @@ HF_SOURCES = [
     "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main",
 ]
 
-# Silero VAD：GitHub + 国内镜像（多备用源）
+# Silero VAD：GitHub + 国内 ghgo 镜像
 VAD_SOURCES = [
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
-    "https://ghproxy.net/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
-    "https://mirror.ghproxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+    "https://ghgo.xyz/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
 ]
 
-REQUIRED_FILES = [
-    ("model.int8.onnx", HF_SOURCES, "{base}/model.int8.onnx"),
-    ("tokens.txt", HF_SOURCES, "{base}/tokens.txt"),
-    ("silero_vad.onnx", VAD_SOURCES, None),  # VAD 源直接是完整 URL
-]
+def get_required_files(use_int8: bool):
+    model_name = "model.int8.onnx" if use_int8 else "model.onnx"
+    return [
+        (model_name, HF_SOURCES, "{base}/" + model_name),
+        ("tokens.txt", HF_SOURCES, "{base}/tokens.txt"),
+        ("silero_vad.onnx", VAD_SOURCES, None),  # VAD 源直接是完整 URL
+    ]
 
 MAX_RETRIES = 3
 
@@ -106,21 +105,22 @@ def download_file(filename: str, sources: list, url_template: str | None, dest_d
 
 
 def main():
-    # 强制 stdout 无缓冲，确保 Obsidian 插件能实时读到进度
-    sys.stdout.reconfigure(line_buffering=True)  # type: ignore[attr-defined]
-
-    # 每次连接/读取最多等 60 秒，避免无限挂起
-    socket.setdefaulttimeout(60)
-
     parser = argparse.ArgumentParser(description="下载 SenseVoice 模型文件")
     parser.add_argument("--output-dir", type=str, required=True, help="模型存放目录")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--use-int8", dest="use_int8", action="store_true", default=True,
+                       help="下载 Int8 量化模型（默认）")
+    group.add_argument("--no-int8", dest="use_int8", action="store_false",
+                       help="下载全精度模型 model.onnx")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    required_files = get_required_files(args.use_int8)
+
     # 检查是否已存在所有文件
-    all_exist = all((output_dir / name).exists() for name, _, _ in REQUIRED_FILES)
+    all_exist = all((output_dir / name).exists() for name, _, _ in required_files)
     if all_exist:
         print("所有模型文件已存在，跳过下载。", flush=True)
         print(f"模型目录: {output_dir}", flush=True)
@@ -129,13 +129,13 @@ def main():
     print(f"模型目录: {output_dir}\n", flush=True)
 
     failed = []
-    for filename, sources, url_template in REQUIRED_FILES:
+    for filename, sources, url_template in required_files:
         if not download_file(filename, sources, url_template, output_dir):
             failed.append(filename)
 
     # 验证
     print("\n═══ 验证模型文件 ═══", flush=True)
-    for name, _, _ in REQUIRED_FILES:
+    for name, _, _ in required_files:
         fp = output_dir / name
         if fp.exists():
             size_mb = fp.stat().st_size / (1024 * 1024)
