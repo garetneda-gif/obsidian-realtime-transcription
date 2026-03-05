@@ -39,9 +39,9 @@ done
 #    download_model.py: 多备用镜像源 + socket 超时 + stdout 无缓冲（更稳定）
 cp "$PROJ/backend/platform/macos/download_model.py" \
    "$PROJ/dist/macos/realtime-transcription/backend/download_model.py"
-cp "$PROJ/backend/setup.sh" \
-   "$PROJ/dist/macos/realtime-transcription/backend/setup.sh"
-chmod +x "$PROJ/dist/macos/realtime-transcription/backend/setup.sh"
+cp "$PROJ/backend/setup.command" \
+   "$PROJ/dist/macos/realtime-transcription/backend/setup.command"
+chmod +x "$PROJ/dist/macos/realtime-transcription/backend/setup.command"
 
 # 5. Windows 专用文件
 cp "$PROJ/backend/platform/windows/download_model.py" \
