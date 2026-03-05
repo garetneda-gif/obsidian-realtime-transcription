@@ -127,30 +127,27 @@ python --version
 
 ### 第三步：安装 Python 依赖
 
-在终端（macOS/Linux）或命令提示符/PowerShell（Windows）中执行：
+在插件目录的 `backend/` 文件夹中提供了一键安装脚本，**运行一次即可**，无需手动输入任何 pip 命令。
+
+#### macOS / Linux
 
 ```bash
-# macOS / Linux
-pip3 install sherpa-onnx -i https://pypi.org/simple/
-pip3 install websockets numpy
-
-# Windows
-pip install sherpa-onnx -i https://pypi.org/simple/
-pip install websockets numpy
+cd <你的Vault>/.obsidian/plugins/realtime-transcription/backend
+bash setup.sh
 ```
 
-> **为什么要加 `-i https://pypi.org/simple/`？** 因为国内常用的清华镜像源（tuna.tsinghua.edu.cn）**未同步** `sherpa-onnx` 的 wheel 包，直接 `pip install sherpa-onnx` 会报找不到包的错误。上述命令临时指定官方 PyPI 源，仅 `sherpa-onnx` 需要，`websockets` 和 `numpy` 在任何源都可正常安装。
+#### Windows
 
-**验证安装成功：**
+双击 `backend\setup.bat`，或在命令提示符中运行：
 
-```bash
-# macOS / Linux
-python3 -c "import sherpa_onnx; print('ok')"
-
-# Windows
-python -c "import sherpa_onnx; print('ok')"
-# 输出 ok 说明安装成功
+```bat
+cd <你的Vault>\.obsidian\plugins\realtime-transcription\backend
+setup.bat
 ```
+
+脚本会自动完成：创建虚拟环境 → 安装所有依赖 → 验证安装 → **输出第五步需要填写的 Python 路径**。
+
+> **遇到报错？** 确认已安装 Python 3.10~3.12，且终端/PowerShell 有网络访问权限。
 
 ---
 
@@ -218,7 +215,8 @@ ls ~/obsidian-models
 
   | 系统 | Python 路径示例 |
   |------|----------------|
-  | macOS | `python3` 或 `/usr/local/bin/python3` |
+  | macOS（系统 Python） | `python3` 或 `/usr/local/bin/python3` |
+  | macOS（虚拟环境，推荐） | `/Users/你的用户名/.../backend/venv/bin/python` |
   | Windows | `C:\Users\yourname\AppData\Local\Programs\Python\Python312\python.exe` |
   | Linux | `python3` 或 `/usr/bin/python3` |
 
@@ -276,7 +274,8 @@ ls ~/obsidian-models
 
 | 提示内容 | 可能原因 | 解决方案 |
 |---------|---------|---------|
-| 「环境检测失败，请执行 pip install...」| sherpa-onnx 依赖未安装 | 运行 `pip install sherpa-onnx websockets numpy`（macOS/Linux 用 `pip3`）后重试 |
+| 「环境检测失败，请执行 pip install...」| sherpa-onnx 依赖未安装 | 按第三步说明安装依赖后重试 |
+| 「环境检测失败」但依赖已安装 | 使用了虚拟环境，但 Python 路径仍指向系统 Python | 将「Python 路径」改为虚拟环境路径，例如 `/path/to/backend/venv/bin/python` |
 | 检测无反应，按钮灰色 | Python 路径字段为空 | macOS/Linux 填 `python3`；Windows 填 `python` |
 | 「No such file or directory」| Python 路径不存在 | macOS/Linux 运行 `which python3`；Windows 运行 `where python` 获取正确路径 |
 | Windows 上找不到 python | Python 未加入系统 PATH | 重新安装 Python，安装时勾选「Add Python to PATH」|
@@ -461,30 +460,27 @@ If you see `Python 3.11.x` (or similar), you're good. Otherwise, install Python 
 
 ### Step 3: Install Python Dependencies
 
-Open a terminal (macOS/Linux) or Command Prompt/PowerShell (Windows) and run:
+A one-shot setup script is included in the `backend/` folder. **Run it once** — no manual pip commands needed.
+
+#### macOS / Linux
 
 ```bash
-# macOS / Linux
-pip3 install sherpa-onnx -i https://pypi.org/simple/
-pip3 install websockets numpy
-
-# Windows
-pip install sherpa-onnx -i https://pypi.org/simple/
-pip install websockets numpy
+cd <your-vault>/.obsidian/plugins/realtime-transcription/backend
+bash setup.sh
 ```
 
-> **Why `-i https://pypi.org/simple/`?** Some pip mirrors (e.g. Tsinghua tuna) do **not** sync `sherpa-onnx` wheels. This flag ensures the package is fetched directly from the official PyPI. Only `sherpa-onnx` needs it; `websockets` and `numpy` work with any mirror.
+#### Windows
 
-**Verify the installation:**
+Double-click `backend\setup.bat`, or run in Command Prompt:
 
-```bash
-# macOS / Linux
-python3 -c "import sherpa_onnx; print('ok')"
-
-# Windows
-python -c "import sherpa_onnx; print('ok')"
-# Output "ok" means success
+```bat
+cd <your-vault>\.obsidian\plugins\realtime-transcription\backend
+setup.bat
 ```
+
+The script automatically: creates a virtual environment → installs all dependencies → verifies the install → **prints the Python path you need for Step 5**.
+
+> **Errors?** Make sure Python 3.10–3.12 is installed and your terminal has internet access.
 
 ---
 
@@ -552,7 +548,8 @@ Open Obsidian → **Settings** → **Realtime Transcription** and configure in o
 
   | OS | Python Path Example |
   |----|---------------------|
-  | macOS | `python3` or `/usr/local/bin/python3` |
+  | macOS (system Python) | `python3` or `/usr/local/bin/python3` |
+  | macOS (virtual env, recommended) | `/Users/yourname/.../backend/venv/bin/python` |
   | Windows | `C:\Users\yourname\AppData\Local\Programs\Python\Python312\python.exe` |
   | Linux | `python3` or `/usr/bin/python3` |
 
@@ -610,7 +607,8 @@ These features require an AI API. Any **OpenAI-compatible API** works (OpenAI, D
 
 | Message | Likely Cause | Fix |
 |---------|-------------|-----|
-| "Environment check failed, please run pip install..." | sherpa-onnx not installed | Run `pip install sherpa-onnx websockets numpy` (use `pip3` on macOS/Linux) then retry |
+| "Environment check failed, please run pip install..." | sherpa-onnx not installed | Follow Step 3 to install dependencies, then retry |
+| "Environment check failed" but packages are installed | Used a venv but Python Path still points to system Python | Set Python Path to the venv path, e.g. `/path/to/backend/venv/bin/python` |
 | No response, button stays gray | Python Path field is empty | Enter `python3` (macOS/Linux) or `python` (Windows) |
 | "No such file or directory" | Python path is wrong | Run `which python3` (macOS/Linux) or `where python` (Windows) to get the correct path |
 | Python not found (Windows) | Python not added to PATH | Reinstall Python and check "Add Python to PATH" |
