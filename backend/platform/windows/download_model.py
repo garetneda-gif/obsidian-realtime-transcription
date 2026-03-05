@@ -25,7 +25,14 @@ VAD_SOURCES = [
     "https://ghgo.xyz/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
 ]
 
-def get_required_files(use_int8: bool):
+def get_required_files(use_int8: bool, download_all: bool = False):
+    if download_all:
+        return [
+            ("model.int8.onnx", HF_SOURCES, "{base}/model.int8.onnx"),
+            ("model.onnx", HF_SOURCES, "{base}/model.onnx"),
+            ("tokens.txt", HF_SOURCES, "{base}/tokens.txt"),
+            ("silero_vad.onnx", VAD_SOURCES, None),
+        ]
     model_name = "model.int8.onnx" if use_int8 else "model.onnx"
     return [
         (model_name, HF_SOURCES, "{base}/" + model_name),
@@ -107,6 +114,8 @@ def download_file(filename: str, sources: list, url_template: str | None, dest_d
 def main():
     parser = argparse.ArgumentParser(description="下载 SenseVoice 模型文件")
     parser.add_argument("--output-dir", type=str, required=True, help="模型存放目录")
+    parser.add_argument("--all", dest="download_all", action="store_true", default=False,
+                        help="下载全部模型（Int8 + 全精度）")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--use-int8", dest="use_int8", action="store_true", default=True,
                        help="下载 Int8 量化模型（默认）")
@@ -117,7 +126,7 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    required_files = get_required_files(args.use_int8)
+    required_files = get_required_files(args.use_int8, args.download_all)
 
     # 检查是否已存在所有文件
     all_exist = all((output_dir / name).exists() for name, _, _ in required_files)

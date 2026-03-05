@@ -249,9 +249,8 @@ export class BackendManager {
 
   async downloadModel(outputDir: string): Promise<boolean> {
     const downloadScript = path.join(this.pluginDir, "backend", "download_model.py");
-    const int8Flag = this.settings.useInt8 ? "--use-int8" : "--no-int8";
     return new Promise<boolean>((resolve) => {
-      const proc = spawn(this.settings.pythonPath, [downloadScript, "--output-dir", outputDir, int8Flag], {
+      const proc = spawn(this.settings.pythonPath, [downloadScript, "--output-dir", outputDir, "--all"], {
         stdio: ["pipe", "pipe", "pipe"],
       });
 

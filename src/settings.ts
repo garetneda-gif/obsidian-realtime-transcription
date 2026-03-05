@@ -123,7 +123,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     // 下载模型按钮
     new Setting(containerEl)
       .setName("下载模型")
-      .setDesc("从 GitHub 下载 SenseVoice-Small + Silero VAD 模型文件（约 240MB）")
+      .setDesc("下载全部模型文件：Int8 量化版 (229MB) + 全精度版 (895MB) + VAD，共约 1.1GB")
       .addButton((btn) =>
         btn.setButtonText("下载模型").onClick(async () => {
           const modelDir = this.plugin.settings.modelDir;
