@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production"
+    "build": "node esbuild.config.mjs production",
+    "post-sync-refresh": "bash ./scripts/post-sync-refresh.sh"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

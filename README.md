@@ -97,6 +97,14 @@ npm run build
 # 将 manifest.json、main.js、styles.css、backend/ 复制到 Vault 插件目录
 ```
 
+> 若你使用 remotely-save，可能在同步结束时被旧版 `main.js` 覆盖。可在同步完成后执行：
+>
+> ```bash
+> npm run post-sync-refresh -- --vault "/你的/Vault/路径" --vault-name "你的Vault名称"
+> ```
+>
+> 该命令会再次复制插件文件，并通过 Obsidian CLI 执行 `plugin:reload` 强制重载。
+
 ---
 
 ### 第二步：安装 Python
@@ -431,6 +439,14 @@ npm install
 npm run build
 # Copy manifest.json, main.js, styles.css, backend/ to your Vault plugin directory
 ```
+
+> If you use remotely-save, sync may overwrite `main.js` with an older version at the end of sync. Run this right after sync:
+>
+> ```bash
+> npm run post-sync-refresh -- --vault "/path/to/your/vault" --vault-name "Your Vault Name"
+> ```
+>
+> This command recopies plugin files and then forces plugin reload via Obsidian CLI (`plugin:reload`).
 
 ---
 
