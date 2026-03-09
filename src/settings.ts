@@ -1,7 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
-import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode } from "./types";
+import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider } from "./types";
 
 export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
@@ -91,6 +91,30 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.recognitionMode)
           .onChange(async (value: RecognitionMode) => {
             this.plugin.settings.recognitionMode = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("GPU 加速")
+      .setDesc(
+        process.platform === "darwin"
+          ? "macOS 推荐选择 CoreML（利用 Apple Neural Engine / GPU 加速推理）"
+          : process.platform === "win32"
+            ? "Windows NVIDIA 显卡可选 CUDA（需安装 CUDA Toolkit）"
+            : "当前平台仅支持 CPU",
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOption("cpu", "CPU（默认）");
+        if (process.platform === "darwin") {
+          dropdown.addOption("coreml", "CoreML（macOS GPU/ANE 加速）");
+        } else if (process.platform === "win32") {
+          dropdown.addOption("cuda", "CUDA（NVIDIA GPU 加速）");
+        }
+        dropdown
+          .setValue(this.plugin.settings.gpuProvider)
+          .onChange(async (value: GpuProvider) => {
+            this.plugin.settings.gpuProvider = value;
             await this.plugin.saveSettings();
           });
       });

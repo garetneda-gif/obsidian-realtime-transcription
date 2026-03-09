@@ -117,6 +117,7 @@ export class BackendManager {
       "--vad-min-silence", String(this.settings.vad.minSilenceDuration),
       "--partial-profile", this.settings.realtimeProfile,
       "--recognition-mode", this.settings.recognitionMode,
+      "--provider", this.settings.gpuProvider,
     ];
     if (this.settings.useInt8) {
       args.push("--use-int8");
@@ -249,13 +250,25 @@ export class BackendManager {
 
   async downloadModel(outputDir: string): Promise<boolean> {
     const downloadScript = path.join(this.pluginDir, "backend", "download_model.py");
+
+    if (!existsSync(downloadScript)) {
+      new Notice(`下载脚本不存在: ${downloadScript}\n请重新安装插件（需包含 backend/ 目录）`);
+      return false;
+    }
+
     return new Promise<boolean>((resolve) => {
-      const proc = spawn(this.settings.pythonPath, [downloadScript, "--output-dir", outputDir, "--all"], {
+      // -u：强制 Python 无缓冲输出，进度可实时传到 Node.js
+      const proc = spawn(this.settings.pythonPath, ["-u", downloadScript, "--output-dir", outputDir], {
         stdio: ["pipe", "pipe", "pipe"],
       });
 
       proc.stdout!.on("data", (data: Buffer) => {
-        console.log("[Model Download]", data.toString());
+        const msg = data.toString().trim();
+        console.log("[Model Download]", msg);
+        // 有新文件开始下载时推送 Notice
+        if (msg.includes("下载:")) {
+          new Notice(msg.split("\n")[0], 3000);
+        }
       });
       proc.stderr!.on("data", (data: Buffer) => {
         console.error("[Model Download Error]", data.toString());
@@ -263,7 +276,10 @@ export class BackendManager {
       proc.on("exit", (code: number | null) => {
         resolve(code === 0);
       });
-      proc.on("error", () => resolve(false));
+      proc.on("error", (err: Error) => {
+        new Notice(`无法启动 Python（${this.settings.pythonPath}）: ${err.message}`);
+        resolve(false);
+      });
     });
   }
 
@@ -410,6 +426,7 @@ export class BackendManager {
       vadMinSilence: this.settings.vad.minSilenceDuration,
       realtimeProfile: this.settings.realtimeProfile,
       recognitionMode: this.settings.recognitionMode,
+      gpuProvider: this.settings.gpuProvider,
     });
   }
 }

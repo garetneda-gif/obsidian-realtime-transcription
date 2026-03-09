@@ -69,6 +69,11 @@ Obsidian 插件 (TypeScript) ── WebSocket ── Python 后端 (sherpa-onnx)
 Obsidian 开发者控制台: `Cmd+Option+I` (macOS) / `Ctrl+Shift+I` (Windows)
 关键日志前缀: `[Transcription]`
 
+## GitHub 操作约定
+
+- 本仓库涉及 GitHub 的自动化操作（如创建 PR、查看 Issue、发布版本、推送协作流程）统一使用 GitHub CLI：`gh`
+- 不使用 GitHub MCP 作为默认 GitHub 操作通道
+
 ## 兼容性要求
 
 - Obsidian ≥ 1.4.0

@@ -42,8 +42,10 @@ class TranscriptionServer:
     def __init__(
         self,
         model_dir: str,
+        recognition_mode: str = "zh-en",
         use_int8: bool = True,
         num_threads: int = 4,
+        provider: str = "cpu",
         vad_threshold: float = 0.5,
         vad_min_silence: float = 1.0,
         vad_min_speech: float = 0.25,
@@ -79,18 +81,36 @@ class TranscriptionServer:
             print(f"错误: tokens 文件不存在: {tokens_file}", file=sys.stderr)
             sys.exit(1)
 
+        # 识别语言模式：
+        # - zh-en: 使用 auto（中英混杂）
+        # - zh: 强制中文
+        # - en: 强制英文
+        mode = (recognition_mode or "zh-en").lower()
+        language_hint = "auto"
+        if mode == "zh":
+            language_hint = "zh"
+        elif mode == "en":
+            language_hint = "en"
+
+        # GPU 加速：macOS 用 coreml，Windows 用 cuda，默认 cpu
+        actual_provider = provider
+        if provider != "cpu":
+            print(f"尝试使用 GPU 加速: provider={provider}")
+
         self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
             model=str(model_onnx),
             tokens=str(tokens_file),
-            language="auto",
+            language=language_hint,
             use_itn=True,
             num_threads=num_threads,
+            provider=actual_provider,
         )
 
         self.sample_rate = 16000
         self.clients: set = set()
         self._recording_start_time: dict = {}
-        print(f"模型加载完成: {model_onnx.name}")
+        self.recognition_mode = mode
+        print(f"模型加载完成: {model_onnx.name} (mode={self.recognition_mode}, lang={language_hint}, provider={actual_provider})")
 
     def _decode_text(self, samples: np.ndarray) -> str:
         stream = self.recognizer.create_stream()
@@ -148,7 +168,7 @@ class TranscriptionServer:
                         if partial_raw:
                             partial_lang = self._parse_language(partial_raw)
                             partial_text = self._clean_text(partial_raw)
-                            if partial_lang == "zh":
+                            if partial_lang not in ("ja", "ko", "yue"):
                                 partial_lang = self._guess_language_from_text(partial_text)
                             if partial_text and not self._is_similar(partial_text, last_partial_text):
                                 partial_resp = {
@@ -177,7 +197,7 @@ class TranscriptionServer:
                             # 解析 SenseVoice 输出的语言标签
                             language = self._parse_language(text)
                             clean_text = self._clean_text(text)
-                            if language == "zh":
+                            if language not in ("ja", "ko", "yue"):
                                 language = self._guess_language_from_text(clean_text)
 
                             elapsed = (
@@ -244,7 +264,7 @@ class TranscriptionServer:
         for tag, lang in lang_map.items():
             if tag in lower:
                 return lang
-        return "zh"
+        return "auto"
 
     def _clean_text(self, text: str) -> str:
         """清理 SenseVoice 输出中的特殊标签"""
@@ -291,12 +311,18 @@ class TranscriptionServer:
         if hangul_count > 0:
             return "ko"
 
-        # 中文为主但夹杂少量英文术语（如 VAD / API）时，仍判中文
-        if han_count > 0 and latin_count <= max(3, int(han_count * 0.25)):
+        # 只要出现明显中文，优先中文，避免中文句子被误判英文
+        if han_count >= 2:
+            if latin_count >= max(12, int(han_count * 2.5)):
+                return "en"
             return "zh"
 
-        # 英文判定：需要有一定连续英文占比，避免“有英文就误判”
-        if latin_count >= 6 and latin_count >= int(han_count * 0.6):
+        # 单个汉字 + 大量英文（例如专有名词夹一个汉字）可判英文
+        if han_count == 1 and latin_count >= 8:
+            return "en"
+
+        # 纯英文/短英文句子也应识别为英文（例如 "The." / "Hello"）
+        if han_count == 0 and latin_count >= 3:
             return "en"
 
         if han_count > 0:
@@ -304,7 +330,7 @@ class TranscriptionServer:
         if latin_count > 0:
             return "en"
 
-        # 默认中文（含汉字及其他情况）
+        # 默认中文
         return "zh"
 
 
@@ -315,6 +341,7 @@ async def main():
     parser.add_argument("--use-int8", action="store_true", default=True, help="使用 int8 量化模型")
     parser.add_argument("--no-int8", action="store_true", help="不使用 int8 量化模型")
     parser.add_argument("--num-threads", type=int, default=4, help="推理线程数 (默认: 4)")
+    parser.add_argument("--provider", default="cpu", help="ONNX Runtime 执行提供者: cpu, cuda (Windows/NVIDIA), coreml (macOS)")
     parser.add_argument("--vad-threshold", type=float, default=0.5, help="VAD 阈值")
     parser.add_argument("--vad-min-silence", type=float, default=1.0, help="VAD 最小静音时长(秒)")
     parser.add_argument("--vad-min-speech", type=float, default=0.25, help="VAD 最小语音时长(秒)")
@@ -327,8 +354,10 @@ async def main():
 
     server = TranscriptionServer(
         model_dir=args.model_dir,
+        recognition_mode=args.recognition_mode,
         use_int8=use_int8,
         num_threads=args.num_threads,
+        provider=args.provider,
         vad_threshold=args.vad_threshold,
         vad_min_silence=args.vad_min_silence,
         vad_min_speech=args.vad_min_speech,

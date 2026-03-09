@@ -31,6 +31,7 @@ export interface VadSettings {
 
 export type RealtimeProfile = "stable" | "fast";
 export type RecognitionMode = "zh-en" | "zh" | "en";
+export type GpuProvider = "cpu" | "cuda" | "coreml";
 
 export interface AggregationSettings {
   flushWindowSec: number;
@@ -52,6 +53,7 @@ export interface PluginSettings {
   autoStartBackend: boolean;
   realtimeProfile: RealtimeProfile;
   recognitionMode: RecognitionMode;
+  gpuProvider: GpuProvider;
   translation: TranslationSettings;
   formalize: FormalizeSettings;
   summary: SummarySettings;
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   autoStartBackend: true,
   realtimeProfile: "stable",
   recognitionMode: "zh-en",
+  gpuProvider: "cpu",
   translation: {
     enabled: false,
     apiUrl: "https://api.openai.com/v1/chat/completions",
