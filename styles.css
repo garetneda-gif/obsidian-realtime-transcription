@@ -575,6 +575,6 @@
 }
 
 /* ── 旧状态栏（隐藏，已合并到控制栏） ── */
-.status-bar {
+.transcription-view .status-bar {
   display: none;
 }
