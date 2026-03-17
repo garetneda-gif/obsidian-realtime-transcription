@@ -893,6 +893,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`AI 摘要失败: ${detail}`);
       this.summaryBuffer = source;
+      return;
     } finally {
       this.summaryInFlight = false;
     }
