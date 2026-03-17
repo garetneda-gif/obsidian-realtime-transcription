@@ -1,5 +1,6 @@
 import { Notice } from "obsidian";
 import { PluginSettings } from "../types";
+import { t } from "../i18n";
 
 const { spawn, execFile, execSync } = require("child_process") as typeof import("child_process");
 const { existsSync, writeFileSync, readFileSync, unlinkSync } = require("fs") as typeof import("fs");
@@ -51,14 +52,14 @@ export class BackendManager {
     const envOk = await this.checkEnvironment();
     if (!envOk) {
       const pipCmd = process.platform === "win32" ? "pip" : "pip3";
-      new Notice(`Python 环境检测失败，请确认已安装 sherpa-onnx:\n${pipCmd} install sherpa-onnx websockets numpy`);
+      new Notice(`${t("backend.envFail")}\n${pipCmd} install sherpa-onnx websockets numpy`);
       return false;
     }
 
     // 2. 检查模型文件
     const modelDir = this.settings.modelDir;
     if (!modelDir) {
-      new Notice("请在插件设置中配置模型目录路径");
+      new Notice(t("backend.noModelDir"));
       return false;
     }
 
@@ -70,7 +71,7 @@ export class BackendManager {
 
     for (const file of requiredFiles) {
       if (!existsSync(path.join(modelDir, file))) {
-        new Notice(`模型文件缺失: ${file}\n请先下载模型或检查路径`);
+        new Notice(`${t("backend.modelFileMissing")}: ${file}\n${t("backend.modelFileMissingHint")}`);
         return false;
       }
     }
@@ -93,19 +94,19 @@ export class BackendManager {
         console.log(`[Transcription] 端口 ${port} 已被占用，尝试 ${nextPort}`);
         port = nextPort;
       } else {
-        new Notice(`端口 ${this.settings.backendPort}-${port} 均被占用，请在设置中更换端口`);
+        new Notice(`${t("backend.portOccupied")}: ${this.settings.backendPort}-${port}`);
         return false;
       }
     }
     if (port !== this.settings.backendPort) {
-      new Notice(`端口 ${this.settings.backendPort} 被占用，自动切换到 ${port}`);
+      new Notice(`${t("backend.portSwitched")}: ${this.settings.backendPort} -> ${port}`);
     }
     this.activePort = port;
 
     // 4. 启动 Python 后端
     const serverScript = path.join(this.pluginDir, "backend", "server.py");
     if (!existsSync(serverScript)) {
-      new Notice(`后端脚本不存在: ${serverScript}`);
+      new Notice(`${t("backend.scriptMissing")}: ${serverScript}`);
       return false;
     }
 
@@ -136,7 +137,7 @@ export class BackendManager {
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          new Notice("后端启动超时（30秒），请检查模型文件和 Python 环境");
+          new Notice(t("backend.startTimeout"));
           resolve(false);
         }
       }, 30000);
@@ -151,7 +152,7 @@ export class BackendManager {
             resolved = true;
             clearTimeout(timeout);
             if (!reachable) {
-              new Notice("后端已启动但连接未就绪，请重试");
+              new Notice(t("backend.startedNotReady"));
               resolve(false);
               return;
             }
@@ -173,7 +174,7 @@ export class BackendManager {
         if (!resolved) {
           resolved = true;
           clearTimeout(timeout);
-          new Notice(`后端启动失败: ${err.message}`);
+          new Notice(`${t("backend.startFailed")}: ${err.message}`);
           resolve(false);
         }
       });
@@ -186,7 +187,7 @@ export class BackendManager {
           resolved = true;
           clearTimeout(timeout);
           const detail = lastStderr ? `\n${lastStderr}` : "";
-          new Notice(`后端启动失败（退出码: ${code ?? "null"}）${detail}`);
+          new Notice(`${t("backend.exitFailed")}: ${code ?? "null"})${detail}`);
           resolve(false);
         }
       });
@@ -252,7 +253,7 @@ export class BackendManager {
     const downloadScript = path.join(this.pluginDir, "backend", "download_model.py");
 
     if (!existsSync(downloadScript)) {
-      new Notice(`下载脚本不存在: ${downloadScript}\n请重新安装插件（需包含 backend/ 目录）`);
+      new Notice(`${t("backend.downloadScriptMissing")}: ${downloadScript}\n${t("backend.downloadScriptMissingHint")}`);
       return false;
     }
 
@@ -266,7 +267,7 @@ export class BackendManager {
         const msg = data.toString().trim();
         console.log("[Model Download]", msg);
         // 有新文件开始下载时推送 Notice
-        if (msg.includes("下载:")) {
+        if (msg.includes("下载:") || msg.includes("Download:")) {
           new Notice(msg.split("\n")[0], 3000);
         }
       });
@@ -277,7 +278,7 @@ export class BackendManager {
         resolve(code === 0);
       });
       proc.on("error", (err: Error) => {
-        new Notice(`无法启动 Python（${this.settings.pythonPath}）: ${err.message}`);
+        new Notice(`${t("backend.cannotStartPython")} (${this.settings.pythonPath}): ${err.message}`);
         resolve(false);
       });
     });

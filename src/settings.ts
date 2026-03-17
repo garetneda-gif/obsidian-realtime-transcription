@@ -2,6 +2,7 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider } from "./types";
+import { t, setLocale } from "./i18n";
 
 export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
@@ -19,12 +20,29 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
+    // ── Language / 语言 ──
+    new Setting(containerEl)
+      .setName(t("settings.language.name"))
+      .setDesc(t("settings.language.desc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("zh", "简体中文")
+          .addOption("en", "English")
+          .setValue(this.plugin.settings.locale)
+          .onChange(async (value: "zh" | "en") => {
+            this.plugin.settings.locale = value;
+            setLocale(value);
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
     // ── 后端设置 ──
-    containerEl.createEl("h2", { text: "后端设置" });
+    containerEl.createEl("h2", { text: t("settings.backend.title") });
 
     new Setting(containerEl)
-      .setName("Python 路径")
-      .setDesc("Python 可执行文件路径，确保已安装 sherpa-onnx")
+      .setName(t("settings.backend.pythonPath.name"))
+      .setDesc(t("settings.backend.pythonPath.desc"))
       .addText((text) => {
         const defaultPython = process.platform === "win32" ? "python" : "python3";
         text
@@ -37,8 +55,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("后端端口")
-      .setDesc("WebSocket 服务端口")
+      .setName(t("settings.backend.port.name"))
+      .setDesc(t("settings.backend.port.desc"))
       .addText((text) =>
         text
           .setPlaceholder("18888")
@@ -53,11 +71,11 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── 模型设置 ──
-    containerEl.createEl("h2", { text: "模型设置" });
+    containerEl.createEl("h2", { text: t("settings.model.title") });
 
     new Setting(containerEl)
-      .setName("模型目录")
-      .setDesc("包含 model.int8.onnx、tokens.txt、silero_vad.onnx 的目录路径")
+      .setName(t("settings.model.dir.name"))
+      .setDesc(t("settings.model.dir.desc"))
       .addText((text) =>
         text
           .setPlaceholder(process.platform === "win32" ? "C:\\path\\to\\models" : "/path/to/models")
@@ -69,8 +87,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("使用 Int8 量化模型")
-      .setDesc("使用更小的量化模型 (229MB vs 895MB)，推荐开启")
+      .setName(t("settings.model.useInt8.name"))
+      .setDesc(t("settings.model.useInt8.desc"))
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.useInt8)
@@ -81,13 +99,13 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("识别语言范围")
-      .setDesc("限制识别语言，避免误判成日语/韩语")
+      .setName(t("settings.model.recognitionMode.name"))
+      .setDesc(t("settings.model.recognitionMode.desc"))
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("zh-en", "中英混杂")
-          .addOption("zh", "纯中文")
-          .addOption("en", "纯英文")
+          .addOption("zh-en", t("settings.model.recognitionMode.zhEn"))
+          .addOption("zh", t("settings.model.recognitionMode.zh"))
+          .addOption("en", t("settings.model.recognitionMode.en"))
           .setValue(this.plugin.settings.recognitionMode)
           .onChange(async (value: RecognitionMode) => {
             this.plugin.settings.recognitionMode = value;
@@ -96,20 +114,20 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("GPU 加速")
+      .setName(t("settings.model.gpu.name"))
       .setDesc(
         process.platform === "darwin"
-          ? "macOS 推荐选择 CoreML（利用 Apple Neural Engine / GPU 加速推理）"
+          ? t("settings.model.gpu.desc.mac")
           : process.platform === "win32"
-            ? "Windows NVIDIA 显卡可选 CUDA（需安装 CUDA Toolkit）"
-            : "当前平台仅支持 CPU",
+            ? t("settings.model.gpu.desc.win")
+            : t("settings.model.gpu.desc.other"),
       )
       .addDropdown((dropdown) => {
-        dropdown.addOption("cpu", "CPU（默认）");
+        dropdown.addOption("cpu", t("settings.model.gpu.cpu"));
         if (process.platform === "darwin") {
-          dropdown.addOption("coreml", "CoreML（macOS GPU/ANE 加速）");
+          dropdown.addOption("coreml", t("settings.model.gpu.coreml"));
         } else if (process.platform === "win32") {
-          dropdown.addOption("cuda", "CUDA（NVIDIA GPU 加速）");
+          dropdown.addOption("cuda", t("settings.model.gpu.cuda"));
         }
         dropdown
           .setValue(this.plugin.settings.gpuProvider)
@@ -121,43 +139,43 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     // 环境检测按钮
     new Setting(containerEl)
-      .setName("环境检测")
-      .setDesc("检查 Python 和 sherpa-onnx 是否正确安装")
+      .setName(t("settings.model.envCheck.name"))
+      .setDesc(t("settings.model.envCheck.desc"))
       .addButton((btn) =>
-        btn.setButtonText("检测环境").onClick(async () => {
-          btn.setButtonText("检测中...");
+        btn.setButtonText(t("settings.model.envCheck.btn")).onClick(async () => {
+          btn.setButtonText(t("settings.model.envCheck.checking"));
           btn.setDisabled(true);
           const pluginDir = this.getPluginDir();
           const { BackendManager } = await import("./services/BackendManager");
           const mgr = new BackendManager(pluginDir, this.plugin.settings);
           const ok = await mgr.checkEnvironment();
           if (ok) {
-            new Notice("环境检测通过：Python + sherpa-onnx 可用");
+            new Notice(t("settings.model.envCheck.pass"));
           } else {
             const pipCmd = process.platform === "win32" ? "pip" : "pip3";
             new Notice(
-              `环境检测失败，请执行:\n${pipCmd} install sherpa-onnx websockets numpy`,
+              `${t("settings.model.envCheck.fail")}\n${pipCmd} install sherpa-onnx websockets numpy`,
             );
           }
-          btn.setButtonText("检测环境");
+          btn.setButtonText(t("settings.model.envCheck.btn"));
           btn.setDisabled(false);
         }),
       );
 
     // 下载模型按钮
     new Setting(containerEl)
-      .setName("下载模型")
-      .setDesc("下载全部模型文件：Int8 量化版 (229MB) + 全精度版 (895MB) + VAD，共约 1.1GB")
+      .setName(t("settings.model.download.name"))
+      .setDesc(t("settings.model.download.desc"))
       .addButton((btn) =>
-        btn.setButtonText("下载模型").onClick(async () => {
+        btn.setButtonText(t("settings.model.download.btn")).onClick(async () => {
           const modelDir = this.plugin.settings.modelDir;
           if (!modelDir) {
-            new Notice("请先设置模型目录路径");
+            new Notice(t("settings.model.download.noDir"));
             return;
           }
-          btn.setButtonText("下载中...");
+          btn.setButtonText(t("settings.model.download.downloading"));
           btn.setDisabled(true);
-          new Notice("开始下载模型，请耐心等待...");
+          new Notice(t("settings.model.download.start"));
 
           const pluginDir = this.getPluginDir();
           const { BackendManager } = await import("./services/BackendManager");
@@ -165,21 +183,21 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           const ok = await mgr.downloadModel(modelDir);
 
           if (ok) {
-            new Notice("模型下载完成！");
+            new Notice(t("settings.model.download.done"));
           } else {
-            new Notice("模型下载失败，请检查网络连接或手动下载");
+            new Notice(t("settings.model.download.fail"));
           }
-          btn.setButtonText("下载模型");
+          btn.setButtonText(t("settings.model.download.btn"));
           btn.setDisabled(false);
         }),
       );
 
     // ── 翻译设置 ──
-    containerEl.createEl("h2", { text: "翻译设置" });
+    containerEl.createEl("h2", { text: t("settings.translation.title") });
 
     new Setting(containerEl)
-      .setName("启用自动翻译")
-      .setDesc("识别到非中文内容时自动翻译为简体中文")
+      .setName(t("settings.translation.enabled.name"))
+      .setDesc(t("settings.translation.enabled.desc"))
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.translation.enabled)
@@ -190,8 +208,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("API 端点")
-      .setDesc("OpenAI 兼容 API 的完整 URL（支持 DeepSeek、通义千问等）")
+      .setName(t("settings.translation.apiUrl.name"))
+      .setDesc(t("settings.translation.apiUrl.desc"))
       .addText((text) =>
         text
           .setPlaceholder("https://api.openai.com/v1/chat/completions")
@@ -203,8 +221,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("API Key")
-      .setDesc("翻译服务的 API 密钥")
+      .setName(t("settings.translation.apiKey.name"))
+      .setDesc(t("settings.translation.apiKey.desc"))
       .addText((text) => {
         text
           .setPlaceholder("sk-...")
@@ -217,8 +235,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("模型名称")
-      .setDesc("用于翻译的模型 ID")
+      .setName(t("settings.translation.model.name"))
+      .setDesc(t("settings.translation.model.desc"))
       .addText((text) =>
         text
           .setPlaceholder("gpt-4o-mini")
@@ -230,11 +248,11 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── 润色设置 ──
-    containerEl.createEl("h2", { text: "润色设置" });
+    containerEl.createEl("h2", { text: t("settings.formalize.title") });
 
     new Setting(containerEl)
-      .setName("润色 API 端点")
-      .setDesc("用于文本润色的独立 API URL（不与翻译/摘要共用）")
+      .setName(t("settings.formalize.apiUrl.name"))
+      .setDesc(t("settings.formalize.apiUrl.desc"))
       .addText((text) =>
         text
           .setPlaceholder("https://api.openai.com/v1/chat/completions")
@@ -246,8 +264,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("润色 API Key")
-      .setDesc("用于润色服务的 API 密钥")
+      .setName(t("settings.formalize.apiKey.name"))
+      .setDesc(t("settings.formalize.apiKey.desc"))
       .addText((text) => {
         text
           .setPlaceholder("sk-...")
@@ -260,8 +278,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("润色模型名称")
-      .setDesc("用于文本润色的模型 ID")
+      .setName(t("settings.formalize.model.name"))
+      .setDesc(t("settings.formalize.model.desc"))
       .addText((text) =>
         text
           .setPlaceholder("gpt-4o-mini")
@@ -273,11 +291,11 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── AI 摘要设置 ──
-    containerEl.createEl("h2", { text: "AI 摘要设置" });
+    containerEl.createEl("h2", { text: t("settings.summary.title") });
 
     new Setting(containerEl)
-      .setName("启用自动 AI 摘要")
-      .setDesc("录音过程中按字数阈值自动生成摘要")
+      .setName(t("settings.summary.enabled.name"))
+      .setDesc(t("settings.summary.enabled.desc"))
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.summary.enabled)
@@ -288,8 +306,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("摘要 API 端点")
-      .setDesc("用于 AI 摘要的独立 API URL（不与翻译共用）")
+      .setName(t("settings.summary.apiUrl.name"))
+      .setDesc(t("settings.summary.apiUrl.desc"))
       .addText((text) =>
         text
           .setPlaceholder("https://api.openai.com/v1/chat/completions")
@@ -301,8 +319,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("摘要 API Key")
-      .setDesc("用于 AI 摘要服务的 API 密钥")
+      .setName(t("settings.summary.apiKey.name"))
+      .setDesc(t("settings.summary.apiKey.desc"))
       .addText((text) => {
         text
           .setPlaceholder("sk-...")
@@ -315,8 +333,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("摘要模型名称")
-      .setDesc("用于 AI 摘要的模型 ID")
+      .setName(t("settings.summary.model.name"))
+      .setDesc(t("settings.summary.model.desc"))
       .addText((text) =>
         text
           .setPlaceholder("gpt-4o-mini")
@@ -328,8 +346,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("摘要触发字数")
-      .setDesc("累计到该字数后自动执行一次摘要")
+      .setName(t("settings.summary.threshold.name"))
+      .setDesc(t("settings.summary.threshold.desc"))
       .addSlider((slider) =>
         slider
           .setLimits(1000, 10000, 100)
@@ -342,11 +360,11 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── 二次摘要设置 ──
-    containerEl.createEl("h2", { text: "二次摘要（综合总结）" });
+    containerEl.createEl("h2", { text: t("settings.metaSummary.title") });
 
     new Setting(containerEl)
-      .setName("启用二次摘要")
-      .setDesc("每累积指定数量的摘要后，自动生成一份综合总结")
+      .setName(t("settings.metaSummary.enabled.name"))
+      .setDesc(t("settings.metaSummary.enabled.desc"))
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.metaSummary.enabled)
@@ -357,8 +375,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("触发摘要数量")
-      .setDesc("每累积多少个摘要后触发一次二次摘要")
+      .setName(t("settings.metaSummary.triggerCount.name"))
+      .setDesc(t("settings.metaSummary.triggerCount.desc"))
       .addSlider((slider) =>
         slider
           .setLimits(2, 10, 1)
@@ -371,15 +389,15 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── 导出设置 ──
-    containerEl.createEl("h2", { text: "导出设置" });
+    containerEl.createEl("h2", { text: t("settings.export.title") });
 
     new Setting(containerEl)
-      .setName("导出内容范围")
-      .setDesc("点击导出按钮时，选择导出仅摘要还是全部内容（转录 + 摘要）")
+      .setName(t("settings.export.mode.name"))
+      .setDesc(t("settings.export.mode.desc"))
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("full", "全部内容（转录 + 摘要）")
-          .addOption("summaryOnly", "仅摘要")
+          .addOption("full", t("settings.export.mode.full"))
+          .addOption("summaryOnly", t("settings.export.mode.summaryOnly"))
           .setValue(this.plugin.settings.exportMode)
           .onChange(async (value: ExportMode) => {
             this.plugin.settings.exportMode = value;
@@ -388,13 +406,13 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("导出文件命名方式")
-      .setDesc("导出笔记时如何命名文件")
+      .setName(t("settings.export.titleMode.name"))
+      .setDesc(t("settings.export.titleMode.desc"))
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("timestamp", "时间戳命名（默认）")
-          .addOption("ai", "AI 智能命名")
-          .addOption("manual", "手动命名")
+          .addOption("timestamp", t("settings.export.titleMode.timestamp"))
+          .addOption("ai", t("settings.export.titleMode.ai"))
+          .addOption("manual", t("settings.export.titleMode.manual"))
           .setValue(this.plugin.settings.exportTitleMode ?? "timestamp")
           .onChange(async (value: ExportTitleMode) => {
             this.plugin.settings.exportTitleMode = value;
@@ -403,27 +421,29 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     // ── 高级设置 ──
-    containerEl.createEl("h2", { text: "高级设置" });
+    containerEl.createEl("h2", { text: t("settings.advanced.title") });
 
     new Setting(containerEl)
-      .setName("实时模式预设")
-      .setDesc("在“稳态档 / 极速档”之间切换，会自动应用一组推荐参数")
+      .setName(t("settings.advanced.profile.name"))
+      .setDesc(t("settings.advanced.profile.desc"))
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("stable", "稳态档（更稳、更准）")
-          .addOption("fast", "极速档（更快、略激进）")
+          .addOption("stable", t("settings.advanced.profile.stable"))
+          .addOption("fast", t("settings.advanced.profile.fast"))
           .setValue(this.plugin.settings.realtimeProfile)
           .onChange(async (value: RealtimeProfile) => {
             this.applyRealtimePreset(value);
             await this.plugin.saveSettings();
-            new Notice(`已切换到${value === "stable" ? "稳态档" : "极速档"}`);
+            new Notice(value === "stable"
+              ? t("settings.advanced.profile.switchedStable")
+              : t("settings.advanced.profile.switchedFast"));
             this.display();
           });
       });
 
     new Setting(containerEl)
-      .setName("实时预览")
-      .setDesc("开启后边说边显示文字（但可能出现重复）；关闭后等说完一句再显示（精度更高）")
+      .setName(t("settings.advanced.realtimePreview.name"))
+      .setDesc(t("settings.advanced.realtimePreview.desc"))
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.aggregation.realtimePreview)
@@ -434,8 +454,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("VAD 静音阈值")
-      .setDesc("语音活动检测的静音持续时间（秒），越大分句越少")
+      .setName(t("settings.advanced.vadSilence.name"))
+      .setDesc(t("settings.advanced.vadSilence.desc"))
       .addSlider((slider) =>
         slider
           .setLimits(0.2, 4.0, 0.1)
@@ -448,8 +468,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("聚合输出窗口")
-      .setDesc("同语种短句会在该时长内合并后再输出，越大段落越长（同时有少量延迟）")
+      .setName(t("settings.advanced.flushWindow.name"))
+      .setDesc(t("settings.advanced.flushWindow.desc"))
       .addSlider((slider) =>
         slider
           .setLimits(1, 12, 1)
@@ -462,8 +482,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("单段最大字数")
-      .setDesc("达到该长度会提前换段，避免单条过长")
+      .setName(t("settings.advanced.maxChars.name"))
+      .setDesc(t("settings.advanced.maxChars.desc"))
       .addSlider((slider) =>
         slider
           .setLimits(120, 1200, 20)

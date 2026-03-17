@@ -12,6 +12,7 @@ import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult,
 import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
 import { TitleInputModal } from "./views/TitleInputModal";
+import { t, setLocale } from "./i18n";
 
 interface PendingTranscript {
   id: string;
@@ -66,20 +67,20 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     await this.refreshLegacyTranscriptionViews();
 
     // 添加 Ribbon 图标
-    this.addRibbonIcon("microphone", "实时语音转写", () => {
+    this.addRibbonIcon("microphone", t("ribbon.tooltip"), () => {
       this.activateView();
     });
 
     // 注册命令
     this.addCommand({
       id: "open-transcription-panel",
-      name: "打开实时语音转写面板",
+      name: t("command.openPanel"),
       callback: () => this.activateView(),
     });
 
     this.addCommand({
       id: "toggle-recording",
-      name: "开始/停止录制",
+      name: t("command.toggleRecording"),
       callback: () => this.toggleRecording(),
     });
 
@@ -107,7 +108,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.wsClient.setOnReconnecting((attempt) => {
       const view = this.getView();
       if (view) {
-        view.setConnectionStatus(false, `重连中... (${attempt})`);
+        view.setConnectionStatus(false, `${t("status.reconnecting")} (${attempt})`);
       }
     });
 
@@ -137,6 +138,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const raw = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+    setLocale(this.settings.locale ?? "zh");
 
     // 兼容旧配置：未拆分润色接口前，沿用翻译配置作为润色默认值
     const hasFormalizeConfig = Boolean(
@@ -211,7 +213,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       }
     } catch (err) {
       console.error("[Transcription] toggleRecording 错误:", err);
-      new Notice(`录制出错: ${err instanceof Error ? err.message : String(err)}`);
+      new Notice(`${t("notice.recordingError")}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -221,9 +223,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     await this.saveSettings();
 
     const label = this.settings.summary.displayMode === "summaryOnly"
-      ? "仅显示摘要"
-      : "摘要 + 转录";
-    new Notice(`显示模式: ${label}`);
+      ? t("notice.displayModeSummaryOnly")
+      : t("notice.displayModeBoth");
+    new Notice(`${t("notice.displayModeLabel")}: ${label}`);
   }
 
   private async startRecording(): Promise<void> {
@@ -236,7 +238,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     const currentView = this.getView();
     if (!currentView) {
-      new Notice("无法打开转写面板");
+      new Notice(t("notice.cannotOpenPanel"));
       return;
     }
     this.pendingTranscript = null;
@@ -252,22 +254,22 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     // 1. 启动后端
     console.log("[Transcription] 正在启动后端...");
-    currentView.setConnectionStatus(false, "启动后端...");
+    currentView.setConnectionStatus(false, t("status.startingBackend"));
     const started = await this.backendManager.start();
     console.log("[Transcription] 后端启动结果:", started);
     if (!started) {
-      currentView.setConnectionStatus(false, "后端启动失败");
+      currentView.setConnectionStatus(false, t("status.backendStartFailed"));
       return;
     }
 
     // 2. 连接 WebSocket
     console.log("[Transcription] 正在连接 WebSocket...");
-    currentView.setConnectionStatus(false, "连接中...");
+    currentView.setConnectionStatus(false, t("status.connecting"));
     try {
       await this.connectBackendWithRetry(this.backendManager.activePort || this.settings.backendPort);
     } catch (err) {
       console.error("[Transcription] WebSocket 连接失败:", err);
-      new Notice("无法连接到转写后端");
+      new Notice(t("notice.cannotConnectBackend"));
       return;
     }
 
@@ -282,7 +284,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       });
     } catch (err) {
       console.error("[Transcription] 麦克风启动失败:", err);
-      new Notice("无法访问麦克风，请检查权限设置");
+      new Notice(t("notice.micPermission"));
       this.wsClient.disconnect();
       return;
     }
@@ -290,7 +292,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.recording = true;
     this.syncViewControlStates(currentView);
     currentView.setListeningStatus(true);
-    new Notice("开始录制");
+    new Notice(t("notice.recordingStarted"));
     console.log("[Transcription] 录制已开始");
   }
 
@@ -331,7 +333,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       view.setConnectionStatus(false);
     }
 
-    new Notice("录制已停止");
+    new Notice(t("notice.recordingStopped"));
   }
 
   private async handleTranscriptionResult(result: TranscriptionResult): Promise<void> {
@@ -891,7 +893,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     } catch (err) {
       console.error("AI 摘要失败:", err);
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
-      new Notice(`AI 摘要失败: ${detail}`);
+      new Notice(`${t("notice.summaryFailed")}: ${detail}`);
       this.summaryBuffer = source;
       return;
     } finally {
@@ -947,7 +949,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     } catch (err) {
       console.error("二次摘要失败:", err);
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
-      new Notice(`二次摘要失败: ${detail}`);
+      new Notice(`${t("notice.metaSummaryFailed")}: ${detail}`);
       this.metaSummaryTexts.push(...texts);
     } finally {
       this.metaSummaryInFlight = false;
@@ -956,7 +958,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
   private async formalizeEntry(entryId: string, text: string): Promise<string> {
     if (!this.formalizeService.canFormalize()) {
-      throw new Error("请先在设置中配置润色 API");
+      throw new Error(t("notice.configureFormalizeApi"));
     }
     const result = await this.formalizeService.formalize(text);
     const view = this.getView();
@@ -978,8 +980,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (entries.length === 0) {
       new Notice(
         this.settings.exportMode === "summaryOnly"
-          ? "没有可导出的摘要记录"
-          : "没有可导出的转写记录",
+          ? t("notice.noSummaryToExport")
+          : t("notice.noTranscriptToExport"),
       );
       return;
     }
@@ -988,7 +990,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const timeStr = `${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
-    const timestampTitle = `语音转写-${dateStr}-${timeStr}`;
+    const timestampTitle = `${t("export.prefix")}${dateStr}-${timeStr}`;
 
     // 根据 exportTitleMode 决定文件名
     let title: string;
@@ -1004,12 +1006,12 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       }
       case "ai": {
         if (!this.summaryService.isConfigured()) {
-          new Notice("AI 命名需要先配置摘要 API");
+          new Notice(t("notice.aiNamingNeedConfig"));
           title = timestampTitle;
           break;
         }
         try {
-          new Notice("正在生成标题...");
+          new Notice(t("notice.generatingTitle"));
           const contentSnippet = entries
             .map((e) => e.result.text)
             .join("\n")
@@ -1018,7 +1020,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
           title = this.sanitizeFileName(aiTitle) || timestampTitle;
         } catch (err) {
           console.error("[Transcription] AI 命名失败:", err);
-          new Notice("AI 命名失败，使用时间戳命名");
+          new Notice(t("notice.aiNamingFailed"));
           title = timestampTitle;
         }
         break;
@@ -1038,7 +1040,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       md += `**[${time}]** \`${lang}\`\n`;
       md += `${entry.result.text}\n`;
       if (entry.formalText) {
-        md += `> **润色**: ${entry.formalText}\n`;
+        md += `> **${t("export.formalLabel")}**: ${entry.formalText}\n`;
       }
       if (entry.translation) {
         md += `> ${entry.translation}\n`;
@@ -1050,14 +1052,14 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const fileName = `${title}.md`;
     try {
       await this.app.vault.create(fileName, md);
-      new Notice(`已导出到: ${fileName}`);
+      new Notice(`${t("notice.exportedTo")}: ${fileName}`);
       const file = this.app.vault.getAbstractFileByPath(fileName);
       if (file) {
         const leaf = this.app.workspace.getLeaf(false);
         await leaf.openFile(file as import("obsidian").TFile);
       }
     } catch {
-      new Notice("导出失败，文件可能已存在");
+      new Notice(t("notice.exportFailed"));
     }
   }
 

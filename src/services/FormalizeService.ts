@@ -1,5 +1,6 @@
 import { requestUrl } from "obsidian";
 import { FormalizeSettings } from "../types";
+import { t } from "../i18n";
 
 export class FormalizeService {
   private settings: FormalizeSettings;
@@ -23,16 +24,16 @@ export class FormalizeService {
   async formalize(text: string): Promise<string> {
     const inputText = text?.trim();
     if (!inputText) {
-      throw new Error("待润色文本为空");
+      throw new Error(t("formalize.emptyText"));
     }
 
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
     const model = this.settings.model?.trim();
     const apiKey = this.settings.apiKey?.trim();
 
-    if (!apiKey) throw new Error("未配置润色 API Key");
-    if (!apiUrl) throw new Error("未配置润色 API 端点");
-    if (!model) throw new Error("未配置润色模型");
+    if (!apiKey) throw new Error(t("formalize.noApiKey"));
+    if (!apiUrl) throw new Error(t("formalize.noApiUrl"));
+    if (!model) throw new Error(t("formalize.noModel"));
 
     console.log("[Formalize] 开始请求", { apiUrl, model });
 
@@ -65,12 +66,12 @@ export class FormalizeService {
       if (data?.error) {
         const errMsg = typeof data.error.message === "string"
           ? data.error.message
-          : "润色 API 返回错误";
+          : t("formalize.apiError");
         throw new Error(errMsg);
       }
       const result = extractTextFromResponse(data);
       if (!result) {
-        throw new Error("润色 API 返回格式不受支持");
+        throw new Error(t("formalize.unsupportedFormat"));
       }
       return result;
     } catch (err) {

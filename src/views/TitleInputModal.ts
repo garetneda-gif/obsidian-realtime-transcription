@@ -1,4 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
+import { t } from "../i18n";
 
 export class TitleInputModal extends Modal {
   private result: string | null = null;
@@ -10,16 +11,16 @@ export class TitleInputModal extends Modal {
 
   onOpen(): void {
     const { contentEl } = this;
-    contentEl.createEl("h3", { text: "输入导出文件名" });
+    contentEl.createEl("h3", { text: t("modal.exportTitle") });
 
     let inputValue = this.defaultTitle;
 
     new Setting(contentEl)
-      .setName("文件名")
+      .setName(t("modal.fileName"))
       .addText((text) => {
         text
           .setValue(this.defaultTitle)
-          .setPlaceholder("请输入文件名")
+          .setPlaceholder(t("modal.fileNamePlaceholder"))
           .onChange((value) => {
             inputValue = value;
           });
@@ -35,7 +36,7 @@ export class TitleInputModal extends Modal {
     new Setting(contentEl)
       .addButton((btn) =>
         btn
-          .setButtonText("确定")
+          .setButtonText(t("modal.confirm"))
           .setCta()
           .onClick(() => {
             this.result = inputValue.trim() || null;
@@ -43,7 +44,7 @@ export class TitleInputModal extends Modal {
           }),
       )
       .addButton((btn) =>
-        btn.setButtonText("取消").onClick(() => {
+        btn.setButtonText(t("modal.cancel")).onClick(() => {
           this.result = null;
           this.close();
         }),

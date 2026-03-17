@@ -1,5 +1,6 @@
 import { requestUrl } from "obsidian";
 import { SummarySettings } from "../types";
+import { t } from "../i18n";
 
 export class SummaryService {
   private settings: SummarySettings;
@@ -26,9 +27,9 @@ export class SummaryService {
     const model = this.settings.model?.trim();
     const apiKey = this.settings.apiKey?.trim();
 
-    if (!apiKey) throw new Error("未配置摘要 API Key");
-    if (!apiUrl) throw new Error("未配置摘要 API 端点");
-    if (!model) throw new Error("未配置摘要模型");
+    if (!apiKey) throw new Error(t("summary.noApiKey"));
+    if (!apiUrl) throw new Error(t("summary.noApiUrl"));
+    if (!model) throw new Error(t("summary.noModel"));
 
     const response = await requestUrl({
       url: apiUrl,
@@ -57,7 +58,7 @@ export class SummaryService {
     if (!summary) {
       const errMsg = typeof data?.error?.message === "string"
         ? data.error.message
-        : "摘要 API 返回格式不受支持";
+        : t("summary.unsupportedFormat");
       throw new Error(errMsg);
     }
     return summary;
@@ -68,9 +69,9 @@ export class SummaryService {
     const model = this.settings.model?.trim();
     const apiKey = this.settings.apiKey?.trim();
 
-    if (!apiKey) throw new Error("未配置摘要 API Key");
-    if (!apiUrl) throw new Error("未配置摘要 API 端点");
-    if (!model) throw new Error("未配置摘要模型");
+    if (!apiKey) throw new Error(t("summary.noApiKey"));
+    if (!apiUrl) throw new Error(t("summary.noApiUrl"));
+    if (!model) throw new Error(t("summary.noModel"));
 
     const combined = summaries.map((s, i) => `【摘要 ${i + 1}】\n${s}`).join("\n\n");
 
@@ -101,7 +102,7 @@ export class SummaryService {
     if (!result) {
       const errMsg = typeof data?.error?.message === "string"
         ? data.error.message
-        : "二次摘要 API 返回格式不受支持";
+        : t("summary.metaUnsupportedFormat");
       throw new Error(errMsg);
     }
     return result;
@@ -112,9 +113,9 @@ export class SummaryService {
     const model = this.settings.model?.trim();
     const apiKey = this.settings.apiKey?.trim();
 
-    if (!apiKey) throw new Error("未配置摘要 API Key");
-    if (!apiUrl) throw new Error("未配置摘要 API 端点");
-    if (!model) throw new Error("未配置摘要模型");
+    if (!apiKey) throw new Error(t("summary.noApiKey"));
+    if (!apiUrl) throw new Error(t("summary.noApiUrl"));
+    if (!model) throw new Error(t("summary.noModel"));
 
     const response = await requestUrl({
       url: apiUrl,
@@ -141,7 +142,7 @@ export class SummaryService {
     const data = response.json;
     const title = extractTextFromResponse(data);
     if (!title) {
-      throw new Error("AI 命名返回格式不受支持");
+      throw new Error(t("summary.titleUnsupportedFormat"));
     }
     return title.replace(/[。！？.!?"'""'']/g, "").trim();
   }

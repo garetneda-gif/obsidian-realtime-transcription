@@ -1,6 +1,7 @@
 import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS, PLUGIN_ID } from "../constants";
 import { TranscriptEntry, TranscriptionResult, SummaryDisplayMode } from "../types";
+import { t } from "../i18n";
 
 const FORMALIZE_UI_TIMEOUT_MS = 35000;
 
@@ -39,7 +40,7 @@ export class TranscriptionView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "实时语音转写";
+    return t("view.displayText");
   }
 
   getIcon(): string {
@@ -54,7 +55,7 @@ export class TranscriptionView extends ItemView {
     // 头部标题
     const header = container.createDiv("transcription-header");
     const titleEl = header.createEl("span", { cls: "transcription-title" });
-    titleEl.setText("文字转写");
+    titleEl.setText(t("view.title"));
 
     // 控制栏（含状态指示器）
     this.controlBar = container.createDiv("control-bar");
@@ -64,7 +65,7 @@ export class TranscriptionView extends ItemView {
     const statusIndicator = this.controlBar.createDiv("status-indicator");
     this.statusDot = statusIndicator.createDiv("status-dot");
     this.statusText = statusIndicator.createEl("span", { cls: "status-text" });
-    this.statusText.setText("未连接");
+    this.statusText.setText(t("view.statusDisconnected"));
 
     // 保留隐藏的 statusBar 引用以兼容
     this.statusBar = statusIndicator;
@@ -104,7 +105,7 @@ export class TranscriptionView extends ItemView {
 
   private buildControlBar(): void {
     const triggerRecordingToggle = () => {
-      this.setConnectionStatus(false, "按钮已点击，准备启动...");
+      this.setConnectionStatus(false, t("view.btnClickedPreparing"));
       if (this.onToggleRecording) {
         void this.onToggleRecording();
         return;
@@ -112,13 +113,13 @@ export class TranscriptionView extends ItemView {
 
       // 兜底：即使回调丢失，也尝试通过命令触发录音切换
       void this.app.commands.executeCommandById(`${PLUGIN_ID}:toggle-recording`);
-      new Notice("录音按钮回调未绑定，已尝试命令兜底触发");
+      new Notice(t("view.callbackFallback"));
     };
 
     // 录制按钮
     this.recordBtn = this.controlBar.createEl("button", {
       cls: "record-btn",
-      attr: { "aria-label": "开始录制", type: "button" },
+      attr: { "aria-label": t("view.startRecording"), type: "button" },
     });
     const recordIcon = this.recordBtn.createDiv("record-btn-icon");
     setIcon(recordIcon, "microphone");
@@ -128,7 +129,7 @@ export class TranscriptionView extends ItemView {
     // 显示模式切换（仅摘要 / 摘要+转录）
     this.summaryBtn = this.controlBar.createEl("button", {
       cls: "action-btn summary-btn",
-      attr: { "aria-label": "切换为仅显示摘要", type: "button" },
+      attr: { "aria-label": t("view.switchToSummaryOnly"), type: "button" },
     });
     setIcon(this.summaryBtn, "sparkles");
     this.summaryBtn.addEventListener("click", () => {
@@ -138,7 +139,7 @@ export class TranscriptionView extends ItemView {
     // 导出按钮
     this.exportBtn = this.controlBar.createEl("button", {
       cls: "action-btn",
-      attr: { "aria-label": "导出为笔记" },
+      attr: { "aria-label": t("view.exportNote") },
     });
     setIcon(this.exportBtn, "file-text");
     this.exportBtn.addEventListener("click", () => {
@@ -148,7 +149,7 @@ export class TranscriptionView extends ItemView {
     // 清除按钮
     this.clearBtn = this.controlBar.createEl("button", {
       cls: "action-btn",
-      attr: { "aria-label": "清除记录" },
+      attr: { "aria-label": t("view.clearRecords") },
     });
     setIcon(this.clearBtn, "trash-2");
     this.clearBtn.addEventListener("click", () => {
@@ -159,10 +160,10 @@ export class TranscriptionView extends ItemView {
   setRecordingState(recording: boolean): void {
     if (recording) {
       this.recordBtn.addClass("recording");
-      this.recordBtn.setAttribute("aria-label", "停止录制");
+      this.recordBtn.setAttribute("aria-label", t("view.stopRecording"));
     } else {
       this.recordBtn.removeClass("recording");
-      this.recordBtn.setAttribute("aria-label", "开始录制");
+      this.recordBtn.setAttribute("aria-label", t("view.startRecording"));
     }
   }
 
@@ -170,11 +171,11 @@ export class TranscriptionView extends ItemView {
     if (!this.summaryBtn) return;
     if (mode === "summaryOnly") {
       this.summaryBtn.addClass("active");
-      this.summaryBtn.setAttribute("aria-label", "切换为摘要+转录");
+      this.summaryBtn.setAttribute("aria-label", t("view.switchToBoth"));
       this.transcriptContainer.addClass("summary-only");
     } else {
       this.summaryBtn.removeClass("active");
-      this.summaryBtn.setAttribute("aria-label", "切换为仅显示摘要");
+      this.summaryBtn.setAttribute("aria-label", t("view.switchToSummaryOnly"));
       this.transcriptContainer.removeClass("summary-only");
     }
   }
@@ -183,16 +184,16 @@ export class TranscriptionView extends ItemView {
     this.statusDot.className = "status-dot";
     if (connected) {
       this.statusDot.addClass("connected");
-      this.statusText.setText(detail ?? "已连接");
+      this.statusText.setText(detail ?? t("view.statusConnected"));
     } else {
-      this.statusText.setText(detail ?? "未连接");
+      this.statusText.setText(detail ?? t("view.statusDisconnected"));
     }
   }
 
   setListeningStatus(listening: boolean): void {
     if (listening) {
       this.statusDot.className = "status-dot recording";
-      this.statusText.setText("正在聆听...");
+      this.statusText.setText(t("view.statusListening"));
     }
   }
 
@@ -245,7 +246,7 @@ export class TranscriptionView extends ItemView {
       this.streamingCard.addClass("summary-card");
       const title = this.streamingCard.querySelector(".summary-title");
       if (!title) {
-        this.streamingCard.createDiv("summary-title").setText("AI 摘要");
+        this.streamingCard.createDiv("summary-title").setText(t("view.aiSummary"));
       }
     } else {
       this.streamingCard.removeClass("summary-card");
@@ -383,7 +384,7 @@ export class TranscriptionView extends ItemView {
       btn.empty();
       const checkIcon = btn.createDiv("formalize-btn-icon");
       setIcon(checkIcon, "check");
-      btn.appendText("已润色");
+      btn.appendText(t("view.formalized"));
     }
 
     // 插入或更新润色文本
@@ -431,12 +432,12 @@ export class TranscriptionView extends ItemView {
       const titleRow = card.createDiv("summary-title-row");
       const iconEl = titleRow.createDiv("summary-title-icon meta-summary-title-icon");
       setIcon(iconEl, "layers");
-      titleRow.createEl("span", { cls: "summary-title meta-summary-title", text: "AI \u7efc\u5408\u603b\u7ed3" });
+      titleRow.createEl("span", { cls: "summary-title meta-summary-title", text: t("view.aiMetaSummary") });
     } else if (isSummary) {
       const titleRow = card.createDiv("summary-title-row");
       const iconEl = titleRow.createDiv("summary-title-icon");
       setIcon(iconEl, "sparkles");
-      titleRow.createEl("span", { cls: "summary-title", text: "AI \u6458\u8981" });
+      titleRow.createEl("span", { cls: "summary-title", text: t("view.aiSummary") });
     }
 
     // 原文
@@ -463,7 +464,7 @@ export class TranscriptionView extends ItemView {
       translationEl.setText(entry.translation);
     } else if (this.shouldShowTranslationPlaceholder(entry.result.language)) {
       const loadingEl = card.createDiv("card-translation-loading");
-      loadingEl.setText("翻译中...");
+      loadingEl.setText(t("view.translating"));
     }
   }
 
@@ -471,7 +472,7 @@ export class TranscriptionView extends ItemView {
     const footer = card.createDiv("card-footer");
     const formalizeBtn = footer.createEl("button", {
       cls: entry.formalText ? "formalize-btn done" : "formalize-btn",
-      text: entry.formalText ? "已润色" : "润色",
+      text: entry.formalText ? t("view.formalized") : t("view.formalize"),
       attr: { type: "button" },
     });
     const btnIcon = formalizeBtn.createDiv("formalize-btn-icon");
@@ -494,12 +495,12 @@ export class TranscriptionView extends ItemView {
     card: HTMLElement,
   ): Promise<void> {
     if (!this.onFormalize) {
-      new Notice("润色功能未配置");
+      new Notice(t("view.formalizeNotConfigured"));
       return;
     }
 
     btn.classList.add("loading");
-    btn.textContent = "润色中...";
+    btn.textContent = t("view.formalizing");
 
     // 添加加载占位
     const oldLoading = card.querySelector(".card-formal-loading");
@@ -507,7 +508,7 @@ export class TranscriptionView extends ItemView {
     const originalEl = card.querySelector(".card-original");
     const loadingEl = document.createElement("div");
     loadingEl.className = "card-formal-loading";
-    loadingEl.textContent = "正在润色...";
+    loadingEl.textContent = t("view.formalizeLoading");
     if (originalEl?.nextSibling) {
       card.insertBefore(loadingEl, originalEl.nextSibling);
     } else {
@@ -518,29 +519,29 @@ export class TranscriptionView extends ItemView {
       if (!btn.classList.contains("loading")) return;
       loadingEl.remove();
       btn.classList.remove("loading");
-      btn.textContent = "润色";
+      btn.textContent = t("view.formalize");
       const btnIcon = btn.createDiv("formalize-btn-icon");
       setIcon(btnIcon, "wand-2");
       btn.insertBefore(btnIcon, btn.firstChild);
-      new Notice(`润色超时（>${Math.floor(FORMALIZE_UI_TIMEOUT_MS / 1000)} 秒），请检查 API 配置或网络`);
+      new Notice(`${t("view.formalizeTimeout")}(>${Math.floor(FORMALIZE_UI_TIMEOUT_MS / 1000)}${t("view.formalizeTimeoutDetail")}`);
     }, FORMALIZE_UI_TIMEOUT_MS + 1000);
 
     try {
       const result = await withTimeout(
         Promise.resolve().then(() => this.onFormalize!(entryId, text)),
         FORMALIZE_UI_TIMEOUT_MS,
-        `润色超时（>${Math.floor(FORMALIZE_UI_TIMEOUT_MS / 1000)} 秒），请检查 API 配置或网络`,
+        `${t("view.formalizeTimeout")}(>${Math.floor(FORMALIZE_UI_TIMEOUT_MS / 1000)}${t("view.formalizeTimeoutDetail")}`,
       );
       this.updateFormalText(entryId, result);
     } catch (err) {
       loadingEl.remove();
       btn.classList.remove("loading");
-      btn.textContent = "润色";
+      btn.textContent = t("view.formalize");
       const btnIcon = btn.createDiv("formalize-btn-icon");
       setIcon(btnIcon, "wand-2");
       btn.insertBefore(btnIcon, btn.firstChild);
-      const detail = err instanceof Error ? err.message : "未知错误";
-      new Notice(`润色失败: ${detail}`);
+      const detail = err instanceof Error ? err.message : "unknown error";
+      new Notice(`${t("view.formalizeFailed")}: ${detail}`);
     } finally {
       if (watchdog) {
         clearTimeout(watchdog);
@@ -578,9 +579,9 @@ export class TranscriptionView extends ItemView {
     const empty = this.transcriptContainer.createDiv("empty-state");
     const iconEl = empty.createDiv("empty-icon");
     setIcon(iconEl, "microphone");
-    empty.createEl("p", { text: "点击麦克风按钮开始录制" });
+    empty.createEl("p", { text: t("view.emptyStateTitle") });
     empty.createEl("p", {
-      text: "支持中文、英文、日文、韩文、粤语",
+      text: t("view.emptyStateSubtitle"),
       cls: "empty-subtitle",
     });
   }

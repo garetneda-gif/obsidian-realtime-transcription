@@ -46,6 +46,7 @@ export interface MetaSummarySettings {
 }
 
 export interface PluginSettings {
+  locale: "zh" | "en";
   pythonPath: string;
   backendPort: number;
   modelDir: string;
@@ -65,6 +66,7 @@ export interface PluginSettings {
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
+  locale: "zh",
   pythonPath: process.platform === "win32" ? "python" : "python3",
   backendPort: 18888,
   modelDir: "",
