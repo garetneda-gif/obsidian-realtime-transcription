@@ -157,6 +157,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    setLocale(this.settings.locale ?? "zh");
     this.backendManager?.updateSettings(this.settings);
     this.translationService?.updateSettings(this.settings.translation);
     this.summaryService?.updateSettings(this.settings.summary);
@@ -164,6 +165,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const view = this.getView();
     if (view) {
       view.setDisplayMode(this.settings.summary.displayMode);
+      view.refreshLocale();
     }
   }
 

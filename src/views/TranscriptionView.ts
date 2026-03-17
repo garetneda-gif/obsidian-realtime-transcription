@@ -157,6 +157,35 @@ export class TranscriptionView extends ItemView {
     });
   }
 
+  /** Refresh all static UI text after locale change */
+  refreshLocale(): void {
+    const titleEl = this.containerEl.querySelector(".transcription-title");
+    if (titleEl) (titleEl as HTMLElement).setText(t("view.title"));
+
+    this.recordBtn?.setAttribute("aria-label",
+      this.recordBtn.hasClass("recording") ? t("view.stopRecording") : t("view.startRecording"));
+    this.summaryBtn?.setAttribute("aria-label",
+      this.summaryBtn.hasClass("active") ? t("view.switchToBoth") : t("view.switchToSummaryOnly"));
+    this.exportBtn?.setAttribute("aria-label", t("view.exportNote"));
+    this.clearBtn?.setAttribute("aria-label", t("view.clearRecords"));
+
+    // Update status text based on current state
+    if (this.statusDot?.hasClass("recording")) {
+      this.statusText?.setText(t("view.statusListening"));
+    } else if (this.statusDot?.hasClass("connected")) {
+      this.statusText?.setText(t("view.statusConnected"));
+    } else {
+      this.statusText?.setText(t("view.statusDisconnected"));
+    }
+
+    // Update empty state if present
+    const emptyState = this.transcriptContainer?.querySelector(".empty-state");
+    if (emptyState) {
+      emptyState.remove();
+      this.showEmptyState();
+    }
+  }
+
   setRecordingState(recording: boolean): void {
     if (recording) {
       this.recordBtn.addClass("recording");
