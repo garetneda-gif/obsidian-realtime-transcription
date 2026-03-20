@@ -1,9 +1,9 @@
 {
   "id": "realtime-transcription",
-  "name": "实时语音转写",
+  "name": "Realtime Transcription",
   "version": "1.4.0",
   "minAppVersion": "1.4.0",
-  "description": "基于 SenseVoice-Small 的实时语音转写插件，支持中英日韩粤语，英文自动翻译为中文。",
+  "description": "Real-time speech-to-text powered by SenseVoice-Small. Supports Chinese, English, Japanese, Korean, and Cantonese with auto-translation, AI summarization, and text polishing.",
   "author": "garetneda-gif",
   "authorUrl": "https://github.com/garetneda-gif",
   "isDesktopOnly": true
