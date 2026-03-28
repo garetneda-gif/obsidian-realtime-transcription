@@ -422,7 +422,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     console.log(`[Transcription] recv ${resultType}: lang=${normalizedLanguage} "${text.slice(0, 60)}"`);
 
     // 前端文本去重：将同一 VAD 段内所有已 flush 的 partial 拼接，与新文本做重叠匹配
-    if (this.committedPartialTexts.length > 0) {
+    // 云端模式跳过：云端 ASR 每个 partial 都是累积式完整句子文本，前缀去重会截成碎片
+    const isCloudProvider = this.settings.asrProvider !== "local";
+    if (!isCloudProvider && this.committedPartialTexts.length > 0) {
       const dedupResult = trimCommittedPrefix(this.committedPartialTexts, text);
       if (dedupResult.hasOverlap) {
         if (dedupResult.isDuplicate) {
@@ -452,9 +454,12 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     if (resultType === "partial") {
       const showStreaming = this.settings.aggregation.realtimePreview;
+      const isCloud = this.settings.asrProvider !== "local";
 
       const now = new Date();
-      const stabilizedText = this.stabilizePartialText(text);
+      // 云端模式跳过 stabilize：云端 ASR 已自行管理文本稳定性，
+      // 且插入标点会导致 stabilize 误判为回滚而拒绝更新
+      const stabilizedText = isCloud ? text : this.stabilizePartialText(text);
       this.lastPartialText = text;
       this.lastPartialLanguage = normalizedLanguage;
       this.lastPartialWallTime = now;
@@ -615,6 +620,20 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private async flushPendingTranscript(): Promise<void> {
     const pending = this.pendingTranscript;
     if (!pending) return;
+
+    // 云端模式 + partialOnly：句子尚未结束（final 未到），不提交。
+    // 刷新流式卡片让用户看到当前文本，然后重新等待 final。
+    const isCloudFlush = this.settings.asrProvider !== "local";
+    if (pending.partialOnly && isCloudFlush) {
+      const view = this.getView();
+      if (view) {
+        const text = pending.texts.join(" ").trim();
+        view.upsertStreamingTranscript(pending.id, text, pending.language, pending.wallTime);
+      }
+      this.clearFlushTimer();
+      this.scheduleFlush();
+      return;
+    }
 
     this.pendingTranscript = null;
     this.clearFlushTimer();
