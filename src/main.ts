@@ -3,6 +3,7 @@ import { VIEW_TYPE_TRANSCRIPTION } from "./constants";
 import { TranscriptionView } from "./views/TranscriptionView";
 import { BackendManager } from "./services/BackendManager";
 import { WebSocketClient } from "./services/WebSocketClient";
+import { TencentASRClient } from "./services/TencentASRClient";
 import { AudioCapture } from "./services/AudioCapture";
 import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
@@ -27,6 +28,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   settings!: PluginSettings;
   private backendManager!: BackendManager;
   private wsClient!: WebSocketClient;
+  private tencentClient: TencentASRClient | null = null;
   private audioCapture!: AudioCapture;
   private translationService!: TranslationService;
   private summaryService!: SummaryService;
@@ -132,6 +134,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     await this.saveEntriesToDisk();
     this.audioCapture.stop();
     this.wsClient.disconnect();
+    this.tencentClient?.disconnect();
     await this.backendManager.stop();
   }
 
@@ -162,6 +165,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.translationService?.updateSettings(this.settings.translation);
     this.summaryService?.updateSettings(this.settings.summary);
     this.formalizeService?.updateSettings(this.settings.formalize);
+    this.tencentClient?.updateSettings(this.settings.tencentASR);
     const view = this.getView();
     if (view) {
       view.setDisplayMode(this.settings.summary.displayMode);
@@ -254,40 +258,81 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.committedPartialTexts = [];
     currentView.clearStreamingTranscript();
 
-    // 1. 启动后端
-    console.log("[Transcription] 正在启动后端...");
-    currentView.setConnectionStatus(false, t("status.startingBackend"));
-    const started = await this.backendManager.start();
-    console.log("[Transcription] 后端启动结果:", started);
-    if (!started) {
-      currentView.setConnectionStatus(false, t("status.backendStartFailed"));
-      return;
+    const isCloud = this.settings.asrProvider === "tencent";
+
+    if (isCloud) {
+      // [CLOUD] 腾讯云模式：无需启动本地后端
+      console.log("[Transcription] 云端模式（腾讯云 ASR），跳过本地后端");
+      currentView.setConnectionStatus(false, t("status.connecting"));
+
+      // 创建/复用 TencentASRClient
+      if (!this.tencentClient) {
+        this.tencentClient = new TencentASRClient(this.settings.tencentASR);
+        this.tencentClient.setOnResult((result) => this.handleTranscriptionResult(result));
+        this.tencentClient.setOnStatusChange((connected) => {
+          const v = this.getView();
+          if (v) {
+            if (connected && this.recording) {
+              v.setListeningStatus(true);
+            } else {
+              v.setConnectionStatus(connected);
+            }
+          }
+        });
+        this.tencentClient.setOnReconnecting((attempt) => {
+          const v = this.getView();
+          if (v) {
+            v.setConnectionStatus(false, `${t("status.reconnecting")} (${attempt})`);
+          }
+        });
+      } else {
+        this.tencentClient.updateSettings(this.settings.tencentASR);
+      }
+
+      try {
+        await this.tencentClient.connect();
+      } catch (err) {
+        console.error("[Transcription] 腾讯云 ASR 连接失败:", err);
+        new Notice(`${t("notice.cannotConnectBackend")}: ${err instanceof Error ? err.message : String(err)}`);
+        currentView.setConnectionStatus(false, t("status.backendStartFailed"));
+        return;
+      }
+    } else {
+      // [LOCAL] 本地模式：启动后端 + 连接 WebSocket
+      console.log("[Transcription] 正在启动后端...");
+      currentView.setConnectionStatus(false, t("status.startingBackend"));
+      const started = await this.backendManager.start();
+      console.log("[Transcription] 后端启动结果:", started);
+      if (!started) {
+        currentView.setConnectionStatus(false, t("status.backendStartFailed"));
+        return;
+      }
+
+      console.log("[Transcription] 正在连接 WebSocket...");
+      currentView.setConnectionStatus(false, t("status.connecting"));
+      try {
+        await this.connectBackendWithRetry(this.backendManager.activePort || this.settings.backendPort);
+      } catch (err) {
+        console.error("[Transcription] WebSocket 连接失败:", err);
+        new Notice(t("notice.cannotConnectBackend"));
+        return;
+      }
+
+      // 重置 VAD 状态
+      this.wsClient.sendCommand({ type: "reset" });
     }
 
-    // 2. 连接 WebSocket
-    console.log("[Transcription] 正在连接 WebSocket...");
-    currentView.setConnectionStatus(false, t("status.connecting"));
-    try {
-      await this.connectBackendWithRetry(this.backendManager.activePort || this.settings.backendPort);
-    } catch (err) {
-      console.error("[Transcription] WebSocket 连接失败:", err);
-      new Notice(t("notice.cannotConnectBackend"));
-      return;
-    }
-
-    // 3. 重置 VAD 状态
-    this.wsClient.sendCommand({ type: "reset" });
-
-    // 4. 开始音频采集
+    // 开始音频采集（两种模式共用）
+    const client = this.getActiveASRClient();
     console.log("[Transcription] 正在启动麦克风...");
     try {
       await this.audioCapture.start((data) => {
-        this.wsClient.sendAudio(data);
+        client.sendAudio(data);
       });
     } catch (err) {
       console.error("[Transcription] 麦克风启动失败:", err);
       new Notice(t("notice.micPermission"));
-      this.wsClient.disconnect();
+      client.disconnect();
       return;
     }
 
@@ -317,8 +362,12 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     await this.flushPendingTranscript();
     this.clearFlushTimer();
-    this.wsClient.disconnect();
-    await this.backendManager.stop();
+    if (this.settings.asrProvider === "tencent" && this.tencentClient) {
+      this.tencentClient.disconnect();
+    } else {
+      this.wsClient.disconnect();
+      await this.backendManager.stop();
+    }
     this.recording = false;
     this.lastPartialText = "";
     this.lastStablePartialText = "";
@@ -568,7 +617,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       this.resetRollbackCandidate();
       // 通知后端清空 realtime_buffer，带序列号过滤竞态中的过时 partial
       this.flushSeq++;
-      this.wsClient.sendCommand({ type: "flush_partial", seq: this.flushSeq });
+      this.getActiveASRClient().sendCommand({ type: "flush_partial", seq: this.flushSeq });
     }
 
     const mergedText = pending.texts.join(" ").trim();
@@ -631,29 +680,38 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (mode === "zh") return "zh";
     if (mode === "en") return "en";
 
-    const language = (rawLanguage || "zh").toLowerCase();
+    const language = (rawLanguage || "auto").toLowerCase();
 
     const hanCount = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
     const latinCount = (text.match(/[A-Za-z]/g) ?? []).length;
+    const kanaCount = (text.match(/[\u3040-\u30ff]/g) ?? []).length;
+    const hangulCount = (text.match(/[\uac00-\ud7af]/g) ?? []).length;
 
-    // 中文主导且仅包含少量英文术语，保留中文标签，避免误触发翻译
-    if (hanCount > 0 && latinCount <= Math.max(3, Math.floor(hanCount * 0.25))) {
-      return "zh";
-    }
+    // 日语/韩语脚本出现时优先保留
+    if (kanaCount > 0) return "ja";
+    if (hangulCount > 0) return "ko";
 
-    if (language === "en") {
-      if (hanCount > 0 && latinCount < Math.max(6, Math.floor(hanCount * 0.6))) {
-        return "zh";
+    // 汉字为主时，优先中文（粤语标签保留）
+    if (hanCount >= 2) {
+      if (latinCount >= Math.max(12, Math.floor(hanCount * 2.5))) {
+        return "en";
       }
-      return "en";
+      return language === "yue" ? "yue" : "zh";
     }
 
-    // 无汉字且英文字母足够多 → 修正模型将纯英文误标为中文的情况
-    if (hanCount === 0 && latinCount >= 6) return "en";
-    // 英文内容显著多于中文 → 即使模型标为中文也修正（防止混合文本误标）
-    if (latinCount >= 6 && latinCount >= Math.floor(hanCount * 0.6)) return "en";
+    // 单汉字 + 大量英文，按英文处理；否则中文
+    if (hanCount === 1) {
+      if (latinCount >= 8) return "en";
+      return language === "yue" ? "yue" : "zh";
+    }
+
+    // 纯英文/短英文句子也要识别为英文（例如 "The." / "Hello"）
+    if (hanCount === 0 && latinCount >= 3) return "en";
+
+    if (language === "ja" || language === "ko" || language === "yue" || language === "en") {
+      return language;
+    }
     if (language === "zh") return "zh";
-    if (hanCount > 0) return "zh";
 
     return "zh";
   }
@@ -787,6 +845,17 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.rollbackCandidateText = "";
     this.rollbackCandidateCount = 0;
     this.rollbackCandidateAt = 0;
+  }
+
+  /**
+   * 返回当前活跃的 ASR 客户端（本地 WebSocketClient 或腾讯云 TencentASRClient）
+   * 两者共享相同的方法签名：sendAudio / sendCommand / disconnect / setOnResult 等
+   */
+  private getActiveASRClient(): WebSocketClient | TencentASRClient {
+    if (this.settings.asrProvider === "tencent" && this.tencentClient) {
+      return this.tencentClient;
+    }
+    return this.wsClient;
   }
 
   private async connectBackendWithRetry(port: number): Promise<void> {
