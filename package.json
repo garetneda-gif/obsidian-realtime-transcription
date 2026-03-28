@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts",
     "post-sync-refresh": "bash ./scripts/post-sync-refresh.sh"
   },
   "devDependencies": {

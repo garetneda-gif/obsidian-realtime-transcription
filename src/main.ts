@@ -12,6 +12,7 @@ import { TranscriptionSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult, SerializedTranscriptEntry } from "./types";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
+import { isStalePartialResult, trimCommittedPrefix } from "./utils/transcriptDedup";
 import { TitleInputModal } from "./views/TitleInputModal";
 import { t, setLocale } from "./i18n";
 
@@ -403,6 +404,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const view = this.getView();
     if (!view) return;
 
+    if (isStalePartialResult(result, this.flushSeq)) {
+      console.log(`[Transcription] ✗ 丢弃过时 partial: seq=${result.flush_seq} < current=${this.flushSeq}`);
+      return;
+    }
+
     let text = result.text.trim();
     if (!text) return;
     const normalizedLanguage = this.normalizeLanguage(result.language, text);
@@ -411,43 +417,30 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     // 前端文本去重：将同一 VAD 段内所有已 flush 的 partial 拼接，与新文本做重叠匹配
     if (this.committedPartialTexts.length > 0) {
-      const committedJoined = this.committedPartialTexts.join("").replace(/\s+/g, "");
-      const textNorm = text.replace(/\s+/g, "");
-      if (textNorm.length > 0 && committedJoined.length > 0) {
-        let overlapLen = 0;
-        for (let k = 1; k <= committedJoined.length; k++) {
-          if (textNorm.startsWith(committedJoined.slice(0, k))) overlapLen = k;
+      const dedupResult = trimCommittedPrefix(this.committedPartialTexts, text);
+      if (dedupResult.hasOverlap) {
+        if (dedupResult.isDuplicate) {
+          console.log(`[Transcription] ✗ ${resultType} 与已提交文本重复，跳过`);
+          if (resultType === "final") {
+            this.lastPartialText = "";
+            this.lastStablePartialText = "";
+            this.renderedPartialText = "";
+            this.resetRollbackCandidate();
+            this.lastPartialLanguage = "zh";
+            this.lastPartialWallTime = null;
+            this.committedPartialTexts = [];
+          }
+          return;
         }
-        if (overlapLen >= committedJoined.length * 0.5) {
-          const newNorm = textNorm.slice(overlapLen);
-          if (!newNorm || newNorm.length < 2) {
-            console.log(`[Transcription] ✗ ${resultType} 与已提交文本重复，跳过`);
-            if (resultType === "final") {
-              this.lastPartialText = "";
-              this.lastStablePartialText = "";
-              this.renderedPartialText = "";
-              this.resetRollbackCandidate();
-              this.lastPartialLanguage = "zh";
-              this.lastPartialWallTime = null;
-              this.committedPartialTexts = [];
-            }
-            return;
-          }
-          // 从原始 text 中定位重叠边界，保留空格格式
-          let cutIdx = 0;
-          let normIdx = 0;
-          for (let ci = 0; ci < text.length && normIdx < overlapLen; ci++) {
-            if (/\s/.test(text[ci])) continue;
-            normIdx++;
-            cutIdx = ci + 1;
-          }
-          text = text.slice(cutIdx).trim();
-          if (!text) { this.committedPartialTexts = []; return; }
-          console.log(`[Transcription] dedup: trimmed overlap, remaining="${text.slice(0, 60)}"`);
-          this.committedPartialTexts = [];
-        } else if (overlapLen < 3 && textNorm.length >= 4) {
+
+        text = dedupResult.trimmedText;
+        if (!text) return;
+        console.log(`[Transcription] dedup: trimmed overlap, remaining="${text.slice(0, 60)}"`);
+        if (resultType === "final") {
           this.committedPartialTexts = [];
         }
+      } else if (dedupResult.shouldResetCommitted) {
+        this.committedPartialTexts = [];
       }
     }
 
