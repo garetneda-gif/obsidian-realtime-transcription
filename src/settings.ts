@@ -1,7 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
-import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider } from "./types";
+import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider } from "./types";
 import { t, setLocale } from "./i18n";
 
 export class TranscriptionSettingTab extends PluginSettingTab {
@@ -37,6 +37,28 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           });
       });
 
+    // ── ASR 引擎选择 ──
+    containerEl.createEl("h2", { text: "语音识别引擎" });
+
+    new Setting(containerEl)
+      .setName("ASR 提供方")
+      .setDesc("选择语音识别引擎：本地模型（离线）或腾讯云（在线，需配置密钥）")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("local", "本地模型（SenseVoice）")
+          .addOption("tencent", "腾讯云实时语音识别")
+          .setValue(this.plugin.settings.asrProvider)
+          .onChange(async (value: AsrProvider) => {
+            this.plugin.settings.asrProvider = value;
+            await this.plugin.saveSettings();
+            // 重绘设置面板以显示/隐藏对应配置
+            this.display();
+          });
+      });
+
+    const isCloud = this.plugin.settings.asrProvider === "tencent";
+
+    if (!isCloud) {
     // ── 后端设置 ──
     containerEl.createEl("h2", { text: t("settings.backend.title") });
 
@@ -191,6 +213,75 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           btn.setDisabled(false);
         }),
       );
+    } // end if (!isCloud)
+
+    if (isCloud) {
+      // ── 腾讯云 ASR 设置 ──
+      containerEl.createEl("h2", { text: "腾讯云语音识别" });
+
+      const tencentDesc = containerEl.createEl("p", {
+        text: "前往腾讯云控制台开通「语音识别」服务，获取 AppID 和 API 密钥。",
+      });
+      tencentDesc.style.color = "var(--text-muted)";
+      tencentDesc.style.fontSize = "0.85em";
+      tencentDesc.style.marginTop = "-0.5em";
+
+      new Setting(containerEl)
+        .setName("AppID")
+        .setDesc("腾讯云账号 AppID（在控制台首页可见）")
+        .addText((text) =>
+          text
+            .setPlaceholder("125xxxxxxx")
+            .setValue(this.plugin.settings.tencentASR.appId)
+            .onChange(async (value) => {
+              this.plugin.settings.tencentASR.appId = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName("SecretID")
+        .setDesc("API 密钥的 SecretID")
+        .addText((text) =>
+          text
+            .setPlaceholder("AKIDxxxxxxxx")
+            .setValue(this.plugin.settings.tencentASR.secretId)
+            .onChange(async (value) => {
+              this.plugin.settings.tencentASR.secretId = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName("SecretKey")
+        .setDesc("API 密钥的 SecretKey")
+        .addText((text) => {
+          text
+            .setPlaceholder("xxxxxxxxxxxxxxxx")
+            .setValue(this.plugin.settings.tencentASR.secretKey)
+            .onChange(async (value) => {
+              this.plugin.settings.tencentASR.secretKey = value.trim();
+              await this.plugin.saveSettings();
+            });
+          text.inputEl.type = "password";
+        });
+
+      new Setting(containerEl)
+        .setName("引擎模型")
+        .setDesc("选择识别引擎，大模型精度更高但延迟略增")
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption("16k_zh", "中文 (16k_zh)")
+            .addOption("16k_zh_large", "中文大模型 (16k_zh_large)")
+            .addOption("16k_en", "英文 (16k_en)")
+            .addOption("16k_zh_en", "中英混合 (16k_zh_en)")
+            .setValue(this.plugin.settings.tencentASR.engineModelType)
+            .onChange(async (value) => {
+              this.plugin.settings.tencentASR.engineModelType = value;
+              await this.plugin.saveSettings();
+            });
+        });
+    }
 
     // ── 翻译设置 ──
     containerEl.createEl("h2", { text: t("settings.translation.title") });
