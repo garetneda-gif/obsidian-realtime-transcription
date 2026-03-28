@@ -296,10 +296,15 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         this.tencentClient.updateSettings(this.settings.tencentASR);
       }
 
+      if (this.tencentClient.isConnected) {
+        this.tencentClient.disconnect();
+      }
+
       try {
         await this.tencentClient.connect();
       } catch (err) {
         console.error("[Transcription] 腾讯云 ASR 连接失败:", err);
+        this.tencentClient?.disconnect();
         new Notice(`${t("notice.cannotConnectBackend")}: ${err instanceof Error ? err.message : String(err)}`);
         currentView.setConnectionStatus(false, t("status.backendStartFailed"));
         return;

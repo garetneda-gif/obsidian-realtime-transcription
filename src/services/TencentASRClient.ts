@@ -134,6 +134,7 @@ export class TencentASRClient {
       this.ws.onerror = () => {
         clearTimeout(timeout);
         if (this.ws?.readyState !== WebSocket.OPEN) {
+          this.shouldReconnect = false;
           reject(new Error("腾讯云 ASR 连接失败"));
         }
       };
@@ -231,6 +232,7 @@ export class TencentASRClient {
    */
   private inferLanguage(): string {
     const engine = this.settings.engineModelType;
+    if (engine.includes("_zh_en")) return "zh";
     if (engine.includes("_en")) return "en";
     if (engine.includes("_zh")) return "zh";
     return "zh";

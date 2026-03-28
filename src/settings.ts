@@ -242,15 +242,16 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName("SecretID")
         .setDesc("API 密钥的 SecretID")
-        .addText((text) =>
+        .addText((text) => {
           text
             .setPlaceholder("AKIDxxxxxxxx")
             .setValue(this.plugin.settings.tencentASR.secretId)
             .onChange(async (value) => {
               this.plugin.settings.tencentASR.secretId = value.trim();
               await this.plugin.saveSettings();
-            }),
-        );
+            });
+          text.inputEl.type = "password";
+        });
 
       new Setting(containerEl)
         .setName("SecretKey")
