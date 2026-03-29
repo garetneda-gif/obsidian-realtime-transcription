@@ -2,6 +2,7 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider } from "./types";
+import { isHostedCloud } from "./types";
 import { t, setLocale } from "./i18n";
 
 export class TranscriptionSettingTab extends PluginSettingTab {
@@ -41,24 +42,24 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     containerEl.createEl("h2", { text: "语音识别引擎" });
 
     new Setting(containerEl)
-      .setName("ASR 提供方")
-      .setDesc("选择语音识别引擎：本地模型（离线）或腾讯云（在线，需配置密钥）")
+      .setName(t("settings.asr.provider.name"))
+      .setDesc(t("settings.asr.provider.desc"))
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("local", "本地模型（SenseVoice）")
-          .addOption("tencent", "腾讯云实时语音识别")
+          .addOption("local", t("settings.asr.provider.local"))
+          .addOption("tencent", t("settings.asr.provider.tencent"))
+          .addOption("cloud", t("settings.asr.provider.cloud"))
           .setValue(this.plugin.settings.asrProvider)
           .onChange(async (value: AsrProvider) => {
             this.plugin.settings.asrProvider = value;
             await this.plugin.saveSettings();
-            // 重绘设置面板以显示/隐藏对应配置
             this.display();
           });
       });
 
-    const isCloud = this.plugin.settings.asrProvider === "tencent";
+    const provider = this.plugin.settings.asrProvider;
 
-    if (!isCloud) {
+    if (provider === "local") {
     // ── 后端设置 ──
     containerEl.createEl("h2", { text: t("settings.backend.title") });
 
@@ -213,10 +214,10 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           btn.setDisabled(false);
         }),
       );
-    } // end if (!isCloud)
+    } // end if (provider === "local")
 
-    if (isCloud) {
-      // ── 腾讯云 ASR 设置 ──
+    if (provider === "tencent") {
+      // ── 腾讯云 BYOK 设置 ──
       containerEl.createEl("h2", { text: "腾讯云语音识别" });
 
       const tencentDesc = containerEl.createEl("p", {
@@ -270,6 +271,129 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName("引擎模型")
         .setDesc("选择识别引擎，大模型精度更高但延迟略增")
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption("16k_zh", "中文 (16k_zh)")
+            .addOption("16k_zh_large", "中文大模型 (16k_zh_large)")
+            .addOption("16k_en", "英文 (16k_en)")
+            .addOption("16k_zh_en", "中英混合 (16k_zh_en)")
+            .setValue(this.plugin.settings.tencentASR.engineModelType)
+            .onChange(async (value) => {
+              this.plugin.settings.tencentASR.engineModelType = value;
+              await this.plugin.saveSettings();
+            });
+        });
+    }
+
+    if (isHostedCloud(provider)) {
+      // ── 云端付费账户设置 ──
+      containerEl.createEl("h2", { text: t("settings.cloud.title") });
+
+      new Setting(containerEl)
+        .setName(t("settings.cloud.serverUrl.name"))
+        .setDesc(t("settings.cloud.serverUrl.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder("https://your-server.com")
+            .setValue(this.plugin.settings.cloudAuth.serverUrl)
+            .onChange(async (value) => {
+              this.plugin.settings.cloudAuth.serverUrl = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      const cloudAuth = this.plugin.settings.cloudAuth;
+      const isLoggedIn = Boolean(cloudAuth.token && cloudAuth.serverUrl);
+
+      if (isLoggedIn) {
+        // 已登录状态：显示余额和操作按钮
+        const balanceYuan = (cloudAuth.balanceCents / 100).toFixed(2);
+        new Setting(containerEl)
+          .setName(t("settings.cloud.login.name"))
+          .setDesc(`${t("settings.cloud.loggedInAs")}${t("settings.cloud.balance")}: ¥${balanceYuan}`)
+          .addButton((btn) =>
+            btn.setButtonText(t("settings.cloud.recharge.btn")).onClick(() => {
+              // 打开浏览器充值页面
+              window.open(`${cloudAuth.serverUrl}/recharge`);
+            }),
+          )
+          .addButton((btn) =>
+            btn.setButtonText(t("settings.cloud.logout.btn")).onClick(async () => {
+              this.plugin.settings.cloudAuth.token = "";
+              this.plugin.settings.cloudAuth.refreshToken = "";
+              this.plugin.settings.cloudAuth.tokenExpiresAt = "";
+              this.plugin.settings.cloudAuth.balanceCents = 0;
+              await this.plugin.saveSettings();
+              this.display();
+            }),
+          );
+      } else {
+        // 未登录状态：显示登录/注册表单
+        let emailValue = "";
+        let passwordValue = "";
+
+        new Setting(containerEl)
+          .setName(t("settings.cloud.email"))
+          .addText((text) => {
+            text.setPlaceholder("user@example.com").onChange((v) => { emailValue = v.trim(); });
+          });
+
+        new Setting(containerEl)
+          .setName(t("settings.cloud.password"))
+          .addText((text) => {
+            text.inputEl.type = "password";
+            text.setPlaceholder("********").onChange((v) => { passwordValue = v; });
+          });
+
+        new Setting(containerEl)
+          .addButton((btn) =>
+            btn.setButtonText(t("settings.cloud.login.btn")).setCta().onClick(async () => {
+              try {
+                const { CloudAuthService } = await import("./services/CloudAuthService");
+                const svc = new CloudAuthService(this.plugin.settings.cloudAuth);
+                const result = await svc.login(emailValue, passwordValue);
+                this.plugin.settings.cloudAuth = {
+                  ...this.plugin.settings.cloudAuth,
+                  token: result.token,
+                  refreshToken: result.refresh_token,
+                  tokenExpiresAt: result.expires_at,
+                  balanceCents: result.balance_cents,
+                };
+                await this.plugin.saveSettings();
+                new Notice(t("settings.cloud.loginSuccess"));
+                this.display();
+              } catch (e) {
+                new Notice(`${t("settings.cloud.loginFailed")}: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }),
+          )
+          .addButton((btn) =>
+            btn.setButtonText(t("settings.cloud.register.btn")).onClick(async () => {
+              try {
+                const { CloudAuthService } = await import("./services/CloudAuthService");
+                const svc = new CloudAuthService(this.plugin.settings.cloudAuth);
+                const result = await svc.register(emailValue, passwordValue);
+                this.plugin.settings.cloudAuth = {
+                  ...this.plugin.settings.cloudAuth,
+                  token: result.token,
+                  refreshToken: result.refresh_token,
+                  tokenExpiresAt: result.expires_at,
+                  balanceCents: result.balance_cents,
+                };
+                await this.plugin.saveSettings();
+                new Notice(t("settings.cloud.registerSuccess"));
+                this.display();
+              } catch (e) {
+                new Notice(`${t("settings.cloud.registerFailed")}: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }),
+          );
+      }
+
+      // 引擎模型选择（cloud 模式也需要选择引擎）
+      new Setting(containerEl)
+        .setName("引擎模型")
+        .setDesc("选择识别引擎")
         .addDropdown((dropdown) => {
           dropdown
             .addOption("16k_zh", "中文 (16k_zh)")
