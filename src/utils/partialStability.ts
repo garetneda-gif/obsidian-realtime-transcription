@@ -49,7 +49,7 @@ export function shouldResetNoisyPartial(previousDisplay: string, current: string
   const currentHanCount = (current.match(/[\u3400-\u9fff]/g) ?? []).length;
 
   const previousIsShort = previousComparable.length <= 4;
-  const currentMuchLonger = currentComparable.length >= Math.max(previousComparable.length + 4, previousComparable.length * 2);
+  const currentMuchLonger = currentComparable.length >= Math.max(previousComparable.length + 2, Math.ceil(previousComparable.length * 1.5));
   const scriptShiftToChinese = previousLatinCount > 0 && currentHanCount >= 4;
   const previousAppearsLater =
     previousComparable.length <= 4 &&

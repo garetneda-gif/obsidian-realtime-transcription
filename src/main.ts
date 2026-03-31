@@ -565,7 +565,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     const pendingText = this.pendingTranscript.texts.join(" ");
     const mergedTextLength = pendingText.length + 1 + text.length;
+    // 云端 ASR（腾讯云）每个 final 都是服务端分好的句子边界，不再聚合
+    const isCloudFinal = this.settings.asrProvider !== "local";
     const canMerge =
+      !isCloudFinal &&
       this.pendingTranscript.language === normalizedLanguage &&
       now - this.pendingTranscript.lastUpdatedAt <= flushWindowMs &&
       mergedTextLength <= maxChars;
