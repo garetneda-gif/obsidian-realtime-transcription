@@ -536,6 +536,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
           this.scheduleFlush();
         }
       }
+      // 云端模式：确保 flush timer 运行，定期检查文本长度并分段
+      // （本地模式由 final 触发 scheduleFlush，但云端连续说话时 final 可能不到）
+      if (isCloud && isNewPending) {
+        this.scheduleFlush();
+      }
       return;
     }
 
