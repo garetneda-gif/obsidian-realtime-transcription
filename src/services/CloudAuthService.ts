@@ -13,7 +13,7 @@
  *   Plugin → CloudAuthService → Billing Server → 使用报告
  */
 
-import { CloudAuthSettings } from "../types";
+import type { CloudAuthSettings } from "../types";
 
 interface SignResult {
   signed_url: string;
@@ -45,16 +45,31 @@ interface RechargeOrder {
   order_id: string;
 }
 
+interface AccountInfo {
+  email?: string;
+  balance_cents: number;
+  created_at?: string;
+}
+
+interface OrderStatus {
+  order_id?: string;
+  trade_order_id?: string;
+  status: string;
+  amount_cents?: number;
+  balance_cents?: number;
+  paid_at?: string | null;
+}
+
 export class CloudAuthService {
   private settings: CloudAuthSettings;
   private onSettingsChanged: ((settings: CloudAuthSettings) => void) | null = null;
 
   constructor(settings: CloudAuthSettings) {
-    this.settings = { ...settings };
+    this.settings = this.normalizeSettings(settings);
   }
 
   updateSettings(settings: CloudAuthSettings): void {
-    this.settings = { ...settings };
+    this.settings = this.normalizeSettings(settings);
   }
 
   setOnSettingsChanged(cb: (settings: CloudAuthSettings) => void): void {
@@ -69,11 +84,17 @@ export class CloudAuthService {
     return this.settings.balanceCents;
   }
 
+  static normalizeServerUrl(serverUrl: string): string {
+    const trimmed = serverUrl.trim().replace(/\/+$/, "");
+    if (!trimmed) return "";
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  }
+
   async register(email: string, password: string): Promise<AuthResult> {
     const resp = await this.post("/api/auth/register", { email, password });
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.error || "Registration failed");
+      throw await this.readError(resp, "Registration failed");
     }
     const data = await resp.json() as AuthResult;
     this.updateTokens(data);
@@ -83,8 +104,7 @@ export class CloudAuthService {
   async login(email: string, password: string): Promise<AuthResult> {
     const resp = await this.post("/api/auth/login", { email, password });
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.error || "Login failed");
+      throw await this.readError(resp, "Login failed");
     }
     const data = await resp.json() as AuthResult;
     this.updateTokens(data);
@@ -119,8 +139,7 @@ export class CloudAuthService {
       voice_id: voiceId,
     });
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.error || "Signing failed");
+      throw await this.readError(resp, "Signing failed");
     }
     const data = await resp.json() as SignResult;
     this.settings.balanceCents = data.balance_cents;
@@ -149,16 +168,29 @@ export class CloudAuthService {
 
   async getBalance(): Promise<number> {
     const resp = await this.authGet("/api/billing/balance");
-    if (!resp.ok) throw new Error("Failed to get balance");
+    if (!resp.ok) throw await this.readError(resp, "Failed to get balance");
     const data = await resp.json();
     this.settings.balanceCents = data.balance_cents;
     this.onSettingsChanged?.(this.settings);
     return data.balance_cents;
   }
 
+  async getAccount(): Promise<AccountInfo> {
+    const resp = await this.authGet("/api/billing/me");
+    if (resp.status === 404) {
+      const balance = await this.getBalance();
+      return { balance_cents: balance };
+    }
+    if (!resp.ok) throw await this.readError(resp, "Failed to get account");
+    const data = await resp.json() as AccountInfo;
+    this.settings.balanceCents = data.balance_cents;
+    this.onSettingsChanged?.(this.settings);
+    return data;
+  }
+
   async getUsage(): Promise<{ total_seconds: number; total_cost_cents: number; records: UsageRecord[] }> {
     const resp = await this.authGet("/api/billing/usage");
-    if (!resp.ok) throw new Error("Failed to get usage");
+    if (!resp.ok) throw await this.readError(resp, "Failed to get usage");
     return resp.json();
   }
 
@@ -168,10 +200,25 @@ export class CloudAuthService {
       return_url: this.settings.serverUrl,
     });
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.error || "Failed to create recharge order");
+      throw await this.readError(resp, "Failed to create recharge order");
     }
     return resp.json() as Promise<RechargeOrder>;
+  }
+
+  async getOrderStatus(orderId: string): Promise<OrderStatus> {
+    const resp = await this.authGet(`/api/billing/orders/${encodeURIComponent(orderId)}`);
+    if (!resp.ok) throw await this.readError(resp, "Failed to get order status");
+    const data = await resp.json() as OrderStatus;
+    this.updateBalanceFromPayload(data);
+    return data;
+  }
+
+  async refreshOrder(orderId: string): Promise<OrderStatus> {
+    const resp = await this.authPost(`/api/billing/orders/${encodeURIComponent(orderId)}/refresh`);
+    if (!resp.ok) throw await this.readError(resp, "Failed to refresh order");
+    const data = await resp.json() as OrderStatus;
+    this.updateBalanceFromPayload(data);
+    return data;
   }
 
   logout(): void {
@@ -192,14 +239,27 @@ export class CloudAuthService {
     this.onSettingsChanged?.(this.settings);
   }
 
-  private async authPost(path: string, body: Record<string, unknown>): Promise<Response> {
+  private normalizeSettings(settings: CloudAuthSettings): CloudAuthSettings {
+    return {
+      ...settings,
+      serverUrl: CloudAuthService.normalizeServerUrl(settings.serverUrl),
+    };
+  }
+
+  private updateBalanceFromPayload(data: { balance_cents?: number }): void {
+    if (typeof data.balance_cents !== "number") return;
+    this.settings.balanceCents = data.balance_cents;
+    this.onSettingsChanged?.(this.settings);
+  }
+
+  private async authPost(path: string, body: Record<string, unknown> = {}): Promise<Response> {
     await this.ensureValidToken();
     return this.post(path, body, { Authorization: `Bearer ${this.settings.token}` });
   }
 
   private async authGet(path: string): Promise<Response> {
     await this.ensureValidToken();
-    const url = `${this.settings.serverUrl}${path}`;
+    const url = this.buildUrl(path);
     return fetch(url, {
       headers: { Authorization: `Bearer ${this.settings.token}` },
     });
@@ -210,12 +270,38 @@ export class CloudAuthService {
     body: Record<string, unknown>,
     extraHeaders?: Record<string, string>,
   ): Promise<Response> {
-    const url = `${this.settings.serverUrl}${path}`;
+    const url = this.buildUrl(path);
     return fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...extraHeaders },
       body: JSON.stringify(body),
     });
+  }
+
+  private buildUrl(path: string): string {
+    const serverUrl = CloudAuthService.normalizeServerUrl(this.settings.serverUrl);
+    if (!serverUrl) throw new Error("Cloud server URL is required");
+    this.settings.serverUrl = serverUrl;
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return `${serverUrl}${normalizedPath}`;
+  }
+
+  private async readError(resp: Response, fallback: string): Promise<Error> {
+    const payload = await this.readJson(resp);
+    const code = typeof payload?.code === "string" ? payload.code : "";
+    const message =
+      (typeof payload?.error === "string" && payload.error) ||
+      (typeof payload?.message === "string" && payload.message) ||
+      fallback;
+    return new Error(code ? `${code}: ${message}` : message);
+  }
+
+  private async readJson(resp: Response): Promise<Record<string, unknown> | null> {
+    try {
+      return await resp.json() as Record<string, unknown>;
+    } catch {
+      return null;
+    }
   }
 
   private async ensureValidToken(): Promise<void> {

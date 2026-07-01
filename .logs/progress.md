@@ -151,3 +151,8 @@
 - 根据截图反馈重做设置页常驻顶部栏：顶部为长条标题，滚动后动画折叠为麦克风 SVG 小按钮。
 - 修复圆角标题条遮挡关闭按钮和右侧下拉控件的问题。
 - 更新发布元数据到 `1.4.7`，已构建并覆盖本机插件目录。
+## 2026-07-02 01:56 — 云账户客户端流程可用化
+- 当前会话在 MacBook Air，分支 `feat/claudian-direct-context`，仅处理前端云账户/充值状态切片。
+- 已实现服务端地址归一化、账户查询 `/api/billing/me` 到 `/api/billing/balance` 回退、订单状态查询和主动刷新。
+- 设置页已登录状态支持刷新余额、创建充值订单、打开支付页、手动检查订单、退出登录。
+- 验证：`node --experimental-strip-types --test tests/cloudAuthService.test.ts`、`node --experimental-strip-types --test tests/*.test.ts`、`npm run build` 均通过。

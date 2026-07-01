@@ -4,6 +4,7 @@ import { resolvePluginDir } from "./utils/pluginPaths";
 import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider, CopyContentMode, CopyRangeMode } from "./types";
 import { DEFAULT_SETTINGS, isHostedCloud } from "./types";
 import { t, setLocale } from "./i18n";
+import { CloudAuthService } from "./services/CloudAuthService";
 
 type SettingsSection = "general" | "recognition" | "ai" | "output";
 
@@ -17,6 +18,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
   private activeSettingsSection: SettingsSection = "recognition";
   private cleanupHeaderScroll: (() => void) | null = null;
+  private pendingRechargeOrderId: string | null = null;
+  private pendingRechargeStatus = "";
 
   constructor(app: App, plugin: RealtimeTranscriptionPlugin) {
     super(app, plugin);
@@ -311,42 +314,90 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             .setPlaceholder("https://asr-api.example.com")
             .setValue(cloudAuth.serverUrl)
             .onChange(async (value) => {
-              this.plugin.settings.cloudAuth.serverUrl = value.trim();
+              this.plugin.settings.cloudAuth.serverUrl = CloudAuthService.normalizeServerUrl(value);
               await this.plugin.saveSettings();
             }),
         );
 
       if (isLoggedIn) {
-        // 已登录状态：显示余额和操作按钮
         const balanceYuan = (cloudAuth.balanceCents / 100).toFixed(2);
         new Setting(containerEl)
-          .setName(t("settings.cloud.login.name"))
-          .setDesc(`${t("settings.cloud.loggedInAs")}${t("settings.cloud.balance")}: ¥${balanceYuan}`)
+          .setName(t("settings.cloud.account.name"))
+          .setDesc(`${t("settings.cloud.serverUrl.name")}: ${cloudAuth.serverUrl} · ${t("settings.cloud.balance")}: ¥${balanceYuan}`)
           .addButton((btn) =>
-            btn.setButtonText(t("settings.cloud.recharge.btn")).onClick(async () => {
+            btn.setButtonText(t("settings.cloud.refreshBalance.btn")).onClick(async () => {
               try {
-                const { CloudAuthService } = await import("./services/CloudAuthService");
-                const svc = new CloudAuthService(this.plugin.settings.cloudAuth);
-                const order = await svc.createRechargeOrder();
-                window.open(order.url);
-                new Notice(t("settings.cloud.rechargeStarted"));
+                btn.setDisabled(true);
+                btn.setButtonText(t("settings.cloud.refreshBalance.loading"));
+                const svc = this.createCloudAuthService();
+                await svc.getAccount();
+                await this.plugin.saveSettings();
+                new Notice(t("settings.cloud.balanceRefreshed"));
+                this.display();
               } catch (e) {
-                new Notice(`${t("settings.cloud.rechargeFailed")}: ${e instanceof Error ? e.message : String(e)}`);
+                new Notice(`${t("settings.cloud.refreshBalance.failed")}: ${this.errorMessage(e)}`);
+              } finally {
+                btn.setDisabled(false);
+                btn.setButtonText(t("settings.cloud.refreshBalance.btn"));
+              }
+            }),
+          )
+          .addButton((btn) =>
+            btn.setButtonText(t("settings.cloud.recharge.btn")).setCta().onClick(async () => {
+              try {
+                btn.setDisabled(true);
+                const svc = this.createCloudAuthService();
+                const order = await svc.createRechargeOrder();
+                this.pendingRechargeOrderId = order.order_id;
+                this.pendingRechargeStatus = t("settings.cloud.orderStatusPending");
+                window.open(order.url);
+                await this.plugin.saveSettings();
+                new Notice(t("settings.cloud.rechargeStarted"));
+                this.display();
+              } catch (e) {
+                new Notice(`${t("settings.cloud.rechargeFailed")}: ${this.errorMessage(e)}`);
+              } finally {
+                btn.setDisabled(false);
               }
             }),
           )
           .addButton((btn) =>
             btn.setButtonText(t("settings.cloud.logout.btn")).onClick(async () => {
-              this.plugin.settings.cloudAuth.token = "";
-              this.plugin.settings.cloudAuth.refreshToken = "";
-              this.plugin.settings.cloudAuth.tokenExpiresAt = "";
-              this.plugin.settings.cloudAuth.balanceCents = 0;
+              const svc = this.createCloudAuthService();
+              svc.logout();
+              this.pendingRechargeOrderId = null;
+              this.pendingRechargeStatus = "";
               await this.plugin.saveSettings();
               this.display();
             }),
           );
+
+        if (this.pendingRechargeOrderId) {
+          new Setting(containerEl)
+            .setName(t("settings.cloud.pendingOrder.name"))
+            .setDesc(`${this.pendingRechargeOrderId} · ${this.pendingRechargeStatus || t("settings.cloud.orderStatusPending")}`)
+            .addButton((btn) =>
+              btn.setButtonText(t("settings.cloud.checkOrder.btn")).onClick(async () => {
+                try {
+                  btn.setDisabled(true);
+                  btn.setButtonText(t("settings.cloud.checkOrder.loading"));
+                  const svc = this.createCloudAuthService();
+                  const order = await svc.refreshOrder(this.pendingRechargeOrderId!);
+                  this.pendingRechargeStatus = this.describeOrderStatus(order.status);
+                  await svc.getAccount();
+                  await this.plugin.saveSettings();
+                  new Notice(this.pendingRechargeStatus);
+                  this.display();
+                } catch (e) {
+                  new Notice(`${t("settings.cloud.checkOrder.failed")}: ${this.errorMessage(e)}`);
+                } finally {
+                  btn.setDisabled(false);
+                  btn.setButtonText(t("settings.cloud.checkOrder.btn"));
+                }
+              }),
+            );
+        }
       } else {
-        // 未登录状态：显示登录/注册表单
         let emailValue = "";
         let passwordValue = "";
 
@@ -367,42 +418,36 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .addButton((btn) =>
             btn.setButtonText(t("settings.cloud.login.btn")).setCta().onClick(async () => {
               try {
-                const { CloudAuthService } = await import("./services/CloudAuthService");
-                const svc = new CloudAuthService(this.plugin.settings.cloudAuth);
-                const result = await svc.login(emailValue, passwordValue);
-                this.plugin.settings.cloudAuth = {
-                  ...this.plugin.settings.cloudAuth,
-                  token: result.token,
-                  refreshToken: result.refresh_token,
-                  tokenExpiresAt: result.expires_at,
-                  balanceCents: result.balance_cents,
-                };
+                this.ensureCloudServerUrl();
+                btn.setDisabled(true);
+                const svc = this.createCloudAuthService();
+                await svc.login(emailValue, passwordValue);
+                await svc.getAccount();
                 await this.plugin.saveSettings();
                 new Notice(t("settings.cloud.loginSuccess"));
                 this.display();
               } catch (e) {
-                new Notice(`${t("settings.cloud.loginFailed")}: ${e instanceof Error ? e.message : String(e)}`);
+                new Notice(`${t("settings.cloud.loginFailed")}: ${this.errorMessage(e)}`);
+              } finally {
+                btn.setDisabled(false);
               }
             }),
           )
           .addButton((btn) =>
             btn.setButtonText(t("settings.cloud.register.btn")).onClick(async () => {
               try {
-                const { CloudAuthService } = await import("./services/CloudAuthService");
-                const svc = new CloudAuthService(this.plugin.settings.cloudAuth);
-                const result = await svc.register(emailValue, passwordValue);
-                this.plugin.settings.cloudAuth = {
-                  ...this.plugin.settings.cloudAuth,
-                  token: result.token,
-                  refreshToken: result.refresh_token,
-                  tokenExpiresAt: result.expires_at,
-                  balanceCents: result.balance_cents,
-                };
+                this.ensureCloudServerUrl();
+                btn.setDisabled(true);
+                const svc = this.createCloudAuthService();
+                await svc.register(emailValue, passwordValue);
+                await svc.getAccount();
                 await this.plugin.saveSettings();
                 new Notice(t("settings.cloud.registerSuccess"));
                 this.display();
               } catch (e) {
-                new Notice(`${t("settings.cloud.registerFailed")}: ${e instanceof Error ? e.message : String(e)}`);
+                new Notice(`${t("settings.cloud.registerFailed")}: ${this.errorMessage(e)}`);
+              } finally {
+                btn.setDisabled(false);
               }
             }),
           );
@@ -876,6 +921,33 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         this.display();
       });
     }
+  }
+
+  private createCloudAuthService(): CloudAuthService {
+    const svc = new CloudAuthService(this.plugin.settings.cloudAuth);
+    svc.setOnSettingsChanged((settings) => {
+      this.plugin.settings.cloudAuth = { ...settings };
+    });
+    return svc;
+  }
+
+  private ensureCloudServerUrl(): void {
+    const serverUrl = CloudAuthService.normalizeServerUrl(this.plugin.settings.cloudAuth.serverUrl);
+    if (!serverUrl) throw new Error(t("settings.cloud.serverRequired"));
+    this.plugin.settings.cloudAuth.serverUrl = serverUrl;
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  private describeOrderStatus(status: string): string {
+    const normalized = status.toUpperCase();
+    if (normalized === "PAID" || normalized === "OD") return t("settings.cloud.orderStatusPaid");
+    if (normalized === "CREATED" || normalized === "PENDING" || normalized === "WP") {
+      return t("settings.cloud.orderStatusPending");
+    }
+    return `${t("settings.cloud.orderStatus")}: ${status}`;
   }
 
   private applyRealtimePreset(profile: RealtimeProfile): void {

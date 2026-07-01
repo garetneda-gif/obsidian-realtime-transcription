@@ -94,3 +94,8 @@
 - 修改 `src/settings.ts`,`styles.css`：设置页顶部栏在顶部显示长条标题，滚动后动画折叠为与侧边栏同宽的麦克风图标栏。
 - 修复顶部栏遮挡关闭按钮和右侧下拉控件的问题。
 - 更新 `manifest.json`,`package.json`,`package-lock.json`,`versions.json` 到 `1.4.7`。
+## 2026-07-02 01:56 — 完成云账户前端状态切片
+- `src/services/CloudAuthService.ts`: 统一 `buildUrl` URL 归一化，新增 `/api/billing/me` 回退、订单查询和订单刷新方法。
+- `src/settings.ts`: 云端托管登录态显示服务器地址、余额、刷新余额、充值、检查订单和退出登录。
+- `src/i18n.ts`: 补齐云账户/订单状态中英文文案，避免英文界面残留中文。
+- `tests/cloudAuthService.test.ts`: 新增 URL、账户回退、充值订单和刷新错误提取单测。
