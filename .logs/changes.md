@@ -88,3 +88,9 @@
 - 新增 `billing-server/self_check.py`：最小注册/登录/下单拒绝自检。
 - 修改 `README.md`,`README_EN.md`：补云端收费服务启动配置。
 - 更新发布元数据到 `1.4.6`，并发布 GitHub Release `1.4.6`。
+
+## 2026-07-01 17:23 — Realtime Transcription 1.4.7 header polish
+
+- 修改 `src/settings.ts`,`styles.css`：设置页顶部栏在顶部显示长条标题，滚动后动画折叠为与侧边栏同宽的麦克风图标栏。
+- 修复顶部栏遮挡关闭按钮和右侧下拉控件的问题。
+- 更新 `manifest.json`,`package.json`,`package-lock.json`,`versions.json` 到 `1.4.7`。

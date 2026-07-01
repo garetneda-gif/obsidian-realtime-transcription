@@ -614,10 +614,11 @@
   --rt-accent-soft: rgba(245, 174, 39, 0.12);
   --rt-card-border: var(--background-modifier-border);
   --rt-header-sticky-offset: 0px;
-  --rt-nav-sticky-offset: 72px;
+  --rt-nav-sticky-offset: 58px;
+  --rt-nav-width: 168px;
   max-width: 1040px;
   margin: 0 auto;
-  padding: 14px 18px 28px;
+  padding: 10px 18px 28px;
 }
 
 .realtime-settings-header {
@@ -626,47 +627,92 @@
   z-index: 8;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: -14px 0 18px;
-  padding: 14px 0 13px;
+  gap: 8px;
+  width: 100%;
+  max-width: calc(100% - 56px);
+  margin: 0 0 22px;
+  padding: 8px 12px;
   background: var(--background-primary);
-  border-bottom: 1px solid var(--background-modifier-border);
+  border: 1px solid rgba(128, 128, 128, 0.16);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 10px var(--background-primary),
+    0 8px 18px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  transition:
+    width 160ms ease,
+    max-width 160ms ease,
+    padding 160ms ease,
+    gap 160ms ease,
+    border-radius 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.realtime-settings-header.is-compact {
+  width: var(--rt-nav-width);
+  max-width: var(--rt-nav-width);
+  justify-content: center;
+  gap: 0;
+  padding: 8px;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 10px var(--background-primary),
+    0 6px 14px rgba(0, 0, 0, 0.08);
 }
 
 .realtime-settings-header-icon {
-  width: 34px;
-  height: 34px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
   color: var(--rt-accent);
 }
 
 .realtime-settings-header-icon svg {
-  width: 25px;
-  height: 25px;
+  width: 17px;
+  height: 17px;
+}
+
+.realtime-settings-header-text {
+  min-width: 0;
+  max-width: 420px;
+  overflow: hidden;
+  opacity: 1;
+  transition:
+    max-width 150ms ease,
+    opacity 120ms ease;
+}
+
+.realtime-settings-header.is-compact .realtime-settings-header-text {
+  max-width: 0;
+  opacity: 0;
 }
 
 .realtime-settings-title-row {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  min-height: 26px;
+  gap: 7px;
+  min-height: 20px;
+  min-width: 0;
 }
 
 .realtime-settings-title {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 650;
   color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .realtime-settings-version {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 .realtime-settings-layout {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: var(--rt-nav-width) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }

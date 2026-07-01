@@ -16,6 +16,7 @@ interface SettingsSectionConfig {
 export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
   private activeSettingsSection: SettingsSection = "recognition";
+  private cleanupHeaderScroll: (() => void) | null = null;
 
   constructor(app: App, plugin: RealtimeTranscriptionPlugin) {
     super(app, plugin);
@@ -27,6 +28,9 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    this.cleanupHeaderScroll?.();
+    this.cleanupHeaderScroll = null;
+
     const { containerEl } = this;
     containerEl.empty();
 
@@ -794,6 +798,31 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     const activeContent = sections.get(this.activeSettingsSection);
     if (activeContent) content.appendChild(activeContent);
+
+    this.bindHeaderCollapse(header);
+  }
+
+  private bindHeaderCollapse(header: HTMLElement): void {
+    const scrollEl = this.findScrollParent(this.containerEl);
+    const update = () => {
+      header.classList.toggle("is-compact", scrollEl.scrollTop > 4);
+    };
+
+    update();
+    scrollEl.addEventListener("scroll", update, { passive: true });
+    this.cleanupHeaderScroll = () => scrollEl.removeEventListener("scroll", update);
+  }
+
+  private findScrollParent(start: HTMLElement): HTMLElement {
+    let el: HTMLElement | null = start;
+    while (el) {
+      const style = getComputedStyle(el);
+      if (/(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`) && el.scrollHeight > el.clientHeight) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return start;
   }
 
   private buildSectionContainers(): Map<SettingsSection, HTMLElement> {
