@@ -103,3 +103,16 @@
 
 **下次接续**:
 - 如需视觉确认设置页,在 Obsidian 设置中进入“文字转写”插件配置页查看新增分组
+
+## 2026-07-01 14:25 — 准备 1.4.3 GitHub Release
+
+**做了**:
+- 将插件版本从 `1.4.1` 提升到 `1.4.3`
+- 更新 `package.json`,`package-lock.json`,`manifest.json`,`versions.json`
+- 按既有 release 资产格式准备 `main.js`,`manifest.json`,`styles.css`
+
+**卡点**:
+- mac mini 的 Git HTTPS 仍有 LibreSSL TLS 问题,GitHub push/release 改由 Air 本机执行
+
+**下次接续**:
+- 创建 tag `1.4.3` 并发布 GitHub Release

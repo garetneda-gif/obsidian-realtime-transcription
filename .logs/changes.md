@@ -52,3 +52,10 @@
 **修改**:`src/types.ts`,`src/settings.ts`,`src/i18n.ts`,`src/main.ts`,`src/utils/claudianContext.ts`,`src/views/TranscriptionView.ts`,`styles.css`,`tests/claudianContext.test.ts`(原因:复制按钮支持按内容/范围筛选,Claudian 提示词支持自定义,上下文文件改入隐藏插件目录,删除按钮改为透明红色图标)
 **删除**:无
 **关联 commit**:待提交
+
+## 2026-07-01 14:25 — 发布 1.4.3
+
+**新增**:无
+**修改**:`package.json`,`package-lock.json`,`manifest.json`,`versions.json`(原因:当前 GitHub 最新 release 为 `1.4.2`,新 release 需要唯一版本号 `1.4.3`)
+**删除**:无
+**关联 commit**:待提交
