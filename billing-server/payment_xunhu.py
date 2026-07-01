@@ -11,7 +11,7 @@ from flask import Blueprint, request, jsonify
 import config
 from database import SessionLocal
 from money import cents_to_yuan, yuan_to_cents
-from models import User, Order, OrderStatus, new_uuid
+from models import User, Order, OrderStatus, new_uuid, utcnow
 
 payment_bp = Blueprint("payment", __name__, url_prefix="/api/billing")
 
@@ -40,32 +40,13 @@ def _verify_sign(params: dict[str, Any], app_secret: str) -> bool:
     return hmac.compare_digest(received_hash, expected_hash)
 
 
-def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: str) -> dict[str, Any]:
-    """创建虎皮椒支付订单，返回支付链接"""
-    if not _payment_configured():
-        return {"error": "Payment service not configured"}
-
-    trade_order_id = f"RT-{int(time.time())}-{os.urandom(4).hex()}"
-    try:
-        amount_cents = yuan_to_cents(amount_yuan)
-    except ValueError as e:
-        return {"error": str(e)}
-
-    db = SessionLocal()
-    try:
-        order = Order(
-            id=new_uuid(),
-            user_id=user_id,
-            trade_order_id=trade_order_id,
-            amount_cents=amount_cents,
-            status=OrderStatus.CREATED,
-            idempotency_key=trade_order_id,
-        )
-        db.add(order)
-        db.commit()
-    finally:
-        db.close()
-
+def _create_xunhu_order(
+    trade_order_id: str,
+    amount_cents: int,
+    title: str,
+    return_url: str,
+) -> dict[str, Any]:
+    """调用虎皮椒创建支付订单，返回 provider 结果。"""
     params = {
         "version": "1.1",
         "appid": config.XUNHU_APPID,
@@ -84,10 +65,62 @@ def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: s
         resp = requests.post(XUNHU_PAY_URL, data=params, timeout=10)
         result = resp.json()
         if result.get("errcode") == 0:
-            return {"url": result.get("url"), "url_qrcode": result.get("url_qrcode"), "order_id": trade_order_id}
-        return {"error": result.get("errmsg", "Payment creation failed")}
+            payment_url = result.get("url")
+            if not payment_url:
+                return {"error": "Payment provider returned no payment URL", "status": 502}
+            return {
+                "url": payment_url,
+                "url_qrcode": result.get("url_qrcode"),
+                "open_order_id": result.get("open_order_id"),
+            }
+        return {"error": result.get("errmsg", "Payment creation failed"), "status": 502}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "status": 502}
+
+
+def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: str) -> dict[str, Any]:
+    """创建虎皮椒支付订单，返回支付链接"""
+    if not _payment_configured():
+        return {"error": "Payment service not configured", "status": 503}
+
+    try:
+        amount_cents = yuan_to_cents(amount_yuan)
+    except ValueError as e:
+        return {"error": str(e), "status": 400}
+
+    trade_order_id = f"RT-{int(time.time())}-{os.urandom(4).hex()}"
+    provider_result = _create_xunhu_order(
+        trade_order_id=trade_order_id,
+        amount_cents=amount_cents,
+        title=title,
+        return_url=return_url,
+    )
+    if "error" in provider_result:
+        return {"error": provider_result["error"], "status": provider_result.get("status", 502)}
+
+    db = SessionLocal()
+    try:
+        order = Order(
+            id=new_uuid(),
+            user_id=user_id,
+            trade_order_id=trade_order_id,
+            amount_cents=amount_cents,
+            status=OrderStatus.CREATED,
+            idempotency_key=trade_order_id,
+            provider="xunhu",
+            provider_order_id=provider_result.get("open_order_id"),
+            payment_url=provider_result["url"],
+        )
+        db.add(order)
+        db.commit()
+    finally:
+        db.close()
+
+    return {
+        "url": provider_result["url"],
+        "url_qrcode": provider_result.get("url_qrcode"),
+        "order_id": trade_order_id,
+    }
 
 
 @payment_bp.route("/callback/xunhu", methods=["POST"])
@@ -134,6 +167,7 @@ def xunhu_callback():
 
         # 更新订单状态 + 加余额
         order.status = OrderStatus.CREDITED
+        order.credited_at = utcnow()
         user = db.query(User).filter(User.id == order.user_id).with_for_update().first()
         if user:
             user.balance_cents += order.amount_cents
@@ -166,7 +200,33 @@ def create_order():
     )
 
     if "error" in result:
-        status = 503 if result["error"] == "Payment service not configured" else 400
-        return jsonify({"error": result["error"]}), status
+        return jsonify({"error": result["error"]}), result.get("status", 400)
 
     return jsonify(result), 200
+
+
+@payment_bp.route("/orders/<trade_order_id>", methods=["GET"])
+def get_order(trade_order_id: str):
+    """查询当前用户的充值订单状态"""
+    from auth import require_auth
+    user_id, err = require_auth()
+    if err:
+        return err
+
+    db = SessionLocal()
+    try:
+        order = db.query(Order).filter(
+            Order.user_id == user_id,
+            Order.trade_order_id == trade_order_id,
+        ).first()
+        if not order:
+            return jsonify({"error": "Order not found"}), 404
+
+        return jsonify({
+            "order_id": order.trade_order_id,
+            "amount_cents": order.amount_cents,
+            "status": order.status,
+            "created_at": order.created_at.isoformat(),
+        }), 200
+    finally:
+        db.close()

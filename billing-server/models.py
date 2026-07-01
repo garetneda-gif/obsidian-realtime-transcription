@@ -45,7 +45,12 @@ class Order(Base):
     amount_cents = Column(Integer, nullable=False)
     status = Column(String(16), nullable=False, default=OrderStatus.CREATED)
     idempotency_key = Column(String(64), unique=True, nullable=True)
+    provider = Column(String(32), nullable=False, default="xunhu")
+    provider_order_id = Column(String(128), nullable=True)
+    payment_url = Column(String(2048), nullable=True)
+    credited_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class SignRequest(Base):
