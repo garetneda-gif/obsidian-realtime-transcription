@@ -59,3 +59,7 @@
 **修改**:`package.json`,`package-lock.json`,`manifest.json`,`versions.json`(原因:当前 GitHub 最新 release 为 `1.4.2`,新 release 需要唯一版本号 `1.4.3`)
 **删除**:无
 **关联 commit**:待提交
+## 2026-07-01 15:59 — Remove Tencent credential debug logs
+
+- 删除 `src/services/TencentASRClient.ts` 中签名阶段的凭据/签名调试输出。
+- 更新发布元数据到 `1.4.4`。

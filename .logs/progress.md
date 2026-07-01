@@ -116,3 +116,9 @@
 
 **下次接续**:
 - 创建 tag `1.4.3` 并发布 GitHub Release
+## 2026-07-01 15:59 — Security hotfix for Tencent ASR logs
+
+- 已确认截图未显示 SecretID/SecretKey 明文。
+- 已确认本机 vault `data.json` 保存凭据但未被 Git 跟踪。
+- 已删除 Tencent ASR 签名阶段敏感调试日志。
+- 下一步：构建、部署到本机 vault，并发布 `1.4.4`。

@@ -47,3 +47,8 @@
 **根因**:`clearEntries()` 只清 `transcriptEntries` 和持久化文件,未清 `summaryBuffer`、`metaSummaryTexts`、待 flush 转写和在途摘要请求
 **解决**:清空时调用 `resetTransientTranscriptState()`,并用 `transcriptSessionVersion` 丢弃清空前返回的摘要/二次摘要
 **复现**:`node --experimental-strip-types --test tests/clearEntriesState.test.ts`
+## 2026-07-01 15:59 — Tencent ASR debug logs exposed credential fragments
+
+- 根因：签名构建阶段打印 SecretID 前缀、SecretKey 前缀、签名原文和签名结果。
+- 风险：截图未暴露密钥，但分享 Obsidian 开发者控制台日志时可能泄露可重构的临时签名请求。
+- 解决：移除敏感调试日志，保留实际签名逻辑。
