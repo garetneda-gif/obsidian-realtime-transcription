@@ -1142,7 +1142,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const view = this.getView();
     if (!view) return;
 
-    const entries = view.getEntries();
+    const entries = this.getCopyTranscriptEntries(view.getEntries());
     if (entries.length === 0) {
       new Notice(t("notice.noTranscriptToCopy"));
       return;
@@ -1156,6 +1156,15 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       console.error("[Transcription] 复制记录失败:", err);
       new Notice(t("notice.copyFailed"));
     }
+  }
+
+  private getCopyTranscriptEntries(entries: TranscriptEntry[]): TranscriptEntry[] {
+    const scopedEntries = this.settings.copyContentMode === "summaryOnly"
+      ? entries.filter((entry) => entry.result.language === "summary" || entry.result.language === "meta-summary")
+      : entries;
+    return this.settings.copyRangeMode === "latest"
+      ? scopedEntries.slice(-1)
+      : scopedEntries;
   }
 
   private async sendToClaudian(): Promise<void> {
@@ -1179,7 +1188,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const contextDir = getVaultAbsolutePath(this.app, CLAUDIAN_CONTEXT_FOLDER);
       const selector = await this.waitForClaudianExternalContextSelector();
       const result = contextDir && selector ? selector.addExternalContext(contextDir) : null;
-      if (result?.success || result?.error?.toLowerCase().includes("already added")) {
+      const contextReady = result?.success || result?.error?.toLowerCase().includes("already added");
+      const inputSeeded = seedClaudianInput(this.app, CLAUDIAN_CONTEXT_FILE, this.settings.claudianPrompt);
+      if (contextReady || inputSeeded) {
         new Notice(t("notice.claudianContextReady"));
         return;
       }
@@ -1193,7 +1204,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private async waitForClaudianExternalContextSelector(): Promise<ClaudianExternalContextSelector | null> {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 30; i++) {
       const selector = getClaudianExternalContextSelector(this.app);
       if (selector) return selector;
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -1417,8 +1428,8 @@ async function ensureVaultFolder(app: import("obsidian").App, folder: string): P
   let current = "";
   for (const part of parts) {
     current = current ? `${current}/${part}` : part;
-    if (!app.vault.getAbstractFileByPath(current)) {
-      await app.vault.createFolder(current);
+    if (!(await app.vault.adapter.exists(current))) {
+      await app.vault.adapter.mkdir(current);
     }
   }
 }
@@ -1435,31 +1446,64 @@ function getVaultAbsolutePath(app: import("obsidian").App, path: string): string
 
 type ClaudianExternalContextSelector = {
   addExternalContext: (path: string) => { success: boolean; error?: string };
+  getExternalContexts?: () => string[];
+};
+
+type ClaudianTabLike = {
+  dom?: {
+    inputEl?: HTMLTextAreaElement;
+  };
+  ui?: {
+    externalContextSelector?: ClaudianExternalContextSelector;
+  };
 };
 
 type ClaudianViewLike = {
-  getActiveTab?: () => {
-    ui?: {
-      externalContextSelector?: ClaudianExternalContextSelector;
-    };
-  } | null;
+  getActiveTab?: () => ClaudianTabLike | null;
   getTabManager?: () => {
-    getActiveTab?: () => {
-      ui?: {
-        externalContextSelector?: ClaudianExternalContextSelector;
-      };
-    } | null;
+    getActiveTab?: () => ClaudianTabLike | null;
   } | null;
 };
 
+function getClaudianTab(view: ClaudianViewLike): ClaudianTabLike | null {
+  return view.getActiveTab?.() ?? view.getTabManager?.()?.getActiveTab?.() ?? null;
+}
+
 function getClaudianExternalContextSelector(app: import("obsidian").App): ClaudianExternalContextSelector | null {
   for (const leaf of app.workspace.getLeavesOfType("claudian-view")) {
-    const view = leaf.view as ClaudianViewLike;
-    const selector = view.getActiveTab?.()?.ui?.externalContextSelector
-      ?? view.getTabManager?.()?.getActiveTab?.()?.ui?.externalContextSelector;
-    if (typeof selector?.addExternalContext === "function") {
-      return selector;
-    }
+    const selector = getClaudianTab(leaf.view as ClaudianViewLike)?.ui?.externalContextSelector;
+    if (typeof selector?.addExternalContext === "function") return selector;
   }
   return null;
+}
+
+function getClaudianInput(app: import("obsidian").App): HTMLTextAreaElement | null {
+  for (const leaf of app.workspace.getLeavesOfType("claudian-view")) {
+    const input = getClaudianTab(leaf.view as ClaudianViewLike)?.dom?.inputEl;
+    if (input) return input;
+  }
+  return null;
+}
+
+function buildClaudianPrompt(contextFile: string, promptTemplate?: string): string {
+  const template = promptTemplate?.trim() || DEFAULT_SETTINGS.claudianPrompt;
+  if (template.includes("{{contextFile}}")) {
+    return template.split("{{contextFile}}").join(contextFile);
+  }
+  return `${template} ${contextFile}`;
+}
+
+function seedClaudianInput(app: import("obsidian").App, contextFile: string, promptTemplate?: string): boolean {
+  const input = getClaudianInput(app);
+  if (!input) return false;
+  const seed = `${buildClaudianPrompt(contextFile, promptTemplate)}\n`;
+  if (!input.value.includes(contextFile)) {
+    input.value = input.value.trim()
+      ? `${seed}\n${input.value.trim()}`
+      : `${seed}\n`;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  return true;
 }

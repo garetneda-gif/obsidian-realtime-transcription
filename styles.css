@@ -8,6 +8,7 @@
   height: 100%;
   overflow: hidden;
   background: var(--background-primary);
+  position: relative;
 }
 
 /* ── 头部 ── */
@@ -39,12 +40,7 @@
 
 /* 状态指示器（嵌入控制栏右侧） */
 .control-bar .status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-faint);
+  display: none;
 }
 
 .control-bar .status-indicator .status-dot {
@@ -170,6 +166,40 @@
 .control-bar .action-btn svg {
   width: 15px;
   height: 15px;
+}
+
+.control-bar .action-btn.clear-btn,
+.control-bar .action-btn.clear-btn:hover,
+.control-bar .action-btn.clear-btn:focus,
+.control-bar .action-btn.clear-btn:active {
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.control-bar .action-btn.clear-btn {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 0;
+  border: none;
+  color: #e74c3c;
+}
+
+.control-bar .action-btn.clear-btn:hover {
+  color: #c0392b;
+}
+
+.control-bar .action-btn.clear-btn:focus-visible {
+  outline: 2px solid rgba(231, 76, 60, 0.55);
+  outline-offset: 3px;
+}
+
+.control-bar .action-btn.clear-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* ── 转写结果区域 ── */

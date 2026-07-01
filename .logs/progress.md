@@ -87,3 +87,19 @@
 
 **下次接续**:
 - 同步 `main.js` 到实际 vault 插件目录,在 Obsidian 内重载插件后手动验证按钮
+
+## 2026-07-01 14:05 — 增加复制与 Claudian 交接设置
+
+**做了**:
+- 复制按钮新增“全部内容/仅摘要”和“全部记录/最近 1 条”设置
+- Claudian 交接提示词改为可配置模板,并把上下文文件改写到隐藏插件目录
+- 删除按钮 hover/focus/active 状态改为仅显示红色 SVG,无方块背景
+- 根据只读审查反馈,Claudian 多面板时分别查找可用 selector/input,删除按钮保留键盘焦点描边
+- 跑通 `node --experimental-strip-types --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/obsidian-realtime-transcription-claudian-typecheck`,`npm run build`
+- 已部署到 `/Users/jikunren/笔记/大二下笔记/.obsidian/plugins/realtime-transcription`
+
+**卡点**:
+- Obsidian 设置侧栏自动化不稳定,已用构建产物和主面板截图确认插件加载
+
+**下次接续**:
+- 如需视觉确认设置页,在 Obsidian 设置中进入“文字转写”插件配置页查看新增分组

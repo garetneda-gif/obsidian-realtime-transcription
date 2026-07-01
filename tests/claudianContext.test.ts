@@ -19,8 +19,8 @@ test("buildClaudianContextMarkdown stores current transcript context", () => {
     new Date("2026-07-01T01:02:03.000Z"),
   );
 
-  assert.equal(CLAUDIAN_CONTEXT_FOLDER, "Claudian/实时转写上下文");
-  assert.equal(CLAUDIAN_CONTEXT_FILE, "Claudian/实时转写上下文/current.md");
+  assert.equal(CLAUDIAN_CONTEXT_FOLDER, ".obsidian/plugins/realtime-transcription/claudian-context");
+  assert.equal(CLAUDIAN_CONTEXT_FILE, ".obsidian/plugins/realtime-transcription/claudian-context/current.md");
   assert.match(body, /source: realtime-transcription/);
   assert.match(body, /updated: 2026-07-01T01:02:03\.000Z/);
   assert.match(body, /entries: 2/);

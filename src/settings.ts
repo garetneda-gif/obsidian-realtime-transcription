@@ -1,8 +1,8 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
-import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider } from "./types";
-import { isHostedCloud } from "./types";
+import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider, CopyContentMode, CopyRangeMode } from "./types";
+import { DEFAULT_SETTINGS, isHostedCloud } from "./types";
 import { t, setLocale } from "./i18n";
 
 export class TranscriptionSettingTab extends PluginSettingTab {
@@ -605,6 +605,51 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             this.plugin.settings.exportTitleMode = value;
             await this.plugin.saveSettings();
           });
+      });
+
+    containerEl.createEl("h2", { text: t("settings.copyHandoff.title") });
+
+    new Setting(containerEl)
+      .setName(t("settings.copy.content.name"))
+      .setDesc(t("settings.copy.content.desc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("full", t("settings.copy.content.full"))
+          .addOption("summaryOnly", t("settings.copy.content.summaryOnly"))
+          .setValue(this.plugin.settings.copyContentMode ?? DEFAULT_SETTINGS.copyContentMode)
+          .onChange(async (value: CopyContentMode) => {
+            this.plugin.settings.copyContentMode = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(t("settings.copy.range.name"))
+      .setDesc(t("settings.copy.range.desc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("all", t("settings.copy.range.all"))
+          .addOption("latest", t("settings.copy.range.latest"))
+          .setValue(this.plugin.settings.copyRangeMode ?? DEFAULT_SETTINGS.copyRangeMode)
+          .onChange(async (value: CopyRangeMode) => {
+            this.plugin.settings.copyRangeMode = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(t("settings.claudian.prompt.name"))
+      .setDesc(t("settings.claudian.prompt.desc"))
+      .addTextArea((text) => {
+        text
+          .setPlaceholder(DEFAULT_SETTINGS.claudianPrompt)
+          .setValue(this.plugin.settings.claudianPrompt ?? DEFAULT_SETTINGS.claudianPrompt)
+          .onChange(async (value) => {
+            this.plugin.settings.claudianPrompt = value.trim() || DEFAULT_SETTINGS.claudianPrompt;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.rows = 3;
+        text.inputEl.addClass("realtime-transcription-claudian-prompt");
       });
 
     // ── 高级设置 ──

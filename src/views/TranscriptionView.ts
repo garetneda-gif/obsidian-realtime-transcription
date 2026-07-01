@@ -121,16 +121,6 @@ export class TranscriptionView extends ItemView {
       new Notice(t("view.callbackFallback"));
     };
 
-    // 录制按钮
-    this.recordBtn = this.controlBar.createEl("button", {
-      cls: "record-btn",
-      attr: { "aria-label": t("view.startRecording"), type: "button" },
-    });
-    const recordIcon = this.recordBtn.createDiv("record-btn-icon");
-    setIcon(recordIcon, "microphone");
-
-    this.recordBtn.addEventListener("click", triggerRecordingToggle);
-
     // 显示模式切换（仅摘要 / 摘要+转录）
     this.summaryBtn = this.controlBar.createEl("button", {
       cls: "action-btn summary-btn",
@@ -150,6 +140,16 @@ export class TranscriptionView extends ItemView {
     this.exportBtn.addEventListener("click", () => {
       this.onExport?.();
     });
+
+    // 录制按钮
+    this.recordBtn = this.controlBar.createEl("button", {
+      cls: "record-btn",
+      attr: { "aria-label": t("view.startRecording"), type: "button" },
+    });
+    const recordIcon = this.recordBtn.createDiv("record-btn-icon");
+    setIcon(recordIcon, "microphone");
+
+    this.recordBtn.addEventListener("click", triggerRecordingToggle);
 
     this.copyBtn = this.controlBar.createEl("button", {
       cls: "action-btn",
@@ -171,7 +171,7 @@ export class TranscriptionView extends ItemView {
 
     // 清除按钮
     this.clearBtn = this.controlBar.createEl("button", {
-      cls: "action-btn",
+      cls: "action-btn clear-btn",
       attr: { "aria-label": t("view.clearRecords") },
     });
     setIcon(this.clearBtn, "trash-2");

@@ -45,3 +45,10 @@
 **修改**:`src/main.ts`,`src/views/TranscriptionView.ts`,`src/i18n.ts`(原因:新增“交给 Claudian”按钮,将当前转写写入稳定上下文文件并挂入 Claudian external contexts)
 **删除**:无
 **关联 commit**:待提交
+
+## 2026-07-01 14:05 — 配置复制记录与 Claudian 提示词
+
+**新增**:无
+**修改**:`src/types.ts`,`src/settings.ts`,`src/i18n.ts`,`src/main.ts`,`src/utils/claudianContext.ts`,`src/views/TranscriptionView.ts`,`styles.css`,`tests/claudianContext.test.ts`(原因:复制按钮支持按内容/范围筛选,Claudian 提示词支持自定义,上下文文件改入隐藏插件目录,删除按钮改为透明红色图标)
+**删除**:无
+**关联 commit**:待提交

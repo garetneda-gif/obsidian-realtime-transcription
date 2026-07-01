@@ -14,6 +14,8 @@ export interface FormalizeSettings {
 export type SummaryDisplayMode = "summaryOnly" | "both";
 export type ExportMode = "summaryOnly" | "full";
 export type ExportTitleMode = "timestamp" | "ai" | "manual";
+export type CopyContentMode = "summaryOnly" | "full";
+export type CopyRangeMode = "all" | "latest";
 
 export interface SummarySettings {
   enabled: boolean;
@@ -92,6 +94,9 @@ export interface PluginSettings {
   metaSummary: MetaSummarySettings;
   exportMode: ExportMode;
   exportTitleMode: ExportTitleMode;
+  copyContentMode: CopyContentMode;
+  copyRangeMode: CopyRangeMode;
+  claudianPrompt: string;
   vad: VadSettings;
   aggregation: AggregationSettings;
 }
@@ -145,6 +150,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   },
   exportMode: "full",
   exportTitleMode: "timestamp",
+  copyContentMode: "full",
+  copyRangeMode: "all",
+  claudianPrompt: "请参考转写上下文： @ {{contextFile}} 并回答",
   vad: {
     threshold: 0.5,
     minSilenceDuration: 1.0,

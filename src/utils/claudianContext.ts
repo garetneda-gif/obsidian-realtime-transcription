@@ -1,4 +1,4 @@
-export const CLAUDIAN_CONTEXT_FOLDER = "Claudian/实时转写上下文";
+export const CLAUDIAN_CONTEXT_FOLDER = ".obsidian/plugins/realtime-transcription/claudian-context";
 export const CLAUDIAN_CONTEXT_FILE = `${CLAUDIAN_CONTEXT_FOLDER}/current.md`;
 
 export function buildClaudianContextMarkdown(
