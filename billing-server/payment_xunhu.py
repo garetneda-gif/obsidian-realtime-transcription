@@ -16,6 +16,7 @@ from models import User, Order, OrderStatus, new_uuid, utcnow
 payment_bp = Blueprint("payment", __name__, url_prefix="/api/billing")
 
 XUNHU_PAY_URL = "https://api.xunhupay.com/payment/do.html"
+XUNHU_QUERY_URL = "https://api.xunhupay.com/payment/query.html"
 
 
 def _payment_configured() -> bool:
@@ -76,6 +77,37 @@ def _create_xunhu_order(
         return {"error": result.get("errmsg", "Payment creation failed"), "status": 502}
     except Exception as e:
         return {"error": str(e), "status": 502}
+
+
+def query_payment_status(trade_order_id: str) -> dict[str, Any]:
+    """查询虎皮椒订单状态，使用本地商户订单号 out_trade_order。"""
+    params = {
+        "appid": config.XUNHU_APPID,
+        "out_trade_order": trade_order_id,
+        "time": str(int(time.time())),
+        "nonce_str": os.urandom(16).hex(),
+    }
+    params["hash"] = _sign(params, config.XUNHU_APPSECRET)
+
+    resp = requests.post(XUNHU_QUERY_URL, data=params, timeout=10)
+    return resp.json()
+
+
+def credit_paid_order(db, order: Order, paid_amount_cents: int) -> bool:
+    """Credit a paid order exactly once. Returns True when balance changed."""
+    if order.status == OrderStatus.CREDITED:
+        return False
+    if paid_amount_cents != order.amount_cents:
+        raise ValueError("Payment amount mismatch")
+
+    user = db.query(User).filter(User.id == order.user_id).with_for_update().first()
+    if not user:
+        raise ValueError("Order user not found")
+
+    user.balance_cents += order.amount_cents
+    order.status = OrderStatus.CREDITED
+    order.credited_at = utcnow()
+    return True
 
 
 def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: str) -> dict[str, Any]:
@@ -153,10 +185,6 @@ def xunhu_callback():
         if not order:
             return "fail", 404
 
-        # 幂等：已处理的订单直接返回成功
-        if order.status in (OrderStatus.CREDITED, OrderStatus.PAID):
-            return "success"
-
         # 金额验证
         try:
             callback_cents = yuan_to_cents(total_fee)
@@ -165,12 +193,10 @@ def xunhu_callback():
         if callback_cents != order.amount_cents:
             return "fail", 400
 
-        # 更新订单状态 + 加余额
-        order.status = OrderStatus.CREDITED
-        order.credited_at = utcnow()
-        user = db.query(User).filter(User.id == order.user_id).with_for_update().first()
-        if user:
-            user.balance_cents += order.amount_cents
+        try:
+            credit_paid_order(db, order, callback_cents)
+        except ValueError:
+            return "fail", 400
 
         db.commit()
         return "success"
@@ -227,6 +253,49 @@ def get_order(trade_order_id: str):
             "amount_cents": order.amount_cents,
             "status": order.status,
             "created_at": order.created_at.isoformat(),
+        }), 200
+    finally:
+        db.close()
+
+
+@payment_bp.route("/orders/<trade_order_id>/refresh", methods=["POST"])
+def refresh_order(trade_order_id: str):
+    """主动查询支付渠道并同步当前用户的充值订单状态。"""
+    from auth import require_auth
+    user_id, err = require_auth()
+    if err:
+        return err
+
+    db = SessionLocal()
+    try:
+        order = db.query(Order).filter(
+            Order.user_id == user_id,
+            Order.trade_order_id == trade_order_id,
+        ).with_for_update().first()
+        if not order:
+            return jsonify({"error": "Order not found"}), 404
+
+        result = query_payment_status(trade_order_id)
+        if result.get("errcode") != 0:
+            return jsonify({"error": result.get("errmsg", "Payment query failed")}), 502
+
+        data = result.get("data") or {}
+        if data.get("status") == "OD":
+            try:
+                paid_amount_cents = yuan_to_cents(
+                    str(data.get("total_fee", cents_to_yuan(order.amount_cents)))
+                )
+                credit_paid_order(db, order, paid_amount_cents)
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+            db.commit()
+
+        balance_cents = db.query(User).filter(User.id == user_id).one().balance_cents
+        return jsonify({
+            "order_id": order.trade_order_id,
+            "amount_cents": order.amount_cents,
+            "status": order.status,
+            "balance_cents": balance_cents,
         }), 200
     finally:
         db.close()

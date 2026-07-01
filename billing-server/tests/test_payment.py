@@ -25,6 +25,39 @@ def _configure_payment(monkeypatch):
     return payment_xunhu
 
 
+def _fake_successful_order(client, monkeypatch, token):
+    payment_xunhu = _configure_payment(monkeypatch)
+
+    class FakeResponse:
+        def json(self):
+            return {
+                "errcode": 0,
+                "url": "https://pay.example/order",
+                "url_qrcode": "https://pay.example/qr",
+                "open_order_id": "open-123",
+            }
+
+    monkeypatch.setattr(payment_xunhu.requests, "post", lambda *a, **k: FakeResponse())
+    resp = client.post(
+        "/api/billing/create-order",
+        json={"amount": "9.90"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    return resp.get_json()["order_id"]
+
+
+def _balance_for_email(email):
+    from database import SessionLocal
+    from models import User
+
+    db = SessionLocal()
+    try:
+        return db.query(User).filter(User.email == email).one().balance_cents
+    finally:
+        db.close()
+
+
 def test_create_order_does_not_persist_when_provider_fails(client, monkeypatch):
     auth = register_and_login(client)
     payment_xunhu = _configure_payment(monkeypatch)
@@ -95,3 +128,88 @@ def test_create_order_persists_after_provider_success_and_is_queryable(client, m
         headers={"Authorization": f"Bearer {other_auth['token']}"},
     )
     assert other_resp.status_code == 404
+
+
+def test_paid_callback_credits_balance_once(client, monkeypatch):
+    import payment_xunhu
+
+    email = "callback@example.com"
+    auth = register_and_login(client, email=email)
+    order_id = _fake_successful_order(client, monkeypatch, auth["token"])
+    before = _balance_for_email(email)
+
+    payload = {
+        "trade_order_id": order_id,
+        "total_fee": "9.90",
+        "status": "OD",
+        "time": str(int(payment_xunhu.time.time())),
+        "nonce_str": "callback-nonce",
+    }
+    payload["hash"] = payment_xunhu._sign(payload, payment_xunhu.config.XUNHU_APPSECRET)
+
+    first = client.post("/api/billing/callback/xunhu", data=payload)
+    assert first.status_code == 200
+    assert first.get_data(as_text=True) == "success"
+    assert _balance_for_email(email) == before + 990
+
+    second = client.post("/api/billing/callback/xunhu", data=payload)
+    assert second.status_code == 200
+    assert _balance_for_email(email) == before + 990
+
+
+def test_refresh_order_credits_paid_provider_result(client, monkeypatch):
+    import payment_xunhu
+
+    email = "refresh-paid@example.com"
+    auth = register_and_login(client, email=email)
+    order_id = _fake_successful_order(client, monkeypatch, auth["token"])
+    before = _balance_for_email(email)
+    seen_query = {}
+
+    class QueryResponse:
+        def json(self):
+            return {
+                "errcode": 0,
+                "data": {"status": "OD", "open_order_id": "open-123", "total_fee": "9.90"},
+                "errmsg": "success!",
+            }
+
+    def fake_query(url, data, timeout):
+        seen_query.update(data)
+        return QueryResponse()
+
+    monkeypatch.setattr(payment_xunhu.requests, "post", fake_query)
+    resp = client.post(
+        f"/api/billing/orders/{order_id}/refresh",
+        headers={"Authorization": f"Bearer {auth['token']}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    payload = resp.get_json()
+    assert payload["status"] == "CREDITED"
+    assert payload["balance_cents"] == before + 990
+    assert _balance_for_email(email) == before + 990
+    assert seen_query["out_trade_order"] == order_id
+    assert "open_order_id" not in seen_query
+
+
+def test_refresh_order_keeps_pending_provider_result(client, monkeypatch):
+    import payment_xunhu
+
+    auth = register_and_login(client, email="refresh-pending@example.com")
+    order_id = _fake_successful_order(client, monkeypatch, auth["token"])
+
+    class QueryResponse:
+        def json(self):
+            return {
+                "errcode": 0,
+                "data": {"status": "WP", "open_order_id": "open-123", "total_fee": "9.90"},
+                "errmsg": "success!",
+            }
+
+    monkeypatch.setattr(payment_xunhu.requests, "post", lambda *a, **k: QueryResponse())
+    resp = client.post(
+        f"/api/billing/orders/{order_id}/refresh",
+        headers={"Authorization": f"Bearer {auth['token']}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.get_json()["status"] == "CREATED"
