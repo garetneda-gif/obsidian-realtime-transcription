@@ -3,7 +3,6 @@ import hashlib
 import hmac
 import os
 import time
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 import requests
@@ -11,27 +10,12 @@ from flask import Blueprint, request, jsonify
 
 import config
 from database import SessionLocal
+from money import cents_to_yuan, yuan_to_cents
 from models import User, Order, OrderStatus, new_uuid
 
 payment_bp = Blueprint("payment", __name__, url_prefix="/api/billing")
 
 XUNHU_PAY_URL = "https://api.xunhupay.com/payment/do.html"
-MIN_RECHARGE_YUAN = Decimal("1.00")
-MAX_RECHARGE_YUAN = Decimal("500.00")
-
-
-def _yuan_to_cents(amount: str) -> int:
-    try:
-        yuan = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    except (InvalidOperation, ValueError):
-        raise ValueError("Invalid amount")
-    if yuan < MIN_RECHARGE_YUAN or yuan > MAX_RECHARGE_YUAN:
-        raise ValueError("Amount must be between ¥1.00 and ¥500.00")
-    return int(yuan * 100)
-
-
-def _cents_to_yuan(cents: int) -> str:
-    return f"{Decimal(cents) / Decimal(100):.2f}"
 
 
 def _payment_configured() -> bool:
@@ -63,7 +47,7 @@ def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: s
 
     trade_order_id = f"RT-{int(time.time())}-{os.urandom(4).hex()}"
     try:
-        amount_cents = _yuan_to_cents(amount_yuan)
+        amount_cents = yuan_to_cents(amount_yuan)
     except ValueError as e:
         return {"error": str(e)}
 
@@ -86,7 +70,7 @@ def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: s
         "version": "1.1",
         "appid": config.XUNHU_APPID,
         "trade_order_id": trade_order_id,
-        "total_fee": _cents_to_yuan(amount_cents),
+        "total_fee": cents_to_yuan(amount_cents),
         "title": title,
         "time": str(int(time.time())),
         "notify_url": config.XUNHU_NOTIFY_URL,
@@ -142,7 +126,7 @@ def xunhu_callback():
 
         # 金额验证
         try:
-            callback_cents = _yuan_to_cents(total_fee)
+            callback_cents = yuan_to_cents(total_fee)
         except ValueError:
             return "fail", 400
         if callback_cents != order.amount_cents:
