@@ -38,3 +38,10 @@
 **修改**:`src/main.ts`,`src/views/TranscriptionView.ts`,`src/i18n.ts`(原因:新增复制按钮,复用导出 Markdown 格式写入剪切板)
 **删除**:`src/main.ts` 内已被 formatter 取代的 `formatTime()` 方法
 **关联 commit**:待提交
+
+## 2026-07-01 12:54 — direct-context 交给 Claudian
+
+**新增**:`src/utils/claudianContext.ts`,`src/utils/obsidianCommands.ts`,`tests/claudianContext.test.ts`
+**修改**:`src/main.ts`,`src/views/TranscriptionView.ts`,`src/i18n.ts`(原因:新增“交给 Claudian”按钮,将当前转写写入稳定上下文文件并挂入 Claudian external contexts)
+**删除**:无
+**关联 commit**:待提交

@@ -15,6 +15,12 @@ import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
 import { formatTranscriptEntriesAsMarkdown } from "./utils/transcriptFormatter";
 import {
+  buildClaudianContextMarkdown,
+  CLAUDIAN_CONTEXT_FILE,
+  CLAUDIAN_CONTEXT_FOLDER,
+} from "./utils/claudianContext";
+import { executeObsidianCommand } from "./utils/obsidianCommands";
+import {
   comparableLength,
   comparableStartsWith,
   longestComparablePrefixLength,
@@ -965,6 +971,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.onToggleDisplayMode = () => this.toggleDisplayMode();
     view.onExport = () => this.exportToNote();
     view.onCopyTranscripts = () => this.copyTranscriptsToClipboard();
+    view.onSendToClaudian = () => this.sendToClaudian();
     view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
     view.onClearTranscripts = () => this.clearEntries();
   }
@@ -1149,6 +1156,49 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       console.error("[Transcription] 复制记录失败:", err);
       new Notice(t("notice.copyFailed"));
     }
+  }
+
+  private async sendToClaudian(): Promise<void> {
+    const view = this.getView();
+    if (!view) return;
+
+    const entries = view.getEntries();
+    if (entries.length === 0) {
+      new Notice(t("notice.noTranscriptToClaudian"));
+      return;
+    }
+
+    const markdown = formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"));
+    const body = buildClaudianContextMarkdown(markdown, entries.length);
+
+    try {
+      await ensureVaultFolder(this.app, CLAUDIAN_CONTEXT_FOLDER);
+      await this.app.vault.adapter.write(CLAUDIAN_CONTEXT_FILE, body);
+      executeObsidianCommand(this.app, "realclaudian:open-view");
+
+      const contextDir = getVaultAbsolutePath(this.app, CLAUDIAN_CONTEXT_FOLDER);
+      const selector = await this.waitForClaudianExternalContextSelector();
+      const result = contextDir && selector ? selector.addExternalContext(contextDir) : null;
+      if (result?.success || result?.error?.toLowerCase().includes("already added")) {
+        new Notice(t("notice.claudianContextReady"));
+        return;
+      }
+
+      await writeTextToClipboard(markdown);
+      new Notice(t("notice.claudianContextFallbackCopied"));
+    } catch (err) {
+      console.error("[Transcription] 交给 Claudian 失败:", err);
+      new Notice(t("notice.claudianContextFailed"));
+    }
+  }
+
+  private async waitForClaudianExternalContextSelector(): Promise<ClaudianExternalContextSelector | null> {
+    for (let i = 0; i < 10; i++) {
+      const selector = getClaudianExternalContextSelector(this.app);
+      if (selector) return selector;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return null;
   }
 
   private async exportToNote(): Promise<void> {
@@ -1360,4 +1410,56 @@ async function writeTextToClipboard(text: string): Promise<void> {
   }
 
   throw new Error("Clipboard API unavailable");
+}
+
+async function ensureVaultFolder(app: import("obsidian").App, folder: string): Promise<void> {
+  const parts = folder.split("/").filter(Boolean);
+  let current = "";
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    if (!app.vault.getAbstractFileByPath(current)) {
+      await app.vault.createFolder(current);
+    }
+  }
+}
+
+type VaultAdapterWithBasePath = {
+  getBasePath?: () => string;
+};
+
+function getVaultAbsolutePath(app: import("obsidian").App, path: string): string | null {
+  const basePath = (app.vault.adapter as VaultAdapterWithBasePath).getBasePath?.();
+  if (!basePath) return null;
+  return `${basePath.replace(/\/$/, "")}/${path}`;
+}
+
+type ClaudianExternalContextSelector = {
+  addExternalContext: (path: string) => { success: boolean; error?: string };
+};
+
+type ClaudianViewLike = {
+  getActiveTab?: () => {
+    ui?: {
+      externalContextSelector?: ClaudianExternalContextSelector;
+    };
+  } | null;
+  getTabManager?: () => {
+    getActiveTab?: () => {
+      ui?: {
+        externalContextSelector?: ClaudianExternalContextSelector;
+      };
+    } | null;
+  } | null;
+};
+
+function getClaudianExternalContextSelector(app: import("obsidian").App): ClaudianExternalContextSelector | null {
+  for (const leaf of app.workspace.getLeavesOfType("claudian-view")) {
+    const view = leaf.view as ClaudianViewLike;
+    const selector = view.getActiveTab?.()?.ui?.externalContextSelector
+      ?? view.getTabManager?.()?.getActiveTab?.()?.ui?.externalContextSelector;
+    if (typeof selector?.addExternalContext === "function") {
+      return selector;
+    }
+  }
+  return null;
 }

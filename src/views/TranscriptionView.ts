@@ -2,6 +2,7 @@ import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf, setIcon } from "obsi
 import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS, PLUGIN_ID } from "../constants";
 import { TranscriptEntry, TranscriptionResult, SummaryDisplayMode } from "../types";
 import { t } from "../i18n";
+import { executeObsidianCommand } from "../utils/obsidianCommands";
 
 const FORMALIZE_UI_TIMEOUT_MS = 35000;
 
@@ -13,6 +14,7 @@ export class TranscriptionView extends ItemView {
   private summaryBtn!: HTMLButtonElement;
   private exportBtn!: HTMLButtonElement;
   private copyBtn!: HTMLButtonElement;
+  private claudianBtn!: HTMLButtonElement;
   private clearBtn!: HTMLButtonElement;
   private statusDot!: HTMLElement;
   private statusText!: HTMLElement;
@@ -30,6 +32,7 @@ export class TranscriptionView extends ItemView {
   onToggleDisplayMode: (() => void | Promise<void>) | null = null;
   onExport: (() => void) | null = null;
   onCopyTranscripts: (() => void | Promise<void>) | null = null;
+  onSendToClaudian: (() => void | Promise<void>) | null = null;
   onFormalize: ((entryId: string, text: string) => Promise<string>) | null = null;
   onClearTranscripts: (() => void | Promise<void>) | null = null;
 
@@ -114,7 +117,7 @@ export class TranscriptionView extends ItemView {
       }
 
       // 兜底：即使回调丢失，也尝试通过命令触发录音切换
-      void this.app.commands.executeCommandById(`${PLUGIN_ID}:toggle-recording`);
+      executeObsidianCommand(this.app, `${PLUGIN_ID}:toggle-recording`);
       new Notice(t("view.callbackFallback"));
     };
 
@@ -157,6 +160,15 @@ export class TranscriptionView extends ItemView {
       void this.onCopyTranscripts?.();
     });
 
+    this.claudianBtn = this.controlBar.createEl("button", {
+      cls: "action-btn",
+      attr: { "aria-label": t("view.sendToClaudian"), type: "button" },
+    });
+    setIcon(this.claudianBtn, "bot");
+    this.claudianBtn.addEventListener("click", () => {
+      void this.onSendToClaudian?.();
+    });
+
     // 清除按钮
     this.clearBtn = this.controlBar.createEl("button", {
       cls: "action-btn",
@@ -179,6 +191,7 @@ export class TranscriptionView extends ItemView {
       this.summaryBtn.hasClass("active") ? t("view.switchToBoth") : t("view.switchToSummaryOnly"));
     this.exportBtn?.setAttribute("aria-label", t("view.exportNote"));
     this.copyBtn?.setAttribute("aria-label", t("view.copyRecords"));
+    this.claudianBtn?.setAttribute("aria-label", t("view.sendToClaudian"));
     this.clearBtn?.setAttribute("aria-label", t("view.clearRecords"));
 
     // Update status text based on current state

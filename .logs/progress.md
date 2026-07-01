@@ -73,3 +73,17 @@
 
 **下次接续**:
 - 在 Obsidian 内重载插件后验证复制按钮写入剪切板
+
+## 2026-07-01 12:54 — 实现 direct-context Claudian 对接
+
+**做了**:
+- 新增“交给 Claudian”按钮,点击后写入 `Claudian/实时转写上下文/current.md`
+- 自动打开 `realclaudian:open-view`,并把上下文目录加入 Claudian external contexts
+- selector 不可用时 fallback 复制当前转写 Markdown 到剪切板
+- 跑通 `node --experimental-strip-types --test tests/*.test.ts`,`npm run build`,`npx tsc --noEmit --outDir /tmp/obsidian-realtime-transcription-claudian-typecheck`
+
+**卡点**:
+- 实现子代理启动后未完成代码,主线程接管实现;已继续派只读审查子代理复核
+
+**下次接续**:
+- 同步 `main.js` 到实际 vault 插件目录,在 Obsidian 内重载插件后手动验证按钮
