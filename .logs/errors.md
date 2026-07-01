@@ -39,3 +39,11 @@
 **根因**:当前 Obsidian 可执行文件以前台桌面进程方式运行,不是可靠的一次性 reload CLI
 **解决**:已中断前台命令;插件文件已覆盖,需在 Obsidian 内重载插件或重启应用
 **复现**:在 mac mini 上执行上述 `obsidian plugin:reload` 命令
+
+## 2026-07-01 10:12 — 清空后下一次摘要仍包含旧内容
+
+**症状**:点击清空记录后,下一次自动摘要仍会带上清空前的转写内容
+**触发**:清空 UI/历史记录后继续录音并触发摘要阈值
+**根因**:`clearEntries()` 只清 `transcriptEntries` 和持久化文件,未清 `summaryBuffer`、`metaSummaryTexts`、待 flush 转写和在途摘要请求
+**解决**:清空时调用 `resetTransientTranscriptState()`,并用 `transcriptSessionVersion` 丢弃清空前返回的摘要/二次摘要
+**复现**:`node --experimental-strip-types --test tests/clearEntriesState.test.ts`

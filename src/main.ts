@@ -13,6 +13,7 @@ import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult,
 import { CloudAuthService } from "./services/CloudAuthService";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
+import { formatTranscriptEntriesAsMarkdown } from "./utils/transcriptFormatter";
 import {
   comparableLength,
   comparableStartsWith,
@@ -64,6 +65,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private lastPartialWallTime: Date | null = null;
   private transcriptEntries: TranscriptEntry[] = [];
   private saveEntriesTimer: ReturnType<typeof setTimeout> | null = null;
+  private transcriptSessionVersion = 0;
   private readonly ENTRIES_FILE = "transcript-entries.json";
 
   async onload(): Promise<void> {
@@ -962,6 +964,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.onToggleRecording = () => this.toggleRecording();
     view.onToggleDisplayMode = () => this.toggleDisplayMode();
     view.onExport = () => this.exportToNote();
+    view.onCopyTranscripts = () => this.copyTranscriptsToClipboard();
     view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
     view.onClearTranscripts = () => this.clearEntries();
   }
@@ -1012,11 +1015,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (this.summaryBuffer.trim().length < threshold) return;
 
     const source = this.summaryBuffer.trim();
+    const sessionVersion = this.transcriptSessionVersion;
     this.summaryBuffer = "";
     this.summaryInFlight = true;
 
     try {
       const summaryText = await this.summaryService.summarize(source);
+      if (sessionVersion !== this.transcriptSessionVersion) return;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -1041,6 +1046,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       // 二次摘要：累积摘要文本
       this.enqueueMetaSummary(summaryText, wallTime);
     } catch (err) {
+      if (sessionVersion !== this.transcriptSessionVersion) return;
       console.error("AI 摘要失败:", err);
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`${t("notice.summaryFailed")}: ${detail}`);
@@ -1048,10 +1054,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       return;
     } finally {
       this.summaryInFlight = false;
-    }
-
-    if (this.summaryBuffer.trim().length >= threshold) {
-      void this.maybeRunSummary(new Date());
+      if (this.summaryBuffer.trim().length >= threshold) {
+        void this.maybeRunSummary(new Date());
+      }
     }
   }
 
@@ -1071,11 +1076,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (this.metaSummaryTexts.length < 2) return;
 
     const texts = [...this.metaSummaryTexts];
+    const sessionVersion = this.transcriptSessionVersion;
     this.metaSummaryTexts = [];
     this.metaSummaryInFlight = true;
 
     try {
       const metaText = await this.summaryService.metaSummarize(texts);
+      if (sessionVersion !== this.transcriptSessionVersion) return;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -1097,12 +1104,17 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       view.addTranscript(entry);
       this.addEntry(entry);
     } catch (err) {
+      if (sessionVersion !== this.transcriptSessionVersion) return;
       console.error("二次摘要失败:", err);
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`${t("notice.metaSummaryFailed")}: ${detail}`);
       this.metaSummaryTexts.push(...texts);
     } finally {
       this.metaSummaryInFlight = false;
+      const triggerCount = Math.max(2, this.settings.metaSummary.triggerCount);
+      if (this.metaSummaryTexts.length >= triggerCount) {
+        void this.maybeRunMetaSummary(new Date());
+      }
     }
   }
 
@@ -1117,6 +1129,26 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     this.updateEntry(entryId, { formalText: result });
     return result;
+  }
+
+  private async copyTranscriptsToClipboard(): Promise<void> {
+    const view = this.getView();
+    if (!view) return;
+
+    const entries = view.getEntries();
+    if (entries.length === 0) {
+      new Notice(t("notice.noTranscriptToCopy"));
+      return;
+    }
+
+    try {
+      const text = formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"));
+      await writeTextToClipboard(text);
+      new Notice(t("notice.copiedTranscripts"));
+    } catch (err) {
+      console.error("[Transcription] 复制记录失败:", err);
+      new Notice(t("notice.copyFailed"));
+    }
   }
 
   private async exportToNote(): Promise<void> {
@@ -1181,22 +1213,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         break;
     }
 
-    // 生成 Markdown 内容
-    let md = `# ${title}\n\n`;
-
-    for (const entry of entries) {
-      const time = this.formatTime(entry.wallTime);
-      const lang = entry.result.language.toUpperCase();
-      md += `**[${time}]** \`${lang}\`\n`;
-      md += `${entry.result.text}\n`;
-      if (entry.formalText) {
-        md += `> **${t("export.formalLabel")}**: ${entry.formalText}\n`;
-      }
-      if (entry.translation) {
-        md += `> ${entry.translation}\n`;
-      }
-      md += `\n`;
-    }
+    const md = `# ${title}\n\n${formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"))}\n`;
 
     // 创建笔记文件
     const fileName = `${title}.md`;
@@ -1290,6 +1307,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private async clearEntries(): Promise<void> {
+    this.resetTransientTranscriptState();
     this.transcriptEntries = [];
     const path = this.getEntriesFilePath();
     try {
@@ -1302,10 +1320,44 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
   }
 
-  private formatTime(date: Date): string {
-    const h = String(date.getHours()).padStart(2, "0");
-    const m = String(date.getMinutes()).padStart(2, "0");
-    const s = String(date.getSeconds()).padStart(2, "0");
-    return `${h}:${m}:${s}`;
+  private resetTransientTranscriptState(): void {
+    this.transcriptSessionVersion++;
+    this.pendingTranscript = null;
+    this.clearFlushTimer();
+    this.committedPartialTexts = [];
+    this.summaryBuffer = "";
+    this.metaSummaryTexts = [];
+    this.lastPartialText = "";
+    this.lastStablePartialText = "";
+    this.renderedPartialText = "";
+    this.resetRollbackCandidate();
+    this.lastPartialLanguage = "zh";
+    this.lastPartialWallTime = null;
+    if (this.recording) {
+      this.getActiveASRClient().sendCommand({ type: "reset" });
+    }
   }
+
+}
+
+async function writeTextToClipboard(text: string): Promise<void> {
+  const browserClipboard = globalThis.navigator?.clipboard;
+  if (browserClipboard?.writeText) {
+    try {
+      await browserClipboard.writeText(text);
+      return;
+    } catch (err) {
+      console.warn("[Transcription] navigator.clipboard 写入失败，尝试 Electron clipboard:", err);
+    }
+  }
+
+  const electronClipboard = (require("electron") as {
+    clipboard?: { writeText?: (value: string) => void };
+  }).clipboard;
+  if (typeof electronClipboard?.writeText === "function") {
+    electronClipboard.writeText(text);
+    return;
+  }
+
+  throw new Error("Clipboard API unavailable");
 }

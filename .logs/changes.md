@@ -24,3 +24,17 @@
 **修改**:`src/services/SummaryService.ts`,`src/services/FormalizeService.ts`,`src/services/TranslationService.ts`(原因:复用同一个 LLM 响应解析器,兼容 Chat/Legacy/Responses API)
 **删除**:三个服务内重复的本地 `extractTextFromResponse` 实现(原因:已被共享 helper 取代)
 **关联 commit**:待提交
+
+## 2026-07-01 10:13 — 清空记录时重置摘要上下文
+
+**新增**:`tests/clearEntriesState.test.ts`
+**修改**:`src/main.ts`(原因:清空记录时同步清掉摘要缓冲、二次摘要队列、待提交转写和 partial 状态)
+**删除**:无
+**关联 commit**:待提交
+
+## 2026-07-01 11:28 — 增加复制全部记录到剪切板
+
+**新增**:`src/utils/transcriptFormatter.ts`,`tests/transcriptFormatter.test.ts`
+**修改**:`src/main.ts`,`src/views/TranscriptionView.ts`,`src/i18n.ts`(原因:新增复制按钮,复用导出 Markdown 格式写入剪切板)
+**删除**:`src/main.ts` 内已被 formatter 取代的 `formatTime()` 方法
+**关联 commit**:待提交

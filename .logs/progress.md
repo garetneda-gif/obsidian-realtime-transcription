@@ -47,3 +47,29 @@
 
 **下次接续**:
 - 如需完全静态类型通过,单独修复 `src/views/TranscriptionView.ts` 的 Obsidian `App.commands` 类型声明
+
+## 2026-07-01 10:14 — 修复清空后摘要残留
+
+**做了**:
+- `clearEntries()` 增加临时状态重置,清掉摘要缓冲和二次摘要队列
+- 摘要/二次摘要请求增加 session version 保护,清空前返回的旧结果不再写入
+- 跑通 `tests/clearEntriesState.test.ts`、完整 `tests/*.test.ts` 和 `npm run build`
+
+**卡点**:
+- GitHub push 仍受 TLS/SSL 连接问题影响,待最后处理
+
+**下次接续**:
+- 提交第二个修复并解决远端推送
+
+## 2026-07-01 11:29 — 增加复制全部转录记录功能
+
+**做了**:
+- 侧边栏控制栏新增复制按钮,点击后复制当前面板全部记录
+- 导出和复制共用 `formatTranscriptEntriesAsMarkdown()` 输出格式
+- 跑通 `tests/transcriptFormatter.test.ts`、完整 `tests/*.test.ts` 和 `npm run build`
+
+**卡点**:
+- 自动 reload Obsidian CLI 不可靠,已直接同步 `main.js` 到 vault 插件目录
+
+**下次接续**:
+- 在 Obsidian 内重载插件后验证复制按钮写入剪切板

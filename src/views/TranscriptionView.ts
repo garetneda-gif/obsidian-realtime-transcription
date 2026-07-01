@@ -12,6 +12,7 @@ export class TranscriptionView extends ItemView {
   private recordBtn!: HTMLButtonElement;
   private summaryBtn!: HTMLButtonElement;
   private exportBtn!: HTMLButtonElement;
+  private copyBtn!: HTMLButtonElement;
   private clearBtn!: HTMLButtonElement;
   private statusDot!: HTMLElement;
   private statusText!: HTMLElement;
@@ -28,6 +29,7 @@ export class TranscriptionView extends ItemView {
   onToggleRecording: (() => void | Promise<void>) | null = null;
   onToggleDisplayMode: (() => void | Promise<void>) | null = null;
   onExport: (() => void) | null = null;
+  onCopyTranscripts: (() => void | Promise<void>) | null = null;
   onFormalize: ((entryId: string, text: string) => Promise<string>) | null = null;
   onClearTranscripts: (() => void | Promise<void>) | null = null;
 
@@ -146,6 +148,15 @@ export class TranscriptionView extends ItemView {
       this.onExport?.();
     });
 
+    this.copyBtn = this.controlBar.createEl("button", {
+      cls: "action-btn",
+      attr: { "aria-label": t("view.copyRecords"), type: "button" },
+    });
+    setIcon(this.copyBtn, "copy");
+    this.copyBtn.addEventListener("click", () => {
+      void this.onCopyTranscripts?.();
+    });
+
     // 清除按钮
     this.clearBtn = this.controlBar.createEl("button", {
       cls: "action-btn",
@@ -167,6 +178,7 @@ export class TranscriptionView extends ItemView {
     this.summaryBtn?.setAttribute("aria-label",
       this.summaryBtn.hasClass("active") ? t("view.switchToBoth") : t("view.switchToSummaryOnly"));
     this.exportBtn?.setAttribute("aria-label", t("view.exportNote"));
+    this.copyBtn?.setAttribute("aria-label", t("view.copyRecords"));
     this.clearBtn?.setAttribute("aria-label", t("view.clearRecords"));
 
     // Update status text based on current state
