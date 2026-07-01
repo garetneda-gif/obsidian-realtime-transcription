@@ -39,6 +39,12 @@ interface UsageRecord {
   created_at: string;
 }
 
+interface RechargeOrder {
+  url: string;
+  url_qrcode?: string;
+  order_id: string;
+}
+
 export class CloudAuthService {
   private settings: CloudAuthSettings;
   private onSettingsChanged: ((settings: CloudAuthSettings) => void) | null = null;
@@ -154,6 +160,18 @@ export class CloudAuthService {
     const resp = await this.authGet("/api/billing/usage");
     if (!resp.ok) throw new Error("Failed to get usage");
     return resp.json();
+  }
+
+  async createRechargeOrder(amountYuan = "9.90"): Promise<RechargeOrder> {
+    const resp = await this.authPost("/api/billing/create-order", {
+      amount: amountYuan,
+      return_url: this.settings.serverUrl,
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || "Failed to create recharge order");
+    }
+    return resp.json() as Promise<RechargeOrder>;
   }
 
   logout(): void {

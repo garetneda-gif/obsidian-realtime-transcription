@@ -346,6 +346,29 @@ macOS 可能拦截未经公证的 Python 脚本，出现「无法验证开发者
 - `data.json`（含 API Key）**不要**提交到 Git 或分享给他人
 - 换新设备时建议手动在插件设置中重新填写 API Key
 
+### 云端收费服务
+
+云端托管模式使用 `billing-server/`：服务端持有腾讯云 ASR 密钥，插件登录后向服务端请求签名 URL，服务端预扣余额，录音结束后按时长结算。
+
+最小启动配置：
+
+```bash
+export BS_SECRET_KEY="至少 32 位随机字符串"
+export TENCENT_APP_ID="腾讯云 AppID"
+export TENCENT_SECRET_ID="腾讯云 SecretID"
+export TENCENT_SECRET_KEY="腾讯云 SecretKey"
+export AP_XUNHU_APPID="虎皮椒 AppID"
+export AP_XUNHU_APPSECRET="虎皮椒 AppSecret"
+export AP_XUNHU_NOTIFY_URL="https://你的域名/api/billing/callback/xunhu"
+export BS_PRICE_PER_HOUR_CENTS=200
+
+cd billing-server
+pip install -r requirements.txt
+python app.py
+```
+
+上线后把插件设置里的「服务器地址」填成你的 HTTPS API 域名。
+
 ---
 
 ### Contributing

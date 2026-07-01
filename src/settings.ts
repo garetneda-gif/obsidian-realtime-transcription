@@ -299,6 +299,19 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       const cloudAuth = this.plugin.settings.cloudAuth;
       const isLoggedIn = Boolean(cloudAuth.token && cloudAuth.serverUrl);
 
+      new Setting(containerEl)
+        .setName(t("settings.cloud.serverUrl.name"))
+        .setDesc(t("settings.cloud.serverUrl.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder("https://asr-api.example.com")
+            .setValue(cloudAuth.serverUrl)
+            .onChange(async (value) => {
+              this.plugin.settings.cloudAuth.serverUrl = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+
       if (isLoggedIn) {
         // 已登录状态：显示余额和操作按钮
         const balanceYuan = (cloudAuth.balanceCents / 100).toFixed(2);
@@ -306,9 +319,16 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .setName(t("settings.cloud.login.name"))
           .setDesc(`${t("settings.cloud.loggedInAs")}${t("settings.cloud.balance")}: ¥${balanceYuan}`)
           .addButton((btn) =>
-            btn.setButtonText(t("settings.cloud.recharge.btn")).onClick(() => {
-              // 打开浏览器充值页面
-              window.open(`${cloudAuth.serverUrl}/recharge`);
+            btn.setButtonText(t("settings.cloud.recharge.btn")).onClick(async () => {
+              try {
+                const { CloudAuthService } = await import("./services/CloudAuthService");
+                const svc = new CloudAuthService(this.plugin.settings.cloudAuth);
+                const order = await svc.createRechargeOrder();
+                window.open(order.url);
+                new Notice(t("settings.cloud.rechargeStarted"));
+              } catch (e) {
+                new Notice(`${t("settings.cloud.rechargeFailed")}: ${e instanceof Error ? e.message : String(e)}`);
+              }
             }),
           )
           .addButton((btn) =>

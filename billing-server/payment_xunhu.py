@@ -3,6 +3,8 @@ import hashlib
 import hmac
 import os
 import time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from typing import Any
 
 import requests
 from flask import Blueprint, request, jsonify
@@ -14,9 +16,29 @@ from models import User, Order, OrderStatus, new_uuid
 payment_bp = Blueprint("payment", __name__, url_prefix="/api/billing")
 
 XUNHU_PAY_URL = "https://api.xunhupay.com/payment/do.html"
+MIN_RECHARGE_YUAN = Decimal("1.00")
+MAX_RECHARGE_YUAN = Decimal("500.00")
 
 
-def _sign(params: dict, app_secret: str) -> str:
+def _yuan_to_cents(amount: str) -> int:
+    try:
+        yuan = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        raise ValueError("Invalid amount")
+    if yuan < MIN_RECHARGE_YUAN or yuan > MAX_RECHARGE_YUAN:
+        raise ValueError("Amount must be between ¥1.00 and ¥500.00")
+    return int(yuan * 100)
+
+
+def _cents_to_yuan(cents: int) -> str:
+    return f"{Decimal(cents) / Decimal(100):.2f}"
+
+
+def _payment_configured() -> bool:
+    return bool(config.XUNHU_APPID and config.XUNHU_APPSECRET and config.XUNHU_NOTIFY_URL)
+
+
+def _sign(params: dict[str, Any], app_secret: str) -> str:
     """虎皮椒签名：按 key 排序拼接 + appsecret，取 MD5"""
     sorted_params = sorted(
         (k, str(v)) for k, v in params.items()
@@ -27,16 +49,23 @@ def _sign(params: dict, app_secret: str) -> str:
     return hashlib.md5(sign_str.encode()).hexdigest()
 
 
-def _verify_sign(params: dict, app_secret: str) -> bool:
+def _verify_sign(params: dict[str, Any], app_secret: str) -> bool:
     """验证虎皮椒回调签名（使用 hmac.compare_digest 防时序攻击）"""
     received_hash = params.get("hash", "")
     expected_hash = _sign(params, app_secret)
     return hmac.compare_digest(received_hash, expected_hash)
 
 
-def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: str) -> dict:
+def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: str) -> dict[str, Any]:
     """创建虎皮椒支付订单，返回支付链接"""
+    if not _payment_configured():
+        return {"error": "Payment service not configured"}
+
     trade_order_id = f"RT-{int(time.time())}-{os.urandom(4).hex()}"
+    try:
+        amount_cents = _yuan_to_cents(amount_yuan)
+    except ValueError as e:
+        return {"error": str(e)}
 
     db = SessionLocal()
     try:
@@ -44,7 +73,7 @@ def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: s
             id=new_uuid(),
             user_id=user_id,
             trade_order_id=trade_order_id,
-            amount_cents=int(float(amount_yuan) * 100),
+            amount_cents=amount_cents,
             status=OrderStatus.CREATED,
             idempotency_key=trade_order_id,
         )
@@ -57,7 +86,7 @@ def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: s
         "version": "1.1",
         "appid": config.XUNHU_APPID,
         "trade_order_id": trade_order_id,
-        "total_fee": amount_yuan,
+        "total_fee": _cents_to_yuan(amount_cents),
         "title": title,
         "time": str(int(time.time())),
         "notify_url": config.XUNHU_NOTIFY_URL,
@@ -80,6 +109,9 @@ def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: s
 @payment_bp.route("/callback/xunhu", methods=["POST"])
 def xunhu_callback():
     """虎皮椒支付回调"""
+    if not _payment_configured():
+        return "fail", 503
+
     params = request.form.to_dict()
 
     # 验签
@@ -109,7 +141,10 @@ def xunhu_callback():
             return "success"
 
         # 金额验证
-        callback_cents = int(float(total_fee) * 100)
+        try:
+            callback_cents = _yuan_to_cents(total_fee)
+        except ValueError:
+            return "fail", 400
         if callback_cents != order.amount_cents:
             return "fail", 400
 
@@ -132,6 +167,8 @@ def create_order():
     user_id, err = require_auth()
     if err:
         return err
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
 
     data = request.get_json(silent=True) or {}
     amount = data.get("amount", "9.90")
@@ -145,6 +182,7 @@ def create_order():
     )
 
     if "error" in result:
-        return jsonify({"error": result["error"]}), 500
+        status = 503 if result["error"] == "Payment service not configured" else 400
+        return jsonify({"error": result["error"]}), status
 
     return jsonify(result), 200
