@@ -99,3 +99,11 @@
 - `src/settings.ts`: 云端托管登录态显示服务器地址、余额、刷新余额、充值、检查订单和退出登录。
 - `src/i18n.ts`: 补齐云账户/订单状态中英文文案，避免英文界面残留中文。
 - `tests/cloudAuthService.test.ts`: 新增 URL、账户回退、充值订单和刷新错误提取单测。
+
+## 2026-07-02 02:02 — 硬化 billing server 部署运行层
+- `billing-server/config.py`: 新增 `validate_config()`、生产密钥/必填项/范围校验，以及 `BS_PUBLIC_SERVER_URL`、`BS_CORS_ORIGINS`、`AP_XUNHU_QUERY_URL`、`BS_DISABLE_SETTLEMENT_LOOP` 配置。
+- `billing-server/app.py`: 新增 `/healthz`、`/readyz`，启动时校验生产配置，并支持禁用后台结算循环。
+- `billing-server/database.py`: SQLite 连接启用 `PRAGMA foreign_keys=ON`。
+- `billing-server/payment_xunhu.py`: 支付查询 URL 改为读取 `config.XUNHU_QUERY_URL`。
+- `billing-server/self_check.py`,`billing-server/tests/test_config.py`: 覆盖健康检查、readyz、生产缺省密钥失败和开发环境宽松校验。
+- `README.md`,`README_EN.md`: 补充云端计费服务最小部署环境变量和自检命令。

@@ -101,6 +101,34 @@ npm run build
 >
 > This command recopies plugin files and then forces plugin reload via Obsidian CLI (`plugin:reload`).
 
+#### Cloud Billing Server (operators)
+
+`billing-server/` provides the cloud-hosted transcription account, recharge, and signing API. Production startup validates required settings. At minimum, set:
+
+```bash
+BS_ENV=production
+BS_SECRET_KEY=<random string with at least 32 characters>
+BS_DATABASE_URL=sqlite:////data/billing.db
+TENCENT_APP_ID=<Tencent Cloud AppID>
+TENCENT_SECRET_ID=<Tencent Cloud SecretId>
+TENCENT_SECRET_KEY=<Tencent Cloud SecretKey>
+AP_XUNHU_APPID=<Xunhu AppID>
+AP_XUNHU_APPSECRET=<Xunhu AppSecret>
+AP_XUNHU_NOTIFY_URL=https://your-domain.example/api/billing/callback/xunhu
+BS_CORS_ORIGINS=app://obsidian.md
+```
+
+Local self-check:
+
+```bash
+cd billing-server
+python -m pip install -r requirements.txt
+python self_check.py
+python app.py
+```
+
+Health probe: `/healthz`; readiness probe: `/readyz`. Set `BS_DISABLE_SETTLEMENT_LOOP=1` for tests or one-off maintenance tasks that should not start the background settlement loop.
+
 ---
 
 ### Step 2: Install Python

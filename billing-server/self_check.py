@@ -14,6 +14,14 @@ def main() -> None:
         init_db()
         client = create_app().test_client()
 
+        health = client.get("/healthz")
+        assert health.status_code == 200, health.get_data(as_text=True)
+        assert health.get_json()["status"] == "ok"
+
+        ready = client.get("/readyz")
+        assert ready.status_code == 200, ready.get_data(as_text=True)
+        assert ready.get_json()["database"] == "ok"
+
         email = "paid@example.com"
         password = "password123"
 

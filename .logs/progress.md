@@ -156,3 +156,9 @@
 - 已实现服务端地址归一化、账户查询 `/api/billing/me` 到 `/api/billing/balance` 回退、订单状态查询和主动刷新。
 - 设置页已登录状态支持刷新余额、创建充值订单、打开支付页、手动检查订单、退出登录。
 - 验证：`node --experimental-strip-types --test tests/cloudAuthService.test.ts`、`node --experimental-strip-types --test tests/*.test.ts`、`npm run build` 均通过。
+
+## 2026-07-02 02:02 — 计费服务运行层配置硬化
+- 当前会话在 MacBook Air，分支 `feat/claudian-direct-context`，仅处理 billing server 部署配置/健康检查切片。
+- 已新增生产配置校验、CORS origins 配置、`/healthz`、`/readyz`、SQLite 外键 pragma 和结算循环禁用开关。
+- 已补 `billing-server/tests/test_config.py` 与 `billing-server/self_check.py` 健康检查覆盖。
+- 验证：`cd billing-server && .venv311/bin/python -m pytest tests/test_config.py tests/test_auth.py tests/test_payment.py -q && .venv311/bin/python self_check.py` 通过。

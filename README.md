@@ -102,6 +102,34 @@ npm run build
 >
 > 该命令会再次复制插件文件，并通过 Obsidian CLI 执行 `plugin:reload` 强制重载。
 
+#### 云端计费服务（部署者）
+
+`billing-server/` 是云端托管转写的账户、充值和签名服务。生产环境启动前会校验必需配置，至少需要设置：
+
+```bash
+BS_ENV=production
+BS_SECRET_KEY=<至少 32 位随机字符串>
+BS_DATABASE_URL=sqlite:////data/billing.db
+TENCENT_APP_ID=<腾讯云 AppID>
+TENCENT_SECRET_ID=<腾讯云 SecretId>
+TENCENT_SECRET_KEY=<腾讯云 SecretKey>
+AP_XUNHU_APPID=<虎皮椒 AppID>
+AP_XUNHU_APPSECRET=<虎皮椒 AppSecret>
+AP_XUNHU_NOTIFY_URL=https://你的域名/api/billing/callback/xunhu
+BS_CORS_ORIGINS=app://obsidian.md
+```
+
+本地自检：
+
+```bash
+cd billing-server
+python -m pip install -r requirements.txt
+python self_check.py
+python app.py
+```
+
+健康检查：`/healthz`；就绪检查：`/readyz`。测试或一次性任务可设置 `BS_DISABLE_SETTLEMENT_LOOP=1` 禁用后台超时结算循环。
+
 ---
 
 ### 第二步：安装 Python

@@ -16,7 +16,6 @@ from models import User, Order, OrderStatus, new_uuid, utcnow
 payment_bp = Blueprint("payment", __name__, url_prefix="/api/billing")
 
 XUNHU_PAY_URL = "https://api.xunhupay.com/payment/do.html"
-XUNHU_QUERY_URL = "https://api.xunhupay.com/payment/query.html"
 
 
 def _payment_configured() -> bool:
@@ -89,7 +88,7 @@ def query_payment_status(trade_order_id: str) -> dict[str, Any]:
     }
     params["hash"] = _sign(params, config.XUNHU_APPSECRET)
 
-    resp = requests.post(XUNHU_QUERY_URL, data=params, timeout=10)
+    resp = requests.post(config.XUNHU_QUERY_URL, data=params, timeout=10)
     return resp.json()
 
 
