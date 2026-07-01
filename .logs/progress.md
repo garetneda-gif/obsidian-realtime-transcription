@@ -137,3 +137,10 @@
 - 顶部栏和左侧分区栏改为 sticky，滚动设置内容时保持常驻。
 - 左侧导航选中态覆盖 Obsidian 默认按钮 active/focus 样式，SVG 保持可见并变为强调色。
 - README 拆分为中文 `README.md` 和英文 `README_EN.md`，语言切换改为文件链接。
+
+## 2026-07-01 17:09 — Cloud account recharge MVP
+
+- 云端账户充值按钮改为调用 `/api/billing/create-order`，创建虎皮椒订单后打开支付链接。
+- 云端账户区新增服务器地址输入，便于切换到自部署 HTTPS API。
+- 服务端支付金额改用 `Decimal`，限制充值范围，并在支付未配置时拒绝下单且不落脏订单。
+- 新增 `billing-server/self_check.py`，覆盖注册、登录、未配置支付时拒绝下单。

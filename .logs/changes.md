@@ -79,3 +79,12 @@
 - 修改 `styles.css`：增大右侧设置项内边距和文字/控件间距；顶部栏和左侧分区栏改为 sticky 常驻。
 - 修改 `styles.css`：选中导航项覆盖默认 active/focus 背景，SVG 图标使用强调色且不消失。
 - 新增 `README_EN.md`，`README.md` 改为中文文档；语言切换从同页锚点改为跨文件链接。
+
+## 2026-07-01 17:09 — Cloud billing recharge MVP
+
+- 修改 `src/services/CloudAuthService.ts`：新增创建充值订单 API。
+- 修改 `src/settings.ts`,`src/i18n.ts`：云端账户显示服务器地址，充值按钮创建订单并打开支付页。
+- 修改 `billing-server/payment_xunhu.py`：充值金额使用 `Decimal`，校验金额区间，支付未配置时不创建订单。
+- 新增 `billing-server/self_check.py`：最小注册/登录/下单拒绝自检。
+- 修改 `README.md`,`README_EN.md`：补云端收费服务启动配置。
+- 更新发布元数据到 `1.4.6`。

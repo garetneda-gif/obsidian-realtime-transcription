@@ -345,6 +345,29 @@ macOS may block unnotarized Python scripts with an "unidentified developer" aler
 - Do **not** commit `data.json` (which contains API keys) to Git or share it with others
 - On a new machine, re-enter API keys manually in plugin settings
 
+### Cloud Billing Server
+
+Hosted cloud mode uses `billing-server/`: the server keeps Tencent Cloud ASR credentials, the plugin logs in and requests a signed ASR URL, the server pre-charges balance, then settles by recording duration.
+
+Minimal startup config:
+
+```bash
+export BS_SECRET_KEY="at least 32 random characters"
+export TENCENT_APP_ID="Tencent Cloud AppID"
+export TENCENT_SECRET_ID="Tencent Cloud SecretID"
+export TENCENT_SECRET_KEY="Tencent Cloud SecretKey"
+export AP_XUNHU_APPID="Xunhu AppID"
+export AP_XUNHU_APPSECRET="Xunhu AppSecret"
+export AP_XUNHU_NOTIFY_URL="https://your-domain/api/billing/callback/xunhu"
+export BS_PRICE_PER_HOUR_CENTS=200
+
+cd billing-server
+pip install -r requirements.txt
+python app.py
+```
+
+After deployment, set the plugin's Server URL to your HTTPS API domain.
+
 ### Contributing
 
 Pull requests and issues are welcome! Please:
