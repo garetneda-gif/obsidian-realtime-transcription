@@ -1,0 +1,26 @@
+# 变更清单
+
+> 每次 git commit 前追加。说明动了哪些文件、为什么动。
+> 与 commit message 互补:commit 说"做了什么",这里说"为什么这么改"。
+
+## 模板
+
+```markdown
+## YYYY-MM-DD HH:MM — <一句话变更主题>
+
+**新增**:`path/a.py`,`path/b.md`
+**修改**:`path/c.py:42-58`(原因:...)
+**删除**:`path/d.py`(原因:已被 X 取代)
+**关联 commit**:<sha 或 PR 链接>
+```
+
+---
+
+<!-- 在下面追加新变更 -->
+
+## 2026-07-01 09:50 — 兼容 Responses API 摘要响应
+
+**新增**:`src/utils/llmResponse.ts`,`tests/llmResponse.test.ts`
+**修改**:`src/services/SummaryService.ts`,`src/services/FormalizeService.ts`,`src/services/TranslationService.ts`(原因:复用同一个 LLM 响应解析器,兼容 Chat/Legacy/Responses API)
+**删除**:三个服务内重复的本地 `extractTextFromResponse` 实现(原因:已被共享 helper 取代)
+**关联 commit**:待提交
