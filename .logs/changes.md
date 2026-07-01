@@ -107,3 +107,8 @@
 - `billing-server/payment_xunhu.py`: 支付查询 URL 改为读取 `config.XUNHU_QUERY_URL`。
 - `billing-server/self_check.py`,`billing-server/tests/test_config.py`: 覆盖健康检查、readyz、生产缺省密钥失败和开发环境宽松校验。
 - `README.md`,`README_EN.md`: 补充云端计费服务最小部署环境变量和自检命令。
+## 2026-07-02 02:39 — ASR 计费结算可用化
+- `billing-server/signing.py`：增加云端 ASR 模型白名单，签名 URL 生成成功后才提交预扣事务，失败直接 rollback。
+- `billing-server/billing.py`：新增账户接口，强化用量报告输入校验、退款幂等、重复报告返回已结算结果。
+- `billing-server/database.py` / `billing-server/models.py`：为 `usage_records.sign_request_id` 补唯一约束和启动迁移检查，避免重复结算记录。
+- `billing-server/tests/test_billing.py`：覆盖账户、预扣、余额不足、签名失败回滚、重复报告、过期结算和唯一索引。

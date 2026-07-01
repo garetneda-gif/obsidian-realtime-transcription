@@ -162,3 +162,7 @@
 - 已新增生产配置校验、CORS origins 配置、`/healthz`、`/readyz`、SQLite 外键 pragma 和结算循环禁用开关。
 - 已补 `billing-server/tests/test_config.py` 与 `billing-server/self_check.py` 健康检查覆盖。
 - 验证：`cd billing-server && .venv311/bin/python -m pytest tests/test_config.py tests/test_auth.py tests/test_payment.py -q && .venv311/bin/python self_check.py` 通过。
+## 2026-07-02 02:39 — 硬化云端 ASR 预扣和结算
+- 接管子代理未完成的 ASR 计费切片，完成签名预扣、签名失败回滚、用量报告幂等和过期结算幂等。
+- 新增 `/api/billing/me`，前端云账户可直接读取邮箱和余额。
+- 验证：`cd billing-server && .venv311/bin/python -m pytest tests -q` 25 passed；`node --experimental-strip-types --test tests/*.test.ts` 26 passed；`npm run build` 通过。

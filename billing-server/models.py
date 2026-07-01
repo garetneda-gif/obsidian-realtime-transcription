@@ -2,8 +2,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index, Enum as SAEnum
-from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index
+from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
@@ -79,7 +79,7 @@ class UsageRecord(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    sign_request_id = Column(String(36), ForeignKey("sign_requests.id"), nullable=False)
+    sign_request_id = Column(String(36), ForeignKey("sign_requests.id"), nullable=False, unique=True)
     duration_seconds = Column(Integer, nullable=False)
     cost_cents = Column(Integer, nullable=False)
     engine_model = Column(String(32), nullable=False)

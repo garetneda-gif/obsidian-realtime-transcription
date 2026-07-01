@@ -16,6 +16,8 @@ from models import User, SignRequest, new_uuid
 
 signing_bp = Blueprint("signing", __name__, url_prefix="/api/asr")
 
+ALLOWED_ENGINE_MODELS = {"16k_zh", "16k_en", "16k_zh-PY", "16k_zh_medical", "16k_zh_large", "16k_zh_en"}
+
 
 def _generate_voice_id() -> str:
     return uuid.uuid4().hex[:16]
@@ -70,9 +72,15 @@ def sign():
         return err
 
     data = request.get_json(silent=True) or {}
-    engine_model = data.get("engine_model", "16k_zh")
+    engine_model = str(data.get("engine_model") or "16k_zh")
+    if engine_model not in ALLOWED_ENGINE_MODELS:
+        return jsonify({
+            "error": "Unsupported engine model",
+            "allowed_models": sorted(ALLOWED_ENGINE_MODELS),
+        }), 400
+
     # 可选：客户端传入已有 voice_id（用于续签保持同一会话）
-    voice_id = data.get("voice_id") or _generate_voice_id()
+    voice_id = str(data.get("voice_id") or _generate_voice_id())
 
     if not config.TENCENT_APP_ID or not config.TENCENT_SECRET_ID or not config.TENCENT_SECRET_KEY:
         return jsonify({"error": "ASR service not configured"}), 503
@@ -92,7 +100,6 @@ def sign():
                 "required_cents": precharge,
             }), 402
 
-        # 预扣费
         user.balance_cents -= precharge
 
         sign_req = SignRequest(
@@ -103,17 +110,14 @@ def sign():
             precharge_cents=precharge,
         )
         db.add(sign_req)
-        db.commit()
 
         try:
             signed_url = _build_signed_url(voice_id, engine_model)
         except Exception as e:
-            # 签名失败：回滚预扣费
-            user.balance_cents += precharge
-            sign_req.settled = 1
-            sign_req.actual_cost_cents = 0
-            db.commit()
+            db.rollback()
             return jsonify({"error": f"Signing failed: {e}"}), 503
+
+        db.commit()
 
         return jsonify({
             "signed_url": signed_url,
