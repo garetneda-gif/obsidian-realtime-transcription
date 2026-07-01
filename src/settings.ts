@@ -1,12 +1,21 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider, CopyContentMode, CopyRangeMode } from "./types";
 import { DEFAULT_SETTINGS, isHostedCloud } from "./types";
 import { t, setLocale } from "./i18n";
 
+type SettingsSection = "general" | "recognition" | "ai" | "output";
+
+interface SettingsSectionConfig {
+  id: SettingsSection;
+  icon: string;
+  label: string;
+}
+
 export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
+  private activeSettingsSection: SettingsSection = "recognition";
 
   constructor(app: App, plugin: RealtimeTranscriptionPlugin) {
     super(app, plugin);
@@ -39,7 +48,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     // ── ASR 引擎选择 ──
-    containerEl.createEl("h2", { text: "语音识别引擎" });
+    containerEl.createEl("h2", { text: t("settings.asr.title") });
 
     new Setting(containerEl)
       .setName(t("settings.asr.provider.name"))
@@ -52,8 +61,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.asrProvider)
           .onChange(async (value: AsrProvider) => {
             this.plugin.settings.asrProvider = value;
-            await this.plugin.saveSettings();
             this.display();
+            await this.plugin.saveSettings();
           });
       });
 
@@ -218,18 +227,16 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     if (provider === "tencent") {
       // ── 腾讯云 BYOK 设置 ──
-      containerEl.createEl("h2", { text: "腾讯云语音识别" });
+      containerEl.createEl("h2", { text: t("settings.tencent.title") });
 
-      const tencentDesc = containerEl.createEl("p", {
-        text: "前往腾讯云控制台开通「语音识别」服务，获取 AppID 和 API 密钥。",
+      containerEl.createEl("p", {
+        cls: "realtime-settings-note",
+        text: t("settings.tencent.desc"),
       });
-      tencentDesc.style.color = "var(--text-muted)";
-      tencentDesc.style.fontSize = "0.85em";
-      tencentDesc.style.marginTop = "-0.5em";
 
       new Setting(containerEl)
-        .setName("AppID")
-        .setDesc("腾讯云账号 AppID（在控制台首页可见）")
+        .setName(t("settings.tencent.appId.name"))
+        .setDesc(t("settings.tencent.appId.desc"))
         .addText((text) =>
           text
             .setPlaceholder("125xxxxxxx")
@@ -241,8 +248,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         );
 
       new Setting(containerEl)
-        .setName("SecretID")
-        .setDesc("API 密钥的 SecretID")
+        .setName(t("settings.tencent.secretId.name"))
+        .setDesc(t("settings.tencent.secretId.desc"))
         .addText((text) => {
           text
             .setPlaceholder("AKIDxxxxxxxx")
@@ -255,8 +262,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         });
 
       new Setting(containerEl)
-        .setName("SecretKey")
-        .setDesc("API 密钥的 SecretKey")
+        .setName(t("settings.tencent.secretKey.name"))
+        .setDesc(t("settings.tencent.secretKey.desc"))
         .addText((text) => {
           text
             .setPlaceholder("xxxxxxxxxxxxxxxx")
@@ -269,14 +276,14 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         });
 
       new Setting(containerEl)
-        .setName("引擎模型")
-        .setDesc("选择识别引擎，大模型精度更高但延迟略增")
+        .setName(t("settings.tencent.engine.name"))
+        .setDesc(t("settings.tencent.engine.desc"))
         .addDropdown((dropdown) => {
           dropdown
-            .addOption("16k_zh", "中文 (16k_zh)")
-            .addOption("16k_zh_large", "中文大模型 (16k_zh_large)")
-            .addOption("16k_en", "英文 (16k_en)")
-            .addOption("16k_zh_en", "中英混合 (16k_zh_en)")
+            .addOption("16k_zh", t("settings.tencent.engine.zh"))
+            .addOption("16k_zh_large", t("settings.tencent.engine.zhLarge"))
+            .addOption("16k_en", t("settings.tencent.engine.en"))
+            .addOption("16k_zh_en", t("settings.tencent.engine.zhEn"))
             .setValue(this.plugin.settings.tencentASR.engineModelType)
             .onChange(async (value) => {
               this.plugin.settings.tencentASR.engineModelType = value;
@@ -726,6 +733,100 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+    this.enhanceSettingsLayout(containerEl);
+  }
+
+  private enhanceSettingsLayout(containerEl: HTMLElement): void {
+    const originalNodes = Array.from(containerEl.childNodes);
+    const sections = this.buildSectionContainers();
+    const titleSections = this.buildTitleSectionMap();
+    let currentSection: SettingsSection = "general";
+
+    for (const node of originalNodes) {
+      if (node instanceof HTMLElement && node.tagName === "H2") {
+        currentSection = titleSections.get(node.textContent?.trim() ?? "") ?? currentSection;
+      }
+      sections.get(currentSection)?.appendChild(node);
+    }
+
+    if (!sections.get(this.activeSettingsSection)?.hasChildNodes()) {
+      this.activeSettingsSection = "general";
+    }
+
+    containerEl.empty();
+    containerEl.addClass("realtime-settings-root");
+
+    const header = containerEl.createDiv("realtime-settings-header");
+    const headerIcon = header.createDiv("realtime-settings-header-icon");
+    setIcon(headerIcon, "mic");
+    const headerText = header.createDiv("realtime-settings-header-text");
+    const titleRow = headerText.createDiv("realtime-settings-title-row");
+    titleRow.createEl("span", { cls: "realtime-settings-title", text: "Realtime Transcription" });
+    titleRow.createEl("span", { cls: "realtime-settings-version", text: `v${this.plugin.manifest.version}` });
+
+    const layout = containerEl.createDiv("realtime-settings-layout");
+    const nav = layout.createDiv("realtime-settings-nav");
+    const content = layout.createDiv("realtime-settings-content");
+
+    const configs = this.getSectionConfigs();
+    this.renderSectionNav(nav, configs);
+
+    const activeContent = sections.get(this.activeSettingsSection);
+    if (activeContent) content.appendChild(activeContent);
+  }
+
+  private buildSectionContainers(): Map<SettingsSection, HTMLElement> {
+    const sections = new Map<SettingsSection, HTMLElement>();
+    for (const config of this.getSectionConfigs()) {
+      const sectionEl = document.createElement("div");
+      sectionEl.addClass("realtime-settings-section");
+      sectionEl.setAttr("data-section", config.id);
+      sections.set(config.id, sectionEl);
+    }
+    return sections;
+  }
+
+  private buildTitleSectionMap(): Map<string, SettingsSection> {
+    return new Map<string, SettingsSection>([
+      [t("settings.asr.title"), "recognition"],
+      [t("settings.backend.title"), "recognition"],
+      [t("settings.model.title"), "recognition"],
+      [t("settings.tencent.title"), "recognition"],
+      [t("settings.cloud.title"), "recognition"],
+      [t("settings.translation.title"), "ai"],
+      [t("settings.formalize.title"), "ai"],
+      [t("settings.summary.title"), "ai"],
+      [t("settings.metaSummary.title"), "ai"],
+      [t("settings.export.title"), "output"],
+      [t("settings.copyHandoff.title"), "output"],
+      [t("settings.advanced.title"), "general"],
+    ]);
+  }
+
+  private getSectionConfigs(): SettingsSectionConfig[] {
+    return [
+      { id: "general", icon: "sliders-horizontal", label: t("settings.nav.general") },
+      { id: "recognition", icon: "radio-tower", label: t("settings.nav.recognition") },
+      { id: "ai", icon: "sparkles", label: t("settings.nav.ai") },
+      { id: "output", icon: "send", label: t("settings.nav.output") },
+    ];
+  }
+
+  private renderSectionNav(nav: HTMLElement, configs: SettingsSectionConfig[]): void {
+    for (const config of configs) {
+      const button = nav.createEl("button", {
+        cls: `realtime-settings-nav-item${this.activeSettingsSection === config.id ? " is-active" : ""}`,
+        attr: { type: "button", "aria-label": config.label },
+      });
+      const iconEl = button.createSpan("realtime-settings-nav-icon");
+      setIcon(iconEl, config.icon);
+      button.createSpan({ cls: "realtime-settings-nav-label", text: config.label });
+      button.addEventListener("click", () => {
+        this.activeSettingsSection = config.id;
+        this.display();
+      });
+    }
   }
 
   private applyRealtimePreset(profile: RealtimeProfile): void {

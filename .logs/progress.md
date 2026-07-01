@@ -122,3 +122,18 @@
 - 已确认本机 vault `data.json` 保存凭据但未被 Git 跟踪。
 - 已删除 Tencent ASR 签名阶段敏感调试日志。
 - 下一步：构建、部署到本机 vault，并发布 `1.4.4`。
+## 2026-07-01 16:09 — Fix English settings translation
+
+- 用户指出英文 UI 仍混中文且 provider 下拉不需要括号内容。
+- 已修复 `src/i18n.ts` 和 `src/settings.ts`，并按 Thino 参考改为分区设置页。
+- 下一步：测试、构建、覆盖本机 vault，并发布 `1.4.5`。
+
+## 2026-07-01 16:32 — Refine settings page layout
+
+- 根据 Obsidian 内截图反馈，移除设置页标题下的副标题说明。
+- 将“高级”合并进“通用”，左侧导航保留四个主项。
+- ASR provider 切换改为先重绘再保存，避免下拉已变但内容区滞后。
+- 右侧设置项增加内边距和文字/控件间距。
+- 顶部栏和左侧分区栏改为 sticky，滚动设置内容时保持常驻。
+- 左侧导航选中态覆盖 Obsidian 默认按钮 active/focus 样式，SVG 保持可见并变为强调色。
+- README 拆分为中文 `README.md` 和英文 `README_EN.md`，语言切换改为文件链接。

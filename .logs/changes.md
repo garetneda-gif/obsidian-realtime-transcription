@@ -63,3 +63,19 @@
 
 - 删除 `src/services/TencentASRClient.ts` 中签名阶段的凭据/签名调试输出。
 - 更新发布元数据到 `1.4.4`。
+## 2026-07-01 16:09 — Complete English Tencent settings copy
+
+- 去掉 ASR provider 选项中的括号说明。
+- 腾讯云设置区标题、说明、AppID、Secret、引擎模型接入 i18n。
+- 引擎模型下拉去掉模型代码后缀。
+- 设置页改为 Thino 式左侧分区导航、右侧详情区。
+- 新增设置页分区样式。
+- 更新发布元数据到 `1.4.5`。
+
+## 2026-07-01 16:32 — Tighten settings page visual hierarchy
+
+- 修改 `src/settings.ts`：删除顶部副标题；将高级设置归入通用分区；provider 切换先刷新界面再保存。
+- 修改 `src/i18n.ts`：删除不再使用的设置页副标题和高级导航文案。
+- 修改 `styles.css`：增大右侧设置项内边距和文字/控件间距；顶部栏和左侧分区栏改为 sticky 常驻。
+- 修改 `styles.css`：选中导航项覆盖默认 active/focus 背景，SVG 图标使用强调色且不消失。
+- 新增 `README_EN.md`，`README.md` 改为中文文档；语言切换从同页锚点改为跨文件链接。
