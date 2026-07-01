@@ -87,4 +87,4 @@
 - 修改 `billing-server/payment_xunhu.py`：充值金额使用 `Decimal`，校验金额区间，支付未配置时不创建订单。
 - 新增 `billing-server/self_check.py`：最小注册/登录/下单拒绝自检。
 - 修改 `README.md`,`README_EN.md`：补云端收费服务启动配置。
-- 更新发布元数据到 `1.4.6`。
+- 更新发布元数据到 `1.4.6`，并发布 GitHub Release `1.4.6`。
