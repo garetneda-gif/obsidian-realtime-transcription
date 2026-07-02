@@ -166,3 +166,9 @@
 - 接管子代理未完成的 ASR 计费切片，完成签名预扣、签名失败回滚、用量报告幂等和过期结算幂等。
 - 新增 `/api/billing/me`，前端云账户可直接读取邮箱和余额。
 - 验证：`cd billing-server && .venv311/bin/python -m pytest tests -q` 25 passed；`node --experimental-strip-types --test tests/*.test.ts` 26 passed；`npm run build` 通过。
+
+## 2026-07-02 09:32 — 转写区域去卡片化
+- 根据 Obsidian 右侧转写流截图反馈,将普通转写条目从气泡卡片改为透明文字流。
+- 根据后续截图反馈,将润色按钮改为透明 SVG 图标,并让按钮 footer 不再占用文本流高度。
+- 润色加载态改为圆形 loader 转圈,不再让魔杖图标旋转。
+- 下一步: 构建、覆盖本机 vault、提交并 push。

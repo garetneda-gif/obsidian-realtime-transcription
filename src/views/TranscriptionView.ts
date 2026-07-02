@@ -435,10 +435,7 @@ export class TranscriptionView extends ItemView {
     if (btn) {
       btn.classList.remove("loading");
       btn.classList.add("done");
-      btn.empty();
-      const checkIcon = btn.createDiv("formalize-btn-icon");
-      setIcon(checkIcon, "check");
-      btn.appendText(t("view.formalized"));
+      this.setFormalizeButton(btn, "check", t("view.formalized"));
     }
 
     // 插入或更新润色文本
@@ -524,14 +521,12 @@ export class TranscriptionView extends ItemView {
 
   private appendFormalizeButton(card: HTMLElement, entry: TranscriptEntry): void {
     const footer = card.createDiv("card-footer");
+    const label = entry.formalText ? t("view.formalized") : t("view.formalize");
     const formalizeBtn = footer.createEl("button", {
       cls: entry.formalText ? "formalize-btn done" : "formalize-btn",
-      text: entry.formalText ? t("view.formalized") : t("view.formalize"),
       attr: { type: "button" },
     });
-    const btnIcon = formalizeBtn.createDiv("formalize-btn-icon");
-    setIcon(btnIcon, "wand-2");
-    formalizeBtn.insertBefore(btnIcon, formalizeBtn.firstChild);
+    this.setFormalizeButton(formalizeBtn, entry.formalText ? "check" : "wand-2", label);
 
     formalizeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -540,6 +535,14 @@ export class TranscriptionView extends ItemView {
       }
       void this.handleFormalizeClick(entry.id, entry.result.text, formalizeBtn, card);
     });
+  }
+
+  private setFormalizeButton(btn: HTMLElement, icon: string, label: string): void {
+    btn.empty();
+    btn.setAttr("aria-label", label);
+    btn.setAttr("title", label);
+    const btnIcon = btn.createDiv("formalize-btn-icon");
+    setIcon(btnIcon, icon);
   }
 
   private async handleFormalizeClick(
@@ -554,7 +557,7 @@ export class TranscriptionView extends ItemView {
     }
 
     btn.classList.add("loading");
-    btn.textContent = t("view.formalizing");
+    this.setFormalizeButton(btn, "loader-circle", t("view.formalizing"));
 
     // 添加加载占位
     const oldLoading = card.querySelector(".card-formal-loading");
@@ -573,10 +576,7 @@ export class TranscriptionView extends ItemView {
       if (!btn.classList.contains("loading")) return;
       loadingEl.remove();
       btn.classList.remove("loading");
-      btn.textContent = t("view.formalize");
-      const btnIcon = btn.createDiv("formalize-btn-icon");
-      setIcon(btnIcon, "wand-2");
-      btn.insertBefore(btnIcon, btn.firstChild);
+      this.setFormalizeButton(btn, "wand-2", t("view.formalize"));
       new Notice(`${t("view.formalizeTimeout")}(>${Math.floor(FORMALIZE_UI_TIMEOUT_MS / 1000)}${t("view.formalizeTimeoutDetail")}`);
     }, FORMALIZE_UI_TIMEOUT_MS + 1000);
 
@@ -590,10 +590,7 @@ export class TranscriptionView extends ItemView {
     } catch (err) {
       loadingEl.remove();
       btn.classList.remove("loading");
-      btn.textContent = t("view.formalize");
-      const btnIcon = btn.createDiv("formalize-btn-icon");
-      setIcon(btnIcon, "wand-2");
-      btn.insertBefore(btnIcon, btn.firstChild);
+      this.setFormalizeButton(btn, "wand-2", t("view.formalize"));
       const detail = err instanceof Error ? err.message : "unknown error";
       new Notice(`${t("view.formalizeFailed")}: ${detail}`);
     } finally {

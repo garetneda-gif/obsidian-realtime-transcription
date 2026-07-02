@@ -112,3 +112,12 @@
 - `billing-server/billing.py`：新增账户接口，强化用量报告输入校验、退款幂等、重复报告返回已结算结果。
 - `billing-server/database.py` / `billing-server/models.py`：为 `usage_records.sign_request_id` 补唯一约束和启动迁移检查，避免重复结算记录。
 - `billing-server/tests/test_billing.py`：覆盖账户、预扣、余额不足、签名失败回滚、重复报告、过期结算和唯一索引。
+
+## 2026-07-02 09:32 — 转写区域改为文本流
+- `styles.css`: 普通转写条目去掉背景、边框、圆角和阴影,改为透明文本流。
+- `styles.css`: 普通转写 footer 改为绝对定位,不再占文本流高度。
+- `src/views/TranscriptionView.ts`: 润色按钮改为 `aria-label/title + SVG` 状态,不再显示矩形文字按钮。
+- `styles.css`: 润色按钮背景、边框、阴影改为透明,仅保留悬停/加载/完成图标色。
+- `src/views/TranscriptionView.ts`: 润色加载态从魔杖自转改为圆形 loader 转圈。
+- `styles.css`: footer 在 `focus-within` 时显示,避免键盘焦点落到不可见按钮。
+- `styles.css`: 保留摘要/二次摘要的结构化样式,避免摘要与普通原文混在一起。
