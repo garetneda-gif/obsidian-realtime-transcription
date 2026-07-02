@@ -156,3 +156,9 @@
 - `src/views/TranscriptionView.ts`: 手动翻译源语言改用同一推断结果,避免旧英文记录按中文发起翻译。
 - `styles.css`: 将翻译/润色加载 shimmer 调慢并扩大高光过渡区域,降低闪烁和卡顿感。
 - `tests/clearEntriesState.test.ts`: 增加视图层语言推断和手动翻译调用路径的静态回归检查。
+
+## 2026-07-02 11:25 — 修复开始录制时后端启动误报
+- `src/main.ts`: 录制开关增加启动/停止互斥,避免连续触发时并发启动互相终止后端。
+- `src/services/BackendManager.ts`: 启动前先复用已可连接的本地后端,避免插件重载后先杀健康残留进程。
+- `src/services/BackendManager.ts`: 后端进程退出日志补充 signal,避免真实崩溃时只看到 `退出码:null`。
+- `tests/clearEntriesState.test.ts`: 增加录制互斥和后端复用顺序的静态回归检查。

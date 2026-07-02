@@ -7,6 +7,10 @@ const viewSource = readFileSync(
   new URL("../src/views/TranscriptionView.ts", import.meta.url),
   "utf8",
 );
+const backendSource = readFileSync(
+  new URL("../src/services/BackendManager.ts", import.meta.url),
+  "utf8",
+);
 
 test("clearEntries resets transient transcript and summary state", () => {
   assert.match(source, /private async clearEntries\(\): Promise<void> \{\s+this\.resetTransientTranscriptState\(\);/);
@@ -60,11 +64,28 @@ test("transcription view infers display language for badges and manual translati
   );
 });
 
+test("recording toggle ignores concurrent start and stop transitions", () => {
+  const body = extractMethodBody("toggleRecording");
+  assert.ok(source.includes("private recordingTransition = false"));
+  assert.match(body, /if \(this\.recordingTransition\) \{\s+return;\s+\}/);
+  assert.match(body, /finally \{\s+this\.recordingTransition = false;\s+\}/);
+});
+
+test("backend start reuses a reachable backend before orphan cleanup", () => {
+  const body = extractMethodBody("start", backendSource);
+  assert.ok(
+    body.indexOf("this.isBackendReachable(this.settings.backendPort") <
+      body.indexOf("this.killOrphanedProcesses()"),
+  );
+});
+
 function extractMethodBody(methodName: string, targetSource = source): string {
   const start = targetSource.indexOf(`private ${methodName}`);
-  assert.notEqual(start, -1, `${methodName} not found`);
+  const publicStart = targetSource.indexOf(`async ${methodName}`);
+  const methodStart = start === -1 ? publicStart : start;
+  assert.notEqual(methodStart, -1, `${methodName} not found`);
 
-  const bodyStart = targetSource.indexOf("{", start);
+  const bodyStart = targetSource.indexOf("{", methodStart);
   let depth = 0;
   for (let index = bodyStart; index < targetSource.length; index++) {
     const char = targetSource[index];

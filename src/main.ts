@@ -53,6 +53,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private summaryService!: SummaryService;
   private formalizeService!: FormalizeService;
   private recording = false;
+  private recordingTransition = false;
   private entryCounter = 0;
   private pendingTranscript: PendingTranscript | null = null;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -254,6 +255,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   async toggleRecording(): Promise<void> {
+    if (this.recordingTransition) {
+      return;
+    }
+    this.recordingTransition = true;
     try {
       if (this.recording) {
         await this.stopRecording();
@@ -263,6 +268,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     } catch (err) {
       console.error("[Transcription] toggleRecording 错误:", err);
       new Notice(`${t("notice.recordingError")}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.recordingTransition = false;
     }
   }
 

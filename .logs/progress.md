@@ -196,3 +196,9 @@
 - 手动翻译源语言复用同一推断结果,避免旧记录按错误语言发起翻译。
 - 翻译/润色加载 shimmer 改为 2.4 秒宽光带 ease-in-out,降低过快和跳帧观感。
 - 验证: `git diff --check`,`npx tsc --noEmit`,`node --experimental-strip-types --test tests/*.test.ts`,`npm run build`,`scripts/post-sync-refresh.sh` 均通过。
+
+## 2026-07-02 11:25 — 修复录制启动时退出码 null
+- 根因收敛到录制启动并发和插件重载后健康后端被先清理两个路径。
+- 已加 `recordingTransition` 防重入,并让 `BackendManager.start()` 先复用可达后端。
+- 后端退出日志补 signal,后续真崩溃不再只有 `退出码:null`。
+- 验证: `git diff --check`,`npx tsc --noEmit`,`node --experimental-strip-types --test tests/*.test.ts`,`npm run build`,`scripts/post-sync-refresh.sh` 和临时端口 Python 后端启动均通过。

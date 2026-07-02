@@ -45,6 +45,12 @@ export class BackendManager {
       this.lastLaunchSignature = null;
     }
 
+    if (await this.isBackendReachable(this.settings.backendPort, 1200)) {
+      this.activePort = this.settings.backendPort;
+      this.lastLaunchSignature = desiredSignature;
+      return true;
+    }
+
     // 0. 清理孤儿进程（插件重载后 this.process 为 null，旧进程仍存活）
     this.killOrphanedProcesses();
 
@@ -179,15 +185,16 @@ export class BackendManager {
         }
       });
 
-      this.process!.on("exit", (code: number | null) => {
-        console.log(`后端进程退出, code=${code}`);
+      this.process!.on("exit", (code: number | null, signal: NodeJS.Signals | null) => {
+        console.log(`后端进程退出, code=${code}, signal=${signal ?? "none"}`);
         this.process = null;
         this.lastLaunchSignature = null;
         if (!resolved) {
           resolved = true;
           clearTimeout(timeout);
           const detail = lastStderr ? `\n${lastStderr}` : "";
-          new Notice(`${t("backend.exitFailed")}: ${code ?? "null"})${detail}`);
+          const reason = signal ? `${code ?? "null"}, signal=${signal}` : `${code ?? "null"}`;
+          new Notice(`${t("backend.exitFailed")}: ${reason})${detail}`);
           resolve(false);
         }
       });
