@@ -175,3 +175,8 @@
 ## 2026-07-02 12:23 — 重做 loading shimmer
 - `styles.css`: 参考常见 skeleton shimmer 实现,将 loading 动画从文字背景位移改为独立伪元素光带 `transform` 扫过。
 - `styles.css`: 保留原 loading 文案和虚线布局,新增 `prefers-reduced-motion` 时关闭扫光动画。
+
+## 2026-07-02 12:29 — 面板转写设置增加复制/导出内容项
+- `src/i18n.ts`: 将右侧面板标题从转写显示设置改为转写设置。
+- `src/views/TranscriptionView.ts`,`src/main.ts`,`src/types.ts`: 面板设置新增复制内容设置和导出内容设置,复用已有全局配置字段。
+- `tests/clearEntriesState.test.ts`: 增加面板复制/导出内容设置链路的静态回归检查。

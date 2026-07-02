@@ -110,6 +110,8 @@ export interface PanelSettingsValues {
   transcriptFontSize: number;
   autoTranslate: boolean;
   autoFormalize: boolean;
+  copyContentMode: CopyContentMode;
+  exportMode: ExportMode;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {

@@ -1190,6 +1190,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       transcriptFontSize: this.settings.transcriptFontSize,
       autoTranslate: this.settings.translation.enabled,
       autoFormalize: this.settings.autoFormalize,
+      copyContentMode: this.settings.copyContentMode ?? DEFAULT_SETTINGS.copyContentMode,
+      exportMode: this.settings.exportMode ?? DEFAULT_SETTINGS.exportMode,
     };
   }
 
@@ -1200,6 +1202,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.settings.transcriptFontSize = clampFontSize(values.transcriptFontSize);
     this.settings.translation.enabled = Boolean(values.autoTranslate);
     this.settings.autoFormalize = Boolean(values.autoFormalize);
+    this.settings.copyContentMode = values.copyContentMode === "summaryOnly" ? "summaryOnly" : "full";
+    this.settings.exportMode = values.exportMode === "summaryOnly" ? "summaryOnly" : "full";
     await this.saveSettings();
   }
 

@@ -33,6 +33,8 @@ export class TranscriptionView extends ItemView {
     transcriptFontSize: 15,
     autoTranslate: false,
     autoFormalize: false,
+    copyContentMode: "full",
+    exportMode: "full",
   };
 
   // 外部注入的回调
@@ -267,6 +269,8 @@ export class TranscriptionView extends ItemView {
       transcriptFontSize: clampPanelFontSize(values.transcriptFontSize),
       autoTranslate: Boolean(values.autoTranslate),
       autoFormalize: Boolean(values.autoFormalize),
+      copyContentMode: values.copyContentMode === "summaryOnly" ? "summaryOnly" : "full",
+      exportMode: values.exportMode === "summaryOnly" ? "summaryOnly" : "full",
     };
     this.applyTranscriptFontSize(this.panelSettingsValues.transcriptFontSize);
     if (this.settingsPage) {
@@ -374,6 +378,36 @@ export class TranscriptionView extends ItemView {
       },
     );
 
+    const copyRow = this.createPanelSettingRow(
+      content,
+      t("panelSettings.copyContent.name"),
+      t("panelSettings.copyContent.desc"),
+    );
+    const copySelect = copyRow.createEl("select", {
+      cls: "panel-settings-select",
+    }) as HTMLSelectElement;
+    this.appendPanelOption(copySelect, "full", t("settings.copy.content.full"));
+    this.appendPanelOption(copySelect, "summaryOnly", t("settings.copy.content.summaryOnly"));
+    copySelect.value = draft.copyContentMode;
+    copySelect.addEventListener("change", () => {
+      draft.copyContentMode = copySelect.value === "summaryOnly" ? "summaryOnly" : "full";
+    });
+
+    const exportRow = this.createPanelSettingRow(
+      content,
+      t("panelSettings.exportMode.name"),
+      t("panelSettings.exportMode.desc"),
+    );
+    const exportSelect = exportRow.createEl("select", {
+      cls: "panel-settings-select",
+    }) as HTMLSelectElement;
+    this.appendPanelOption(exportSelect, "full", t("settings.export.mode.full"));
+    this.appendPanelOption(exportSelect, "summaryOnly", t("settings.export.mode.summaryOnly"));
+    exportSelect.value = draft.exportMode;
+    exportSelect.addEventListener("change", () => {
+      draft.exportMode = exportSelect.value === "summaryOnly" ? "summaryOnly" : "full";
+    });
+
     saveBtn.addEventListener("click", () => {
       void this.savePanelSettingsDraft(draft, saveBtn);
     });
@@ -413,6 +447,10 @@ export class TranscriptionView extends ItemView {
   }
 
   private appendLanguageOption(select: HTMLSelectElement, value: AiOutputLanguage, text: string): void {
+    this.appendPanelOption(select, value, text);
+  }
+
+  private appendPanelOption(select: HTMLSelectElement, value: string, text: string): void {
     const option = select.createEl("option", {
       text,
       attr: { value },

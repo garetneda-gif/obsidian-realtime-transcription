@@ -78,6 +78,18 @@ test("manual translation replaces existing translation with the loading placehol
   assert.ok(body.includes("entry.translation = null"));
 });
 
+test("panel settings include copy and export content modes", () => {
+  const getBody = extractMethodBody("getPanelSettingsValues");
+  const saveBody = extractMethodBody("savePanelSettings");
+  assert.ok(getBody.includes("copyContentMode"));
+  assert.ok(getBody.includes("exportMode"));
+  assert.ok(saveBody.includes("this.settings.copyContentMode"));
+  assert.ok(saveBody.includes("this.settings.exportMode"));
+  assert.ok(viewSource.includes("panelSettings.copyContent.name"));
+  assert.ok(viewSource.includes("panelSettings.exportMode.name"));
+  assert.ok(i18nSource.includes('"panelSettings.title": "转写设置"'));
+});
+
 test("recording toggle ignores concurrent start and stop transitions", () => {
   const body = extractMethodBody("toggleRecording");
   assert.ok(source.includes("private recordingTransition = false"));
