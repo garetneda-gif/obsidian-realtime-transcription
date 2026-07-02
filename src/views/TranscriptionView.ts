@@ -26,6 +26,7 @@ export class TranscriptionView extends ItemView {
   private streamingOriginalEl: HTMLElement | null = null;
   private scrollToBottomBtn!: HTMLElement;
   private settingsPage: HTMLElement | null = null;
+  private panelSettingsCleanup: Array<() => void> = [];
   private pinnedToBottom = true;
   private entries: TranscriptEntry[] = [];
   private panelSettingsValues: PanelSettingsValues = {
@@ -119,6 +120,7 @@ export class TranscriptionView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.cleanupPanelSettingsPage();
     // 不清空 entries，数据由 plugin 实例持久化管理
     this.streamingCard = null;
     this.streamingEntryId = null;
@@ -291,7 +293,7 @@ export class TranscriptionView extends ItemView {
     if (!root) return;
 
     if (this.settingsPage) {
-      this.settingsPage.remove();
+      this.hidePanelSettingsPage();
     }
 
     const draft: PanelSettingsValues = { ...this.panelSettingsValues };
@@ -332,7 +334,11 @@ export class TranscriptionView extends ItemView {
       cls: "panel-settings-value",
       text: `${draft.transcriptFontSize}px`,
     });
-    const fontInput = fontControls.createEl("input", {
+    const rangeWrap = fontControls.createDiv("panel-settings-range-wrap");
+    rangeWrap.createDiv("panel-settings-range-track");
+    rangeWrap.createDiv("panel-settings-range-progress");
+    rangeWrap.createDiv("panel-settings-range-thumb");
+    const fontInput = rangeWrap.createEl("input", {
       cls: "panel-settings-range",
       attr: {
         type: "range",
@@ -342,11 +348,90 @@ export class TranscriptionView extends ItemView {
         value: String(draft.transcriptFontSize),
       },
     }) as HTMLInputElement;
-    fontInput.addEventListener("input", () => {
-      draft.transcriptFontSize = clampPanelFontSize(Number(fontInput.value));
+    const updateFontSize = (size: number) => {
+      draft.transcriptFontSize = clampPanelFontSize(size);
+      fontInput.value = String(draft.transcriptFontSize);
       fontValue.setText(`${draft.transcriptFontSize}px`);
+      this.updatePanelRangeProgress(fontInput);
       this.applyTranscriptFontSize(draft.transcriptFontSize);
+    };
+    const updateFontSizeFromClientX = (clientX: number) => {
+      const rect = rangeWrap.getBoundingClientRect();
+      const min = Number(fontInput.min || "0");
+      const max = Number(fontInput.max || "100");
+      const step = Number(fontInput.step || "1") || 1;
+      const thumbWidth = 26;
+      const usableWidth = Math.max(1, rect.width - thumbWidth);
+      const x = Math.max(0, Math.min(usableWidth, clientX - rect.left - thumbWidth / 2));
+      const rawValue = min + (x / usableWidth) * (max - min);
+      const steppedValue = min + Math.round((rawValue - min) / step) * step;
+      updateFontSize(steppedValue);
+    };
+    const updateFontSizeFromPointer = (event: PointerEvent) => {
+      updateFontSizeFromClientX(event.clientX);
+    };
+    let draggingRange = false;
+    let mouseDraggingRange = false;
+    const handleRangePointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      draggingRange = true;
+      rangeWrap.setPointerCapture(event.pointerId);
+      updateFontSizeFromPointer(event);
+      event.preventDefault();
+    };
+    const handleRangePointerMove = (event: PointerEvent) => {
+      if (!draggingRange) return;
+      updateFontSizeFromPointer(event);
+      event.preventDefault();
+    };
+    const handleRangePointerEnd = (event: PointerEvent) => {
+      if (!draggingRange) return;
+      draggingRange = false;
+      if (rangeWrap.hasPointerCapture(event.pointerId)) {
+        rangeWrap.releasePointerCapture(event.pointerId);
+      }
+      event.preventDefault();
+    };
+    const handleRangeMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      mouseDraggingRange = true;
+      updateFontSizeFromClientX(event.clientX);
+      event.preventDefault();
+    };
+    const handleRangeMouseMove = (event: MouseEvent) => {
+      if (!mouseDraggingRange) return;
+      updateFontSizeFromClientX(event.clientX);
+      event.preventDefault();
+    };
+    const handleRangeMouseUp = (event: MouseEvent) => {
+      if (!mouseDraggingRange) return;
+      mouseDraggingRange = false;
+      event.preventDefault();
+    };
+    rangeWrap.addEventListener("pointerdown", handleRangePointerDown);
+    rangeWrap.addEventListener("pointermove", handleRangePointerMove);
+    rangeWrap.addEventListener("pointerup", handleRangePointerEnd);
+    rangeWrap.addEventListener("pointercancel", handleRangePointerEnd);
+    rangeWrap.addEventListener("mousedown", handleRangeMouseDown);
+    window.addEventListener("mousemove", handleRangeMouseMove);
+    window.addEventListener("mouseup", handleRangeMouseUp);
+    this.panelSettingsCleanup.push(() => {
+      rangeWrap.removeEventListener("pointerdown", handleRangePointerDown);
+      rangeWrap.removeEventListener("pointermove", handleRangePointerMove);
+      rangeWrap.removeEventListener("pointerup", handleRangePointerEnd);
+      rangeWrap.removeEventListener("pointercancel", handleRangePointerEnd);
+      rangeWrap.removeEventListener("mousedown", handleRangeMouseDown);
+      window.removeEventListener("mousemove", handleRangeMouseMove);
+      window.removeEventListener("mouseup", handleRangeMouseUp);
     });
+    fontInput.addEventListener("input", () => {
+      updateFontSize(Number(fontInput.value));
+    });
+    this.updatePanelRangeProgress(fontInput);
+    window.requestAnimationFrame(() => this.updatePanelRangeProgress(fontInput));
+    const rangeObserver = new ResizeObserver(() => this.updatePanelRangeProgress(fontInput));
+    rangeObserver.observe(rangeWrap);
+    this.panelSettingsCleanup.push(() => rangeObserver.disconnect());
 
     const languageRow = this.createPanelSettingRow(
       content,
@@ -451,8 +536,15 @@ export class TranscriptionView extends ItemView {
   }
 
   private hidePanelSettingsPage(): void {
+    this.cleanupPanelSettingsPage();
     this.settingsPage?.remove();
     this.settingsPage = null;
+  }
+
+  private cleanupPanelSettingsPage(): void {
+    for (const cleanup of this.panelSettingsCleanup.splice(0)) {
+      cleanup();
+    }
   }
 
   private createPanelSettingRow(container: HTMLElement, name: string, desc: string): HTMLElement {
@@ -474,6 +566,22 @@ export class TranscriptionView extends ItemView {
     });
     setIcon(arrow, "chevron-down");
     return select;
+  }
+
+  private updatePanelRangeProgress(input: HTMLInputElement): void {
+    const min = Number(input.min || "0");
+    const max = Number(input.max || "100");
+    const value = Number(input.value);
+    const ratio = max > min ? (value - min) / (max - min) : 0;
+    const boundedRatio = Math.max(0, Math.min(1, ratio));
+    const trackWidth = input.parentElement?.clientWidth || input.clientWidth || 0;
+    const thumbWidth = 26;
+    const center = trackWidth > thumbWidth
+      ? (thumbWidth / 2 + boundedRatio * (trackWidth - thumbWidth)) / trackWidth
+      : boundedRatio;
+    const progress = `${Math.max(0, Math.min(1, center)) * 100}%`;
+    input.style.setProperty("--panel-range-progress", progress);
+    input.parentElement?.style.setProperty("--panel-range-progress", progress);
   }
 
   private openExternalUrl(url: string): void {

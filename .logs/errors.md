@@ -92,3 +92,11 @@
 **根因**:`.card-lang-badge.lang-meta-summary` 遗留旧渐变样式,虽然新摘要头部不再使用该 badge
 **解决**:将该 badge 改为透明背景和普通 muted 文本色
 **复现**:`rg "linear-gradient\\(135deg, rgba\\(124, 58, 237" styles.css`
+
+## 2026-07-02 21:14 — 自绘转写字号滑条无法拖动
+
+**症状**:右侧转写设置页的字号滑条视觉显示正常,但用户侧无法拖动
+**触发**:将原生 range 隐藏为自绘滑条后,透明输入层没有稳定接收拖拽路径
+**根因**:视觉层和交互层分离后,只依赖单一事件路径容易在 Electron/macOS 鼠标事件下丢失拖动
+**解决**:`src/views/TranscriptionView.ts` 使用透明原生 range 接收交互,外层同时监听 PointerEvent 和 MouseEvent 兜底,并用 ResizeObserver 保持进度与滑块对齐
+**复现**:打开转写设置页,拖动 `转写字号` 滑条,观察数值和滑块是否随鼠标变化

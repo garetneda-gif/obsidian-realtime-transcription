@@ -208,3 +208,9 @@
 - `src/views/TranscriptionView.ts`: 保存按钮改为 `setIcon(saveBtn, "save")`,与首页图标来源一致。
 - `src/views/TranscriptionView.ts`: 删除 `setPanelSettingsSaveIcon()` 手绘 SVG 方法。
 - `tests/clearEntriesState.test.ts`: 更新静态检查,锁定保存按钮使用系统图标且不保留自定义绘制方法。
+
+## 2026-07-02 21:14 — 面板滑条拖动和按钮反馈
+- `src/views/TranscriptionView.ts`: 面板字号滑条改为自绘轨道/进度/滑块 + 透明原生 range,并添加 PointerEvent、MouseEvent 和 ResizeObserver 同步逻辑。
+- `styles.css`: 转写设置顶部图标按钮新增 hover/active 反馈;滑条延长为整列宽度,橙色进度与圆形滑块对齐。
+- `styles.css`: 摘要块无序列表上方、右侧和项目间距进一步收紧。
+- `tests/clearEntriesState.test.ts`: 增加面板滑条结构、拖动事件、按钮反馈和摘要列表间距的静态回归检查。

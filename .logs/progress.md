@@ -247,3 +247,9 @@
 - 确认首页按钮使用 Obsidian `setIcon(...)` 系统图标,设置页返回按钮已是 `arrow-left`。
 - 将设置页保存按钮从手绘 SVG 改回系统 `save` 图标,删除自定义绘制方法,保持与首页图标体系一致。
 - 验证: `npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`,`node --experimental-strip-types --test tests/*.test.ts`,`git diff --check`,`npm run build` 通过;已同步并重启 Obsidian 截图确认。
+
+## 2026-07-02 21:14 — 修复转写设置滑条和顶部按钮反馈
+- 用户反馈转写字号滑条无法拖动,设置页返回/保存 SVG 没有点击反馈。
+- 自绘滑条保留设计图视觉,透明原生 range 接收拖拽,并补 PointerEvent 与 MouseEvent 双通道兜底。
+- 顶部返回/保存按钮增加 hover/active 背景与按压缩放反馈;摘要无序列表右侧和上方间距同步压紧。
+- 验证: `npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`,`node --experimental-strip-types --test tests/*.test.ts`,`git diff --check`,`npm run build` 通过;已同步并重启 Obsidian,实机拖动滑条 15px→24px→15px 成功。
