@@ -25,10 +25,12 @@ export class TranslationService {
     return this.agentBackend.isConfigured() || this.hasApiConfig();
   }
 
-  shouldTranslate(language: string, targetLanguage: "zh" | "en"): boolean {
+  shouldTranslate(language: string, targetLanguage: "zh" | "en" | "custom"): boolean {
     if (!this.canTranslate()) return false;
+    if (language === "summary" || language === "meta-summary") return false;
+    if (targetLanguage === "custom") return true;
     const normalized = language === "yue" ? "zh" : language;
-    return normalized !== targetLanguage && language !== "summary" && language !== "meta-summary";
+    return normalized !== targetLanguage;
   }
 
   async formalize(text: string, outputLanguage: string): Promise<string> {

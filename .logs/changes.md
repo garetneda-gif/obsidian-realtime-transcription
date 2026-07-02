@@ -188,3 +188,18 @@
 - `src/i18n.ts`: 将 AI 后端设置文案改为 AI 调用方式,下拉选项明确为 API、Claude Code CLI、Codex CLI、OpenCode CLI。
 ## 2026-07-02 12:59 — Shimmer 仅作用于 loading 文本
 - `styles.css`: 移除翻译中/润色中 loading 的整行遮罩伪元素,改为 `background-clip: text` 文字高光。
+
+## 2026-07-02 16:22 — 修复本地 CLI 调用并补反馈入口
+- `src/services/AgentBackendService.ts`: 增加已知 CLI provider 路径兼容判断,避免 Codex provider 继续执行 Claude 路径;Codex 仍过滤 `--agent`、`--ask-for-approval`、`--sandbox`。
+- `src/main.ts`,`src/settings.ts`: 加载旧配置和切换 AI provider 时自动检测/修正 CLI 路径;新增测试连接复用逻辑。
+- `src/settings.ts`,`src/i18n.ts`: 设置页新增 `反馈与建议` 项,提供 Bug 反馈和功能建议两个 GitHub issue 入口。
+- `styles.css`: 面板设置 select 改自绘箭头,`background-position: right 16px center` 并 `padding-right: 44px`。
+- `tests/aiBackendConnection.test.ts`,`tests/clearEntriesState.test.ts`: 增加 CLI 路径错配、反馈入口、下拉箭头样式的静态回归检查。
+
+## 2026-07-02 18:50 — 摘要块和面板设置视觉统一
+- `src/views/TranscriptionView.ts`,`styles.css`: 摘要/综合摘要改为透明左线块,头部加入复制、重新生成、折叠操作按钮,移除旧卡片渐变感。
+- `styles.css`: 摘要标题支持窄侧栏省略,避免挤压右侧复制/重生成/折叠按钮。
+- `src/main.ts`,`src/types.ts`: 摘要条目保存 `summarySourceText`,支持按原始文本重新生成摘要。
+- `src/i18n.ts`: 转写字号说明改为同时覆盖转写和摘要正文,并补摘要操作按钮文案。
+- `styles.css`: 进一步缩小转写设置页工具栏、标题、说明、select/input、反馈链接和 toggle 尺寸。
+- `tests/clearEntriesState.test.ts`: 增加摘要块、重新生成、紧凑 select 箭头和字号适用范围静态检查。

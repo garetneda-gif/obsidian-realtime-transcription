@@ -1,7 +1,7 @@
 # 实时语音转写 for Obsidian
 
 <p align="center">
-  <a href="README.md">中文</a> | <a href="README_EN.md">English</a>
+  <a href="https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README.md">中文</a> | <a href="https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README_EN.md">English</a>
 </p>
 
 <p align="center">

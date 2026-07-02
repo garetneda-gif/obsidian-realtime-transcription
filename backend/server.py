@@ -29,6 +29,7 @@ except ImportError:
 try:
     # websockets ≥14.0: 推荐使用 websockets.asyncio.server.serve
     # websockets <14.0: 使用 websockets.server.serve（已弃用但仍可用）
+    from websockets.exceptions import ConnectionClosed
     try:
         from websockets.asyncio.server import serve
     except ImportError:
@@ -244,7 +245,7 @@ class TranscriptionServer:
                     except json.JSONDecodeError:
                         pass
 
-        except websockets.exceptions.ConnectionClosed:
+        except ConnectionClosed:
             pass
         finally:
             self.clients.discard(websocket)

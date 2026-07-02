@@ -60,3 +60,35 @@
 **根因**:`toggleRecording()` 没有启动/停止互斥;`BackendManager.start()` 在复用可达后端前先清理孤儿进程,容易把刚启动或健康残留的后端终止
 **解决**:`src/main.ts` 增加 `recordingTransition`;`src/services/BackendManager.ts` 启动前先复用可达后端并在退出日志带上 signal
 **复现**:连续触发录制开关或保留 `backend.pid` 后重载插件再开始录制
+
+## 2026-07-02 16:22 — Codex CLI 模式仍报 API/unknown option 错误
+
+**症状**:Codex CLI 模式下摘要/翻译/润色提示 `401 Invalid authentication credentials` 或 `unknown option '--sandbox'`
+**触发**:设置页切到 Codex CLI 后保留旧 `aiBackend.cliPath=/Users/jikunren/.npm-global/bin/claude`,或额外参数含 Codex 不支持的 flag
+**根因**:命令构造在 resolver 找不到时仍回退使用旧显式路径;provider 切换也只在路径为空时自动检测
+**解决**:`src/services/AgentBackendService.ts` 增加 provider/path 兼容判断并过滤 Codex 不兼容参数;`src/main.ts` 和 `src/settings.ts` 在加载/切换时自动改到当前 provider 的 CLI
+**复现**:将 `aiBackend.provider=codex` 且 `aiBackend.cliPath` 指向 `claude`,点击测试连接或触发摘要即可复现
+
+## 2026-07-02 16:22 — CLI 摘要失败通知刷屏
+
+**症状**:CLI 模式摘要失败时连续弹出多条 `AI 摘要失败`
+**触发**:摘要请求失败后 `summaryBuffer` 未消耗,`maybeRunSummary()` 在 finally 中立即再次满足阈值
+**根因**:失败路径没有退避窗口,API 模式曾修过但 CLI 模式复用同一触发器后仍会连续重试
+**解决**:`src/main.ts` 增加 `summaryRetryAfter` 和 `metaSummaryRetryAfter`,失败后 60 秒内不再重复触发
+**复现**:配置不可用本地 CLI 并让转写缓冲超过摘要阈值
+
+## 2026-07-02 18:50 — 面板设置字号压缩后测试仍断言旧尺寸
+
+**症状**:`node --experimental-strip-types --test tests/*.test.ts` 中 `panel settings expose custom AI output language and wrapped select arrow` 失败
+**触发**:将面板 select padding 从旧尺寸压缩为 `padding: 0 34px 0 10px`
+**根因**:静态测试仍写死旧的 `padding: 0 40px 0 12px` 和 `right: 14px`
+**解决**:更新断言为新的紧凑尺寸,并补 `font-size: 13px` 检查
+**复现**:回退 `tests/clearEntriesState.test.ts` 中 select 尺寸断言后运行测试
+
+## 2026-07-02 18:50 — 旧综合摘要 badge 渐变残留
+
+**症状**:摘要框改为透明左线设计后,测试仍发现旧 `linear-gradient(135deg, rgba(124, 58, 237...` 字符串
+**触发**:全量测试校验摘要不再使用紫蓝卡片渐变
+**根因**:`.card-lang-badge.lang-meta-summary` 遗留旧渐变样式,虽然新摘要头部不再使用该 badge
+**解决**:将该 badge 改为透明背景和普通 muted 文本色
+**复现**:`rg "linear-gradient\\(135deg, rgba\\(124, 58, 237" styles.css`

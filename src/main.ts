@@ -8,10 +8,12 @@ import { AudioCapture } from "./services/AudioCapture";
 import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
-import { AgentBackendService } from "./services/AgentBackendService";
+import { AgentBackendService, isAiBackendCliPathCompatible, resolveAiBackendCliPath } from "./services/AgentBackendService";
+import { testOpenAiCompatibleConnection, type AiApiConnectionConfig } from "./services/AiConnectionTestService";
 import { TranscriptionSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud } from "./types";
 import type { AiOutputLanguage, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, TranscriptEntry, TranscriptionResult } from "./types";
+import type { AiBackendProvider } from "./types";
 import { CloudAuthService } from "./services/CloudAuthService";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
@@ -31,6 +33,8 @@ import {
 import { isStalePartialResult, trimCommittedPrefix } from "./utils/transcriptDedup";
 import { TitleInputModal } from "./views/TitleInputModal";
 import { t, setLocale } from "./i18n";
+
+const AI_SUMMARY_FAILURE_RETRY_MS = 60_000;
 
 interface PendingTranscript {
   id: string;
@@ -54,8 +58,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private translationService!: TranslationService;
   private summaryService!: SummaryService;
   private formalizeService!: FormalizeService;
+  private aiBackendTestInFlight: Promise<string> | null = null;
   private recording = false;
   private recordingTransition = false;
+  private connectionLossTimer: ReturnType<typeof setTimeout> | null = null;
   private entryCounter = 0;
   private pendingTranscript: PendingTranscript | null = null;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -63,8 +69,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private committedPartialTexts: string[] = [];
   private summaryBuffer = "";
   private summaryInFlight = false;
+  private summaryRetryAfter = 0;
   private metaSummaryTexts: string[] = [];
   private metaSummaryInFlight = false;
+  private metaSummaryRetryAfter = 0;
   private lastPartialText = "";
   private lastStablePartialText = "";
   private renderedPartialText = "";
@@ -127,6 +135,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     // WebSocket 结果回调
     this.wsClient.setOnResult((result) => this.handleTranscriptionResult(result));
     this.wsClient.setOnStatusChange((connected) => {
+      if (connected) {
+        this.clearConnectionLossTimer();
+      }
       const view = this.getView();
       if (view) {
         if (connected && this.recording) {
@@ -134,6 +145,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         } else {
           view.setConnectionStatus(connected);
         }
+      }
+      if (!connected && this.recording) {
+        this.scheduleConnectionLossGuard();
       }
     });
     this.wsClient.setOnReconnecting((attempt) => {
@@ -157,6 +171,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   async onunload(): Promise<void> {
     await this.flushPendingTranscript();
     this.clearFlushTimer();
+    this.clearConnectionLossTimer();
     if (this.saveEntriesTimer) {
       clearTimeout(this.saveEntriesTimer);
     }
@@ -198,9 +213,21 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (!["openai-compatible", "claude", "codex", "opencode"].includes(this.settings.aiBackend.provider)) {
       this.settings.aiBackend.provider = DEFAULT_SETTINGS.aiBackend.provider;
     }
-    if (!["auto", "zh", "en"].includes(this.settings.aiOutputLanguage)) {
+    if (this.settings.aiBackend.provider !== "openai-compatible") {
+      const detectedCliPath = resolveAiBackendCliPath(this.settings.aiBackend);
+      if (!isAiBackendCliPathCompatible(this.settings.aiBackend) && detectedCliPath) {
+        this.settings.aiBackend.cliPath = detectedCliPath;
+      } else if (!this.settings.aiBackend.cliPath.trim() && detectedCliPath) {
+        this.settings.aiBackend.cliPath = detectedCliPath;
+      }
+    }
+    if (!["auto", "zh", "en", "custom"].includes(this.settings.aiOutputLanguage)) {
       this.settings.aiOutputLanguage = DEFAULT_SETTINGS.aiOutputLanguage;
     }
+    if (typeof this.settings.customAiOutputLanguage !== "string") {
+      this.settings.customAiOutputLanguage = DEFAULT_SETTINGS.customAiOutputLanguage;
+    }
+    this.settings.customAiOutputLanguage = this.settings.customAiOutputLanguage.trim();
     this.settings.transcriptFontSize = clampFontSize(this.settings.transcriptFontSize);
     if (typeof this.settings.autoFormalize !== "boolean") {
       this.settings.autoFormalize = DEFAULT_SETTINGS.autoFormalize;
@@ -223,6 +250,23 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       view.setPanelSettings(this.getPanelSettingsValues());
       view.refreshLocale();
     }
+  }
+
+  async testAiBackendConnection(): Promise<string> {
+    if (this.aiBackendTestInFlight) return this.aiBackendTestInFlight;
+
+    this.aiBackendTestInFlight = this.runAiBackendConnectionTest()
+      .finally(() => {
+        this.aiBackendTestInFlight = null;
+      });
+    return this.aiBackendTestInFlight;
+  }
+
+  detectAiBackendCliPath(provider: AiBackendProvider = this.settings.aiBackend.provider): string {
+    return resolveAiBackendCliPath({
+      ...this.settings.aiBackend,
+      provider,
+    });
   }
 
   async activateView(): Promise<void> {
@@ -307,6 +351,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     this.pendingTranscript = null;
     this.clearFlushTimer();
+    this.clearConnectionLossTimer();
     this.lastPartialText = "";
     this.lastStablePartialText = "";
     this.renderedPartialText = "";
@@ -415,6 +460,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private async stopRecording(): Promise<void> {
+    this.clearConnectionLossTimer();
     this.audioCapture.stop();
     const fallbackPartial =
       this.lastStablePartialText.trim() ||
@@ -462,6 +508,32 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
 
     new Notice(t("notice.recordingStopped"));
+  }
+
+  private scheduleConnectionLossGuard(): void {
+    if (this.connectionLossTimer) return;
+    this.connectionLossTimer = setTimeout(() => {
+      this.connectionLossTimer = null;
+      if (!this.recording || this.getActiveASRClient().isConnected) return;
+      void this.stopAfterConnectionLoss();
+    }, 4000);
+  }
+
+  private clearConnectionLossTimer(): void {
+    if (!this.connectionLossTimer) return;
+    clearTimeout(this.connectionLossTimer);
+    this.connectionLossTimer = null;
+  }
+
+  private async stopAfterConnectionLoss(): Promise<void> {
+    if (!this.recording || this.recordingTransition) return;
+    this.recordingTransition = true;
+    try {
+      await this.stopRecording();
+      new Notice(t("notice.recordingConnectionLost"));
+    } finally {
+      this.recordingTransition = false;
+    }
   }
 
   private async handleTranscriptionResult(result: TranscriptionResult): Promise<void> {
@@ -753,7 +825,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         const translation = await this.translationService.translate(
           entry.result.text,
           entry.result.language,
-          outputLanguageName(targetLanguage),
+          this.outputLanguageName(),
         );
         entry.translation = translation;
         view.updateTranslation(entry.id, translation);
@@ -955,6 +1027,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.tencentClient = new TencentASRClient(this.settings.tencentASR);
     this.tencentClient.setOnResult((result) => this.handleTranscriptionResult(result));
     this.tencentClient.setOnStatusChange((connected) => {
+      if (connected) {
+        this.clearConnectionLossTimer();
+      }
       const v = this.getView();
       if (v) {
         if (connected && this.recording) {
@@ -962,6 +1037,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         } else {
           v.setConnectionStatus(connected);
         }
+      }
+      if (!connected && this.recording) {
+        this.scheduleConnectionLossGuard();
       }
     });
     this.tencentClient.setOnReconnecting((attempt) => {
@@ -1000,6 +1078,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.onExport = () => this.exportToNote();
     view.onCopyTranscripts = () => this.copyTranscriptsToClipboard();
     view.onSendToClaudian = () => this.sendToClaudian();
+    view.onCopyEntryText = (_entryId, text) => writeTextToClipboard(text);
+    view.onRegenerateSummary = (entryId, sourceText, kind) =>
+      this.regenerateSummaryEntry(entryId, sourceText, kind);
     view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
     view.onTranslate = (entryId, text, language) => this.translateEntry(entryId, text, language);
     view.onClearTranscripts = () => this.clearEntries();
@@ -1038,7 +1119,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       : trimmed;
 
     const threshold = Math.max(500, this.settings.summary.thresholdChars);
-    if (this.summaryBuffer.length >= threshold) {
+    if (this.summaryBuffer.length >= threshold && Date.now() >= this.summaryRetryAfter) {
       void this.maybeRunSummary(wallTime);
     }
   }
@@ -1047,6 +1128,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (!this.settings.summary.enabled) return;
     if (!this.summaryService.isConfigured()) return;
     if (this.summaryInFlight) return;
+    if (Date.now() < this.summaryRetryAfter) return;
 
     const threshold = Math.max(500, this.settings.summary.thresholdChars);
     if (this.summaryBuffer.trim().length < threshold) return;
@@ -1059,6 +1141,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     try {
       const summaryText = await this.summaryService.summarize(source, this.outputLanguageName());
       if (sessionVersion !== this.transcriptSessionVersion) return;
+      this.summaryRetryAfter = 0;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -1076,6 +1159,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         translation: null,
         formalText: null,
         wallTime,
+        summarySourceText: source,
       };
       view.addTranscript(entry);
       this.addEntry(entry);
@@ -1088,10 +1172,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`${t("notice.summaryFailed")}: ${detail}`);
       this.summaryBuffer = source;
+      this.summaryRetryAfter = Date.now() + AI_SUMMARY_FAILURE_RETRY_MS;
       return;
     } finally {
       this.summaryInFlight = false;
-      if (this.summaryBuffer.trim().length >= threshold) {
+      if (this.summaryBuffer.trim().length >= threshold && Date.now() >= this.summaryRetryAfter) {
         void this.maybeRunSummary(new Date());
       }
     }
@@ -1103,7 +1188,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     this.metaSummaryTexts.push(summaryText);
     const triggerCount = Math.max(2, this.settings.metaSummary.triggerCount);
-    if (this.metaSummaryTexts.length >= triggerCount) {
+    if (this.metaSummaryTexts.length >= triggerCount && Date.now() >= this.metaSummaryRetryAfter) {
       void this.maybeRunMetaSummary(wallTime);
     }
   }
@@ -1111,6 +1196,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private async maybeRunMetaSummary(wallTime: Date = new Date()): Promise<void> {
     if (this.metaSummaryInFlight) return;
     if (this.metaSummaryTexts.length < 2) return;
+    if (Date.now() < this.metaSummaryRetryAfter) return;
 
     const texts = [...this.metaSummaryTexts];
     const sessionVersion = this.transcriptSessionVersion;
@@ -1120,6 +1206,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     try {
       const metaText = await this.summaryService.metaSummarize(texts, this.outputLanguageName());
       if (sessionVersion !== this.transcriptSessionVersion) return;
+      this.metaSummaryRetryAfter = 0;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -1137,6 +1224,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         translation: null,
         formalText: null,
         wallTime,
+        summarySourceText: texts.join("\n\n"),
       };
       view.addTranscript(entry);
       this.addEntry(entry);
@@ -1146,10 +1234,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`${t("notice.metaSummaryFailed")}: ${detail}`);
       this.metaSummaryTexts.push(...texts);
+      this.metaSummaryRetryAfter = Date.now() + AI_SUMMARY_FAILURE_RETRY_MS;
     } finally {
       this.metaSummaryInFlight = false;
       const triggerCount = Math.max(2, this.settings.metaSummary.triggerCount);
-      if (this.metaSummaryTexts.length >= triggerCount) {
+      if (this.metaSummaryTexts.length >= triggerCount && Date.now() >= this.metaSummaryRetryAfter) {
         void this.maybeRunMetaSummary(new Date());
       }
     }
@@ -1195,6 +1284,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private getPanelSettingsValues(): PanelSettingsValues {
     return {
       aiOutputLanguage: this.settings.aiOutputLanguage,
+      customAiOutputLanguage: this.settings.customAiOutputLanguage ?? DEFAULT_SETTINGS.customAiOutputLanguage,
       transcriptFontSize: this.settings.transcriptFontSize,
       autoTranslate: this.settings.translation.enabled,
       autoFormalize: this.settings.autoFormalize,
@@ -1207,6 +1297,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.settings.aiOutputLanguage = isAiOutputLanguage(values.aiOutputLanguage)
       ? values.aiOutputLanguage
       : DEFAULT_SETTINGS.aiOutputLanguage;
+    this.settings.customAiOutputLanguage = sanitizeCustomOutputLanguage(values.customAiOutputLanguage);
     this.settings.transcriptFontSize = clampFontSize(values.transcriptFontSize);
     this.settings.translation.enabled = Boolean(values.autoTranslate);
     this.settings.autoFormalize = Boolean(values.autoFormalize);
@@ -1215,15 +1306,79 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     await this.saveSettings();
   }
 
-  private resolveAiOutputLanguageCode(): "zh" | "en" {
+  private resolveAiOutputLanguageCode(): "zh" | "en" | "custom" {
     if (this.settings.aiOutputLanguage === "zh" || this.settings.aiOutputLanguage === "en") {
       return this.settings.aiOutputLanguage;
     }
+    if (this.settings.aiOutputLanguage === "custom") {
+      const standardCode = standardLanguageCodeFromName(this.settings.customAiOutputLanguage);
+      if (standardCode) return standardCode;
+      return sanitizeCustomOutputLanguage(this.settings.customAiOutputLanguage) ? "custom" : this.interfaceLanguageCode();
+    }
+    return this.interfaceLanguageCode();
+  }
+
+  private interfaceLanguageCode(): "zh" | "en" {
     return this.settings.locale === "en" ? "en" : "zh";
   }
 
   private outputLanguageName(): string {
-    return outputLanguageName(this.resolveAiOutputLanguageCode());
+    if (this.settings.aiOutputLanguage === "custom") {
+      const customLanguage = sanitizeCustomOutputLanguage(this.settings.customAiOutputLanguage);
+      if (customLanguage) return customLanguage;
+    }
+    const languageCode = this.resolveAiOutputLanguageCode();
+    return outputLanguageName(languageCode === "custom" ? this.interfaceLanguageCode() : languageCode);
+  }
+
+  private async runAiBackendConnectionTest(): Promise<string> {
+    await this.saveSettings();
+    if (this.agentBackendService.isLocalEnabled()) {
+      return this.agentBackendService.testConnection();
+    }
+
+    const config = this.getApiConnectionTestConfig();
+    if (!config) {
+      throw new Error(t("settings.aiBackend.test.noApiConfig"));
+    }
+    return testOpenAiCompatibleConnection(config);
+  }
+
+  private getApiConnectionTestConfig(): AiApiConnectionConfig | null {
+    const candidates: AiApiConnectionConfig[] = [
+      { label: t("settings.translation.title"), ...this.settings.translation },
+      { label: t("settings.formalize.title"), ...this.settings.formalize },
+      { label: t("settings.summary.title"), ...this.settings.summary },
+    ];
+    return candidates.find((item) =>
+      Boolean(item.apiUrl?.trim() && item.apiKey?.trim() && item.model?.trim()),
+    ) ?? null;
+  }
+
+  private async regenerateSummaryEntry(
+    entryId: string,
+    sourceText: string,
+    kind: "summary" | "meta-summary",
+  ): Promise<string> {
+    if (!this.summaryService.isConfigured()) {
+      throw new Error(t("summary.noModel"));
+    }
+
+    const nextText = kind === "meta-summary"
+      ? await this.summaryService.metaSummarize(
+        sourceText.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean),
+        this.outputLanguageName(),
+      )
+      : await this.summaryService.summarize(sourceText, this.outputLanguageName());
+
+    const entry = this.transcriptEntries.find((item) => item.id === entryId);
+    if (entry) {
+      entry.result.text = nextText;
+      entry.wallTime = new Date();
+      this.debouncedSaveEntries();
+    }
+
+    return nextText;
   }
 
   private async copyTranscriptsToClipboard(): Promise<void> {
@@ -1475,7 +1630,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.clearFlushTimer();
     this.committedPartialTexts = [];
     this.summaryBuffer = "";
+    this.summaryRetryAfter = 0;
     this.metaSummaryTexts = [];
+    this.metaSummaryRetryAfter = 0;
     this.lastPartialText = "";
     this.lastStablePartialText = "";
     this.renderedPartialText = "";
@@ -1496,11 +1653,25 @@ function clampFontSize(value: unknown): number {
 }
 
 function isAiOutputLanguage(value: unknown): value is AiOutputLanguage {
-  return value === "auto" || value === "zh" || value === "en";
+  return value === "auto" || value === "zh" || value === "en" || value === "custom";
 }
 
 function outputLanguageName(language: "zh" | "en"): string {
   return language === "en" ? "英文" : "简体中文";
+}
+
+function sanitizeCustomOutputLanguage(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, 40);
+}
+
+function standardLanguageCodeFromName(language: unknown): "zh" | "en" | null {
+  if (typeof language !== "string") return null;
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) return null;
+  if (/(中文|汉语|漢語|普通话|普通話|简体|簡體|繁体|繁體|chinese|mandarin)/i.test(normalized)) return "zh";
+  if (/(英文|英语|英語|english)/i.test(normalized)) return "en";
+  return null;
 }
 
 async function writeTextToClipboard(text: string): Promise<void> {

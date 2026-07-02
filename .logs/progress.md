@@ -229,3 +229,16 @@
 ## 2026-07-02 12:59 — 调整 shimmer 高光范围
 - 用户要求 shimmer 只高亮字体,不要扫过整个区域。
 - 已将 loading 高光从区域伪元素改为文字背景裁剪; `npm run build` 和 `git diff --check` 通过。
+
+## 2026-07-02 16:22 — CLI 后端和反馈入口收尾
+- 用户反馈 Codex CLI 模式仍报错、下拉箭头贴边,并要求增加 Bug 反馈/功能建议入口。
+- 已修正 provider 与 `cliPath` 错配时继续调用旧 CLI 的路径,并把当前 vault 运行时配置从 `claude` 路径更新为 `codex` 路径。
+- 已在设置页新增反馈入口,面板下拉箭头改为自绘 SVG 并预留右侧间距。
+- 验证: `npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`,`node --experimental-strip-types --test tests/*.test.ts`,`npm run build`,`git diff --check`,`/Users/jikunren/.npm-global/bin/codex exec --model gpt-5.5 '只回复 OK'` 均通过;已同步并重启 Obsidian。
+
+## 2026-07-02 18:50 — 摘要框设计和转写设置字号收尾
+- 按设计图将摘要/综合摘要改为透明内容块、左侧强调线和头部操作区,提供复制、重新生成、折叠 SVG 按钮。
+- 转写字号设置文案明确同时作用于转写和摘要正文;右侧转写设置页标题、说明、下拉、输入框、toggle 和间距进一步缩小。
+- Codex CLI 输出改为读取 `--output-last-message` 文件,避免 banner/hook warning 混入翻译或摘要结果。
+- 子代理只读审查指出摘要标题窄侧栏可能挤压操作按钮,已补标题省略和操作区固定宽度。
+- 验证: `npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`,`node --experimental-strip-types --test tests/*.test.ts`,`git diff --check`,`npm run build`,`/opt/homebrew/bin/python3 -m py_compile backend/server.py` 均通过;已同步并重启 Obsidian 实机打开转写设置页。

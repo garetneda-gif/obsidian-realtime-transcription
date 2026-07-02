@@ -235,6 +235,8 @@ export class BackendManager {
       });
       this.process = null;
       this.lastLaunchSignature = null;
+    } else {
+      this.killOrphanedProcesses();
     }
     this.removePidFile();
   }
@@ -416,7 +418,23 @@ export class BackendManager {
       const timer = setTimeout(() => finish(false), timeoutMs);
       try {
         ws = new WebSocket(`ws://127.0.0.1:${port}`);
-        ws.onopen = () => finish(true);
+        ws.onopen = () => {
+          try {
+            ws?.send(JSON.stringify({ type: "ping" }));
+          } catch {
+            finish(false);
+          }
+        };
+        ws.onmessage = (event: MessageEvent) => {
+          if (typeof event.data !== "string") return;
+          try {
+            const data = JSON.parse(event.data);
+            finish(data.type === "pong");
+          } catch {
+            finish(false);
+          }
+        };
+        ws.onclose = () => finish(false);
         ws.onerror = () => finish(false);
       } catch {
         finish(false);

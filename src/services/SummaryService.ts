@@ -18,7 +18,6 @@ export class SummaryService {
   }
 
   isConfigured(): boolean {
-    if (!this.settings.enabled) return false;
     return this.agentBackend.isConfigured() || this.hasApiConfig();
   }
 

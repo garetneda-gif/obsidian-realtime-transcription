@@ -5,6 +5,7 @@ import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, Gpu
 import { DEFAULT_SETTINGS, isHostedCloud } from "./types";
 import { t, setLocale } from "./i18n";
 import { CloudAuthService } from "./services/CloudAuthService";
+import { getDefaultAiBackendModelOptions, isAiBackendCliPathCompatible } from "./services/AgentBackendService";
 
 type SettingsSection = "general" | "recognition" | "ai" | "output";
 
@@ -20,6 +21,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   private cleanupHeaderScroll: (() => void) | null = null;
   private pendingRechargeOrderId: string | null = null;
   private pendingRechargeStatus = "";
+  private aiBackendTestRunning = false;
 
   constructor(app: App, plugin: RealtimeTranscriptionPlugin) {
     super(app, plugin);
@@ -33,6 +35,10 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   display(): void {
     this.cleanupHeaderScroll?.();
     this.cleanupHeaderScroll = null;
+    this.plugin.settings.aiBackend = {
+      ...DEFAULT_SETTINGS.aiBackend,
+      ...this.plugin.settings.aiBackend,
+    };
 
     const { containerEl } = this;
     containerEl.empty();
@@ -53,6 +59,20 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             this.display();
           });
       });
+
+    new Setting(containerEl)
+      .setName(t("settings.feedback.name"))
+      .setDesc(t("settings.feedback.desc"))
+      .addButton((btn) =>
+        btn.setButtonText(t("settings.feedback.bug")).onClick(() => {
+          this.openExternalUrl("https://github.com/garetneda-gif/obsidian-realtime-transcription/issues/new?labels=bug&title=%5BBug%5D%20");
+        }),
+      )
+      .addButton((btn) =>
+        btn.setButtonText(t("settings.feedback.feature")).onClick(() => {
+          this.openExternalUrl("https://github.com/garetneda-gif/obsidian-realtime-transcription/issues/new?labels=enhancement&title=%5BFeature%5D%20");
+        }),
+      );
 
     // ── ASR 引擎选择 ──
     containerEl.createEl("h2", { text: t("settings.asr.title") });
@@ -456,6 +476,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     }
 
     containerEl.createEl("h2", { text: t("settings.aiBackend.title") });
+    const usingLocalAiBackend = this.plugin.settings.aiBackend.provider !== "openai-compatible";
 
     new Setting(containerEl)
       .setName(t("settings.aiBackend.provider.name"))
@@ -469,12 +490,23 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.aiBackend.provider)
           .onChange(async (value: AiBackendProvider) => {
             this.plugin.settings.aiBackend.provider = value;
+            if (value !== "openai-compatible") {
+              const detected = this.plugin.detectAiBackendCliPath(value);
+              const compatible = isAiBackendCliPathCompatible(this.plugin.settings.aiBackend);
+              if (!compatible && detected) {
+                this.plugin.settings.aiBackend.cliPath = detected;
+              } else if (!this.plugin.settings.aiBackend.cliPath.trim() && detected) {
+                this.plugin.settings.aiBackend.cliPath = detected;
+              } else if (!compatible) {
+                this.plugin.settings.aiBackend.cliPath = "";
+              }
+            }
             await this.plugin.saveSettings();
             this.display();
           });
       });
 
-    if (this.plugin.settings.aiBackend.provider !== "openai-compatible") {
+    if (usingLocalAiBackend) {
       new Setting(containerEl)
         .setName(t("settings.aiBackend.cliPath.name"))
         .setDesc(t("settings.aiBackend.cliPath.desc"))
@@ -486,20 +518,22 @@ export class TranscriptionSettingTab extends PluginSettingTab {
               this.plugin.settings.aiBackend.cliPath = value.trim();
               await this.plugin.saveSettings();
             }),
+        )
+        .addButton((btn) =>
+          btn.setButtonText(t("settings.aiBackend.cliPath.detect")).onClick(async () => {
+            const detected = this.plugin.detectAiBackendCliPath();
+            if (!detected) {
+              new Notice(t("settings.aiBackend.cliPath.notFound"));
+              return;
+            }
+            this.plugin.settings.aiBackend.cliPath = detected;
+            await this.plugin.saveSettings();
+            new Notice(`${t("settings.aiBackend.cliPath.detected")}: ${detected}`);
+            this.display();
+          }),
         );
 
-      new Setting(containerEl)
-        .setName(t("settings.aiBackend.model.name"))
-        .setDesc(t("settings.aiBackend.model.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder(t("settings.aiBackend.model.placeholder"))
-            .setValue(this.plugin.settings.aiBackend.model)
-            .onChange(async (value) => {
-              this.plugin.settings.aiBackend.model = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
+      this.renderAiBackendModelSetting(containerEl);
 
       new Setting(containerEl)
         .setName(t("settings.aiBackend.timeout.name"))
@@ -527,7 +561,35 @@ export class TranscriptionSettingTab extends PluginSettingTab {
               await this.plugin.saveSettings();
             }),
         );
+
+      new Setting(containerEl)
+        .setName(t("settings.aiBackend.localMode.name"))
+        .setDesc(t("settings.aiBackend.localMode.desc"));
     }
+
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.test.name"))
+      .setDesc(t("settings.aiBackend.test.desc"))
+      .addButton((btn) =>
+        btn
+          .setButtonText(t("settings.aiBackend.test.button"))
+          .onClick(async () => {
+            if (this.aiBackendTestRunning) return;
+            try {
+              this.aiBackendTestRunning = true;
+              btn.setDisabled(true);
+              btn.setButtonText(t("settings.aiBackend.test.testing"));
+              const result = await this.plugin.testAiBackendConnection();
+              new Notice(`${t("settings.aiBackend.test.success")}: ${result}`);
+            } catch (e) {
+              new Notice(`${t("settings.aiBackend.test.failed")}: ${this.errorMessage(e)}`);
+            } finally {
+              this.aiBackendTestRunning = false;
+              btn.setDisabled(false);
+              btn.setButtonText(t("settings.aiBackend.test.button"));
+            }
+          }),
+      );
 
     // ── 翻译设置 ──
     containerEl.createEl("h2", { text: t("settings.translation.title") });
@@ -544,88 +606,90 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName(t("settings.translation.apiUrl.name"))
-      .setDesc(t("settings.translation.apiUrl.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("https://api.openai.com/v1/chat/completions")
-          .setValue(this.plugin.settings.translation.apiUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.translation.apiUrl = value.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+    if (!usingLocalAiBackend) {
+      new Setting(containerEl)
+        .setName(t("settings.translation.apiUrl.name"))
+        .setDesc(t("settings.translation.apiUrl.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder("https://api.openai.com/v1/chat/completions")
+            .setValue(this.plugin.settings.translation.apiUrl)
+            .onChange(async (value) => {
+              this.plugin.settings.translation.apiUrl = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
 
-    new Setting(containerEl)
-      .setName(t("settings.translation.apiKey.name"))
-      .setDesc(t("settings.translation.apiKey.desc"))
-      .addText((text) => {
-        text
-          .setPlaceholder("sk-...")
-          .setValue(this.plugin.settings.translation.apiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.translation.apiKey = value;
-            await this.plugin.saveSettings();
-          });
-        text.inputEl.type = "password";
-      });
+      new Setting(containerEl)
+        .setName(t("settings.translation.apiKey.name"))
+        .setDesc(t("settings.translation.apiKey.desc"))
+        .addText((text) => {
+          text
+            .setPlaceholder("sk-...")
+            .setValue(this.plugin.settings.translation.apiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.translation.apiKey = value;
+              await this.plugin.saveSettings();
+            });
+          text.inputEl.type = "password";
+        });
 
-    new Setting(containerEl)
-      .setName(t("settings.translation.model.name"))
-      .setDesc(t("settings.translation.model.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("gpt-4o-mini")
-          .setValue(this.plugin.settings.translation.model)
-          .onChange(async (value) => {
-            this.plugin.settings.translation.model = value.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+      new Setting(containerEl)
+        .setName(t("settings.translation.model.name"))
+        .setDesc(t("settings.translation.model.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder("gpt-4o-mini")
+            .setValue(this.plugin.settings.translation.model)
+            .onChange(async (value) => {
+              this.plugin.settings.translation.model = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
 
-    // ── 润色设置 ──
-    containerEl.createEl("h2", { text: t("settings.formalize.title") });
+      // ── 润色设置 ──
+      containerEl.createEl("h2", { text: t("settings.formalize.title") });
 
-    new Setting(containerEl)
-      .setName(t("settings.formalize.apiUrl.name"))
-      .setDesc(t("settings.formalize.apiUrl.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("https://api.openai.com/v1/chat/completions")
-          .setValue(this.plugin.settings.formalize.apiUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.formalize.apiUrl = value.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+      new Setting(containerEl)
+        .setName(t("settings.formalize.apiUrl.name"))
+        .setDesc(t("settings.formalize.apiUrl.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder("https://api.openai.com/v1/chat/completions")
+            .setValue(this.plugin.settings.formalize.apiUrl)
+            .onChange(async (value) => {
+              this.plugin.settings.formalize.apiUrl = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
 
-    new Setting(containerEl)
-      .setName(t("settings.formalize.apiKey.name"))
-      .setDesc(t("settings.formalize.apiKey.desc"))
-      .addText((text) => {
-        text
-          .setPlaceholder("sk-...")
-          .setValue(this.plugin.settings.formalize.apiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.formalize.apiKey = value;
-            await this.plugin.saveSettings();
-          });
-        text.inputEl.type = "password";
-      });
+      new Setting(containerEl)
+        .setName(t("settings.formalize.apiKey.name"))
+        .setDesc(t("settings.formalize.apiKey.desc"))
+        .addText((text) => {
+          text
+            .setPlaceholder("sk-...")
+            .setValue(this.plugin.settings.formalize.apiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.formalize.apiKey = value;
+              await this.plugin.saveSettings();
+            });
+          text.inputEl.type = "password";
+        });
 
-    new Setting(containerEl)
-      .setName(t("settings.formalize.model.name"))
-      .setDesc(t("settings.formalize.model.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("gpt-4o-mini")
-          .setValue(this.plugin.settings.formalize.model)
-          .onChange(async (value) => {
-            this.plugin.settings.formalize.model = value.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+      new Setting(containerEl)
+        .setName(t("settings.formalize.model.name"))
+        .setDesc(t("settings.formalize.model.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder("gpt-4o-mini")
+            .setValue(this.plugin.settings.formalize.model)
+            .onChange(async (value) => {
+              this.plugin.settings.formalize.model = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+    }
 
     // ── AI 摘要设置 ──
     containerEl.createEl("h2", { text: t("settings.summary.title") });
@@ -642,45 +706,47 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName(t("settings.summary.apiUrl.name"))
-      .setDesc(t("settings.summary.apiUrl.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("https://api.openai.com/v1/chat/completions")
-          .setValue(this.plugin.settings.summary.apiUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.summary.apiUrl = value.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+    if (!usingLocalAiBackend) {
+      new Setting(containerEl)
+        .setName(t("settings.summary.apiUrl.name"))
+        .setDesc(t("settings.summary.apiUrl.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder("https://api.openai.com/v1/chat/completions")
+            .setValue(this.plugin.settings.summary.apiUrl)
+            .onChange(async (value) => {
+              this.plugin.settings.summary.apiUrl = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
 
-    new Setting(containerEl)
-      .setName(t("settings.summary.apiKey.name"))
-      .setDesc(t("settings.summary.apiKey.desc"))
-      .addText((text) => {
-        text
-          .setPlaceholder("sk-...")
-          .setValue(this.plugin.settings.summary.apiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.summary.apiKey = value;
-            await this.plugin.saveSettings();
-          });
-        text.inputEl.type = "password";
-      });
+      new Setting(containerEl)
+        .setName(t("settings.summary.apiKey.name"))
+        .setDesc(t("settings.summary.apiKey.desc"))
+        .addText((text) => {
+          text
+            .setPlaceholder("sk-...")
+            .setValue(this.plugin.settings.summary.apiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.summary.apiKey = value;
+              await this.plugin.saveSettings();
+            });
+          text.inputEl.type = "password";
+        });
 
-    new Setting(containerEl)
-      .setName(t("settings.summary.model.name"))
-      .setDesc(t("settings.summary.model.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("gpt-4o-mini")
-          .setValue(this.plugin.settings.summary.model)
-          .onChange(async (value) => {
-            this.plugin.settings.summary.model = value.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+      new Setting(containerEl)
+        .setName(t("settings.summary.model.name"))
+        .setDesc(t("settings.summary.model.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder("gpt-4o-mini")
+            .setValue(this.plugin.settings.summary.model)
+            .onChange(async (value) => {
+              this.plugin.settings.summary.model = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+    }
 
     new Setting(containerEl)
       .setName(t("settings.summary.threshold.name"))
@@ -1003,6 +1069,43 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     }
   }
 
+  private renderAiBackendModelSetting(containerEl: HTMLElement): void {
+    const provider = this.plugin.settings.aiBackend.provider;
+    const currentModel = this.plugin.settings.aiBackend.model.trim();
+    const options = uniqueStrings([
+      ...getDefaultAiBackendModelOptions(provider),
+      currentModel,
+    ]);
+
+    const setting = new Setting(containerEl)
+      .setName(t("settings.aiBackend.model.name"))
+      .setDesc(t("settings.aiBackend.model.desc"));
+
+    if (options.length > 1) {
+      setting.addDropdown((dropdown) => {
+        dropdown.addOption("", t("settings.aiBackend.model.default"));
+        for (const option of options.filter(Boolean)) {
+          dropdown.addOption(option, option);
+        }
+        dropdown.setValue(currentModel).onChange(async (value) => {
+          this.plugin.settings.aiBackend.model = value.trim();
+          await this.plugin.saveSettings();
+          this.display();
+        });
+      });
+    }
+
+    setting.addText((text) =>
+      text
+        .setPlaceholder(t("settings.aiBackend.model.placeholder"))
+        .setValue(this.plugin.settings.aiBackend.model)
+        .onChange(async (value) => {
+          this.plugin.settings.aiBackend.model = value.trim();
+          await this.plugin.saveSettings();
+        }),
+    );
+  }
+
   private createCloudAuthService(): CloudAuthService {
     const svc = new CloudAuthService(this.plugin.settings.cloudAuth);
     svc.setOnSettingsChanged((settings) => {
@@ -1023,6 +1126,10 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       default:
         return "";
     }
+  }
+
+  private openExternalUrl(url: string): void {
+    window.open(url, "_blank", "noopener");
   }
 
   private ensureCloudServerUrl(): void {
@@ -1059,4 +1166,16 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     this.plugin.settings.aggregation.maxChars = 260;
     this.plugin.settings.aggregation.realtimePreview = true;
   }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
 }

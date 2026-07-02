@@ -30,6 +30,7 @@ export class TranscriptionView extends ItemView {
   private entries: TranscriptEntry[] = [];
   private panelSettingsValues: PanelSettingsValues = {
     aiOutputLanguage: "auto",
+    customAiOutputLanguage: "",
     transcriptFontSize: 15,
     autoTranslate: false,
     autoFormalize: false,
@@ -43,6 +44,12 @@ export class TranscriptionView extends ItemView {
   onExport: (() => void) | null = null;
   onCopyTranscripts: (() => void | Promise<void>) | null = null;
   onSendToClaudian: (() => void | Promise<void>) | null = null;
+  onCopyEntryText: ((entryId: string, text: string) => void | Promise<void>) | null = null;
+  onRegenerateSummary: ((
+    entryId: string,
+    sourceText: string,
+    kind: "summary" | "meta-summary",
+  ) => Promise<string>) | null = null;
   onFormalize: ((entryId: string, text: string) => Promise<string>) | null = null;
   onTranslate: ((entryId: string, text: string, language: string) => Promise<string>) | null = null;
   onClearTranscripts: (() => void | Promise<void>) | null = null;
@@ -266,6 +273,7 @@ export class TranscriptionView extends ItemView {
       aiOutputLanguage: isAiOutputLanguage(values.aiOutputLanguage)
         ? values.aiOutputLanguage
         : "auto",
+      customAiOutputLanguage: sanitizeCustomOutputLanguage(values.customAiOutputLanguage),
       transcriptFontSize: clampPanelFontSize(values.transcriptFontSize),
       autoTranslate: Boolean(values.autoTranslate),
       autoFormalize: Boolean(values.autoFormalize),
@@ -310,7 +318,7 @@ export class TranscriptionView extends ItemView {
       cls: "panel-settings-icon-btn save-btn",
       attr: { type: "button", "aria-label": t("panelSettings.save"), title: t("panelSettings.save") },
     });
-    setIcon(saveBtn, "save");
+    this.setPanelSettingsSaveIcon(saveBtn);
 
     const content = page.createDiv("panel-settings-content");
 
@@ -345,17 +353,32 @@ export class TranscriptionView extends ItemView {
       t("panelSettings.outputLanguage.name"),
       t("panelSettings.outputLanguage.desc"),
     );
-    const languageSelect = languageRow.createEl("select", {
-      cls: "panel-settings-select",
-    }) as HTMLSelectElement;
+    const languageSelect = this.createPanelSelect(languageRow);
     this.appendLanguageOption(languageSelect, "auto", t("panelSettings.outputLanguage.auto"));
     this.appendLanguageOption(languageSelect, "zh", t("panelSettings.outputLanguage.zh"));
     this.appendLanguageOption(languageSelect, "en", t("panelSettings.outputLanguage.en"));
+    this.appendLanguageOption(languageSelect, "custom", t("panelSettings.outputLanguage.custom"));
     languageSelect.value = draft.aiOutputLanguage;
+    const customLanguageInput = languageRow.createEl("input", {
+      cls: "panel-settings-text-input",
+      attr: {
+        type: "text",
+        placeholder: t("panelSettings.outputLanguage.customPlaceholder"),
+      },
+    }) as HTMLInputElement;
+    customLanguageInput.value = draft.customAiOutputLanguage;
+    const updateCustomLanguageVisibility = () => {
+      customLanguageInput.style.display = draft.aiOutputLanguage === "custom" ? "" : "none";
+    };
+    updateCustomLanguageVisibility();
     languageSelect.addEventListener("change", () => {
       draft.aiOutputLanguage = isAiOutputLanguage(languageSelect.value)
         ? languageSelect.value
         : "auto";
+      updateCustomLanguageVisibility();
+    });
+    customLanguageInput.addEventListener("input", () => {
+      draft.customAiOutputLanguage = sanitizeCustomOutputLanguage(customLanguageInput.value);
     });
 
     this.createPanelToggleRow(
@@ -383,9 +406,7 @@ export class TranscriptionView extends ItemView {
       t("panelSettings.copyContent.name"),
       t("panelSettings.copyContent.desc"),
     );
-    const copySelect = copyRow.createEl("select", {
-      cls: "panel-settings-select",
-    }) as HTMLSelectElement;
+    const copySelect = this.createPanelSelect(copyRow);
     this.appendPanelOption(copySelect, "full", t("settings.copy.content.full"));
     this.appendPanelOption(copySelect, "summaryOnly", t("settings.copy.content.summaryOnly"));
     copySelect.value = draft.copyContentMode;
@@ -398,14 +419,30 @@ export class TranscriptionView extends ItemView {
       t("panelSettings.exportMode.name"),
       t("panelSettings.exportMode.desc"),
     );
-    const exportSelect = exportRow.createEl("select", {
-      cls: "panel-settings-select",
-    }) as HTMLSelectElement;
+    const exportSelect = this.createPanelSelect(exportRow);
     this.appendPanelOption(exportSelect, "full", t("settings.export.mode.full"));
     this.appendPanelOption(exportSelect, "summaryOnly", t("settings.export.mode.summaryOnly"));
     exportSelect.value = draft.exportMode;
     exportSelect.addEventListener("change", () => {
       draft.exportMode = exportSelect.value === "summaryOnly" ? "summaryOnly" : "full";
+    });
+
+    const feedbackRow = content.createDiv("panel-settings-feedback-row");
+    const bugLink = feedbackRow.createEl("button", {
+      cls: "panel-settings-feedback-link",
+      attr: { type: "button" },
+      text: t("settings.feedback.bug"),
+    });
+    bugLink.addEventListener("click", () => {
+      this.openExternalUrl("https://github.com/garetneda-gif/obsidian-realtime-transcription/issues/new?labels=bug&title=%5BBug%5D%20");
+    });
+    const featureLink = feedbackRow.createEl("button", {
+      cls: "panel-settings-feedback-link",
+      attr: { type: "button" },
+      text: t("settings.feedback.feature"),
+    });
+    featureLink.addEventListener("click", () => {
+      this.openExternalUrl("https://github.com/garetneda-gif/obsidian-realtime-transcription/issues/new?labels=enhancement&title=%5BFeature%5D%20");
     });
 
     saveBtn.addEventListener("click", () => {
@@ -424,6 +461,61 @@ export class TranscriptionView extends ItemView {
     text.createEl("div", { cls: "panel-settings-row-name", text: name });
     text.createEl("div", { cls: "panel-settings-row-desc", text: desc });
     return row;
+  }
+
+  private createPanelSelect(container: HTMLElement): HTMLSelectElement {
+    const wrap = container.createDiv("panel-settings-select-wrap");
+    const select = wrap.createEl("select", {
+      cls: "panel-settings-select",
+    }) as HTMLSelectElement;
+    const arrow = wrap.createSpan({
+      cls: "panel-settings-select-arrow",
+      attr: { "aria-hidden": "true" },
+    });
+    setIcon(arrow, "chevron-down");
+    return select;
+  }
+
+  private setPanelSettingsSaveIcon(button: HTMLElement): void {
+    button.empty();
+    const svg = button.createSvg("svg", {
+      attr: {
+        viewBox: "0 0 24 24",
+        fill: "none",
+        "aria-hidden": "true",
+      },
+    });
+    svg.createSvg("path", {
+      attr: {
+        d: "M6 4h10.2L20 7.8V20H6V4Z",
+        stroke: "currentColor",
+        "stroke-width": "1.55",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      },
+    });
+    svg.createSvg("path", {
+      attr: {
+        d: "M9 4v5h7V4",
+        stroke: "currentColor",
+        "stroke-width": "1.55",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      },
+    });
+    svg.createSvg("path", {
+      attr: {
+        d: "M9 20v-6h7v6",
+        stroke: "currentColor",
+        "stroke-width": "1.55",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      },
+    });
+  }
+
+  private openExternalUrl(url: string): void {
+    window.open(url, "_blank", "noopener");
   }
 
   private createPanelToggleRow(
@@ -536,13 +628,15 @@ export class TranscriptionView extends ItemView {
     this.streamingCard.removeClass("streaming");
     if (entry.result.language === "summary") {
       this.streamingCard.addClass("summary-card");
-      const title = this.streamingCard.querySelector(".summary-title");
+      const title = this.streamingCard.querySelector(".summary-title-row");
       if (!title) {
-        this.streamingCard.createDiv("summary-title").setText(t("view.aiSummary"));
+        const header = this.streamingCard.querySelector(".card-header");
+        if (header) header.remove();
+        this.appendSummaryHeader(this.streamingCard, entry, "summary");
       }
     } else {
       this.streamingCard.removeClass("summary-card");
-      const title = this.streamingCard.querySelector(".summary-title");
+      const title = this.streamingCard.querySelector(".summary-title-row");
       if (title) title.remove();
     }
 
@@ -559,6 +653,7 @@ export class TranscriptionView extends ItemView {
     if (this.streamingOriginalEl) {
       const isSummaryEntry = entry.result.language === "summary";
       if (isSummaryEntry) {
+        this.streamingOriginalEl.addClass("summary-body");
         this.streamingOriginalEl.empty();
         void MarkdownRenderer.render(this.app, entry.result.text, this.streamingOriginalEl, "", this);
       } else {
@@ -698,30 +793,20 @@ export class TranscriptionView extends ItemView {
       card.addClass("meta-summary-card");
     }
 
-    // 卡片头部：时间 + 语言
-    const cardHeader = card.createDiv("card-header");
-    const timeEl = cardHeader.createEl("span", { cls: "card-timestamp" });
-    timeEl.setText(this.formatWallTime(entry.wallTime));
+    if (isSummary || isMetaSummary) {
+      this.appendSummaryHeader(card as HTMLElement, entry, isMetaSummary ? "meta-summary" : "summary");
+    } else {
+      const cardHeader = card.createDiv("card-header");
+      const timeEl = cardHeader.createEl("span", { cls: "card-timestamp" });
+      timeEl.setText(this.formatWallTime(entry.wallTime));
 
-    const langBadge = cardHeader.createEl("span", { cls: "card-lang-badge" });
-    this.updateLanguageBadge(langBadge, entry.result.language, entry.result.text);
-
-    // 摘要/二次摘要标题
-    if (isMetaSummary) {
-      const titleRow = card.createDiv("summary-title-row");
-      const iconEl = titleRow.createDiv("summary-title-icon meta-summary-title-icon");
-      setIcon(iconEl, "layers");
-      titleRow.createEl("span", { cls: "summary-title meta-summary-title", text: t("view.aiMetaSummary") });
-    } else if (isSummary) {
-      const titleRow = card.createDiv("summary-title-row");
-      const iconEl = titleRow.createDiv("summary-title-icon");
-      setIcon(iconEl, "sparkles");
-      titleRow.createEl("span", { cls: "summary-title", text: t("view.aiSummary") });
+      const langBadge = cardHeader.createEl("span", { cls: "card-lang-badge" });
+      this.updateLanguageBadge(langBadge, entry.result.language, entry.result.text);
     }
 
-    // 原文
     const originalEl = card.createDiv("card-original");
     if (isSummary || isMetaSummary) {
+      originalEl.addClass("summary-body");
       void MarkdownRenderer.render(this.app, entry.result.text, originalEl, "", this);
     } else {
       originalEl.setText(entry.formalText ?? entry.result.text);
@@ -743,6 +828,115 @@ export class TranscriptionView extends ItemView {
       loadingEl.setText(t("view.translating"));
       loadingEl.setAttr("data-loading-text", t("view.translating"));
     }
+  }
+
+  private appendSummaryHeader(
+    card: HTMLElement,
+    entry: TranscriptEntry,
+    kind: "summary" | "meta-summary",
+  ): void {
+    const titleRow = card.createDiv("summary-title-row");
+    const titleMain = titleRow.createDiv("summary-title-main");
+    const iconEl = titleMain.createDiv(`summary-title-icon${kind === "meta-summary" ? " meta-summary-title-icon" : ""}`);
+    setIcon(iconEl, kind === "meta-summary" ? "layers" : "sparkles");
+    titleMain.createEl("span", {
+      cls: `summary-title${kind === "meta-summary" ? " meta-summary-title" : ""}`,
+      text: kind === "meta-summary" ? t("view.aiMetaSummary") : t("view.aiSummary"),
+    });
+
+    const actions = titleRow.createDiv("summary-title-actions");
+    const copyBtn = this.createSummaryActionButton(actions, "copy", t("view.copySummary"));
+    copyBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void this.handleSummaryCopy(entry, copyBtn);
+    });
+
+    const refreshBtn = this.createSummaryActionButton(actions, "refresh-cw", t("view.regenerateSummary"));
+    if (!entry.summarySourceText) {
+      refreshBtn.disabled = true;
+    }
+    refreshBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!entry.summarySourceText || refreshBtn.classList.contains("loading")) return;
+      void this.handleSummaryRegenerate(entry, kind, refreshBtn, card);
+    });
+
+    const collapseBtn = this.createSummaryActionButton(actions, "chevron-up", t("view.collapseSummary"));
+    collapseBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const collapsed = card.hasClass("is-summary-collapsed");
+      if (collapsed) {
+        card.removeClass("is-summary-collapsed");
+        this.setSummaryActionButton(collapseBtn, "chevron-up", t("view.collapseSummary"));
+      } else {
+        card.addClass("is-summary-collapsed");
+        this.setSummaryActionButton(collapseBtn, "chevron-down", t("view.expandSummary"));
+      }
+    });
+  }
+
+  private createSummaryActionButton(container: HTMLElement, icon: string, label: string): HTMLButtonElement {
+    const button = container.createEl("button", {
+      cls: "summary-action-btn",
+      attr: { type: "button" },
+    });
+    this.setSummaryActionButton(button, icon, label);
+    return button;
+  }
+
+  private setSummaryActionButton(button: HTMLElement, icon: string, label: string): void {
+    button.empty();
+    button.setAttr("aria-label", label);
+    button.setAttr("title", label);
+    setIcon(button, icon);
+  }
+
+  private async handleSummaryCopy(entry: TranscriptEntry, button: HTMLButtonElement): Promise<void> {
+    try {
+      await Promise.resolve(this.onCopyEntryText?.(entry.id, entry.result.text));
+      this.showSummaryTransientSuccess(button, "copy", t("view.copySummary"));
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "unknown error";
+      new Notice(`${t("notice.copyFailed")}: ${detail}`);
+    }
+  }
+
+  private async handleSummaryRegenerate(
+    entry: TranscriptEntry,
+    kind: "summary" | "meta-summary",
+    button: HTMLButtonElement,
+    card: HTMLElement,
+  ): Promise<void> {
+    if (!entry.summarySourceText || !this.onRegenerateSummary) return;
+
+    button.classList.add("loading");
+    this.setSummaryActionButton(button, "loader-circle", t("view.regeneratingSummary"));
+    const body = card.querySelector(".summary-body") as HTMLElement | null;
+    body?.addClass("summary-body-loading");
+    try {
+      const nextText = await this.onRegenerateSummary(entry.id, entry.summarySourceText, kind);
+      entry.result.text = nextText;
+      if (body) {
+        body.removeClass("summary-body-loading");
+        body.empty();
+        void MarkdownRenderer.render(this.app, nextText, body, "", this);
+      }
+      this.showSummaryTransientSuccess(button, "refresh-cw", t("view.regenerateSummary"));
+    } catch (err) {
+      body?.removeClass("summary-body-loading");
+      const detail = err instanceof Error ? err.message : "unknown error";
+      new Notice(`${t("notice.summaryFailed")}: ${detail}`);
+      this.setSummaryActionButton(button, "refresh-cw", t("view.regenerateSummary"));
+    } finally {
+      button.classList.remove("loading");
+    }
+  }
+
+  private showSummaryTransientSuccess(button: HTMLButtonElement, resetIcon: string, resetLabel: string): void {
+    this.setSummaryActionButton(button, "check", t("view.actionDone"));
+    window.setTimeout(() => {
+      this.setSummaryActionButton(button, resetIcon, resetLabel);
+    }, 2000);
   }
 
   private appendEntryActions(card: HTMLElement, entry: TranscriptEntry): void {
@@ -1039,5 +1233,10 @@ function clampPanelFontSize(value: unknown): number {
 }
 
 function isAiOutputLanguage(value: unknown): value is AiOutputLanguage {
-  return value === "auto" || value === "zh" || value === "en";
+  return value === "auto" || value === "zh" || value === "en" || value === "custom";
+}
+
+function sanitizeCustomOutputLanguage(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, 40);
 }

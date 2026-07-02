@@ -16,7 +16,7 @@ export type ExportMode = "summaryOnly" | "full";
 export type ExportTitleMode = "timestamp" | "ai" | "manual";
 export type CopyContentMode = "summaryOnly" | "full";
 export type CopyRangeMode = "all" | "latest";
-export type AiOutputLanguage = "auto" | "zh" | "en";
+export type AiOutputLanguage = "auto" | "zh" | "en" | "custom";
 export type AiBackendProvider = "openai-compatible" | "claude" | "codex" | "opencode";
 
 export interface AiBackendSettings {
@@ -108,6 +108,7 @@ export interface PluginSettings {
   copyContentMode: CopyContentMode;
   copyRangeMode: CopyRangeMode;
   aiOutputLanguage: AiOutputLanguage;
+  customAiOutputLanguage: string;
   transcriptFontSize: number;
   autoFormalize: boolean;
   claudianPrompt: string;
@@ -117,6 +118,7 @@ export interface PluginSettings {
 
 export interface PanelSettingsValues {
   aiOutputLanguage: AiOutputLanguage;
+  customAiOutputLanguage: string;
   transcriptFontSize: number;
   autoTranslate: boolean;
   autoFormalize: boolean;
@@ -183,6 +185,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   copyContentMode: "full",
   copyRangeMode: "all",
   aiOutputLanguage: "auto",
+  customAiOutputLanguage: "",
   transcriptFontSize: 15,
   autoFormalize: false,
   claudianPrompt: "请参考转写上下文： @ {{contextFile}} 并回答",
@@ -215,6 +218,7 @@ export interface TranscriptEntry {
   translation: string | null;
   formalText: string | null;
   wallTime: Date;
+  summarySourceText?: string;
 }
 
 /** JSON 持久化用序列化版本，wallTime 为 ISO 字符串 */
@@ -224,4 +228,5 @@ export interface SerializedTranscriptEntry {
   translation: string | null;
   formalText: string | null;
   wallTime: string;
+  summarySourceText?: string;
 }
