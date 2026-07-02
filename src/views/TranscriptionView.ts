@@ -318,7 +318,7 @@ export class TranscriptionView extends ItemView {
       cls: "panel-settings-icon-btn save-btn",
       attr: { type: "button", "aria-label": t("panelSettings.save"), title: t("panelSettings.save") },
     });
-    this.setPanelSettingsSaveIcon(saveBtn);
+    setIcon(saveBtn, "save");
 
     const content = page.createDiv("panel-settings-content");
 
@@ -474,44 +474,6 @@ export class TranscriptionView extends ItemView {
     });
     setIcon(arrow, "chevron-down");
     return select;
-  }
-
-  private setPanelSettingsSaveIcon(button: HTMLElement): void {
-    button.empty();
-    const svg = button.createSvg("svg", {
-      attr: {
-        viewBox: "0 0 24 24",
-        fill: "none",
-        "aria-hidden": "true",
-      },
-    });
-    svg.createSvg("path", {
-      attr: {
-        d: "M6 4h10.2L20 7.8V20H6V4Z",
-        stroke: "currentColor",
-        "stroke-width": "1.55",
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
-      },
-    });
-    svg.createSvg("path", {
-      attr: {
-        d: "M9 4v5h7V4",
-        stroke: "currentColor",
-        "stroke-width": "1.55",
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
-      },
-    });
-    svg.createSvg("path", {
-      attr: {
-        d: "M9 20v-6h7v6",
-        stroke: "currentColor",
-        "stroke-width": "1.55",
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
-      },
-    });
   }
 
   private openExternalUrl(url: string): void {

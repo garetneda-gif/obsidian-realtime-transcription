@@ -203,3 +203,8 @@
 - `src/i18n.ts`: 转写字号说明改为同时覆盖转写和摘要正文,并补摘要操作按钮文案。
 - `styles.css`: 进一步缩小转写设置页工具栏、标题、说明、select/input、反馈链接和 toggle 尺寸。
 - `tests/clearEntriesState.test.ts`: 增加摘要块、重新生成、紧凑 select 箭头和字号适用范围静态检查。
+
+## 2026-07-02 19:19 — 设置页保存图标改用系统图标
+- `src/views/TranscriptionView.ts`: 保存按钮改为 `setIcon(saveBtn, "save")`,与首页图标来源一致。
+- `src/views/TranscriptionView.ts`: 删除 `setPanelSettingsSaveIcon()` 手绘 SVG 方法。
+- `tests/clearEntriesState.test.ts`: 更新静态检查,锁定保存按钮使用系统图标且不保留自定义绘制方法。

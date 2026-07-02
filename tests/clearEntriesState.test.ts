@@ -113,10 +113,8 @@ test("panel settings expose custom AI output language and wrapped select arrow",
   assert.ok(viewSource.includes("panelSettings.outputLanguage.custom"));
   assert.ok(viewSource.includes("panelSettings.outputLanguage.customPlaceholder"));
   assert.ok(viewSource.includes("customLanguageInput.style.display"));
-  assert.ok(viewSource.includes("this.setPanelSettingsSaveIcon(saveBtn)"));
-  assert.ok(viewSource.includes('d: "M6 4h10.2L20 7.8V20H6V4Z"'));
-  assert.ok(viewSource.includes('d: "M9 4v5h7V4"'));
-  assert.ok(viewSource.includes('d: "M9 20v-6h7v6"'));
+  assert.ok(viewSource.includes('setIcon(saveBtn, "save")'));
+  assert.ok(!viewSource.includes("setPanelSettingsSaveIcon"));
   assert.ok(viewSource.includes("createPanelSelect(languageRow)"));
   assert.ok(viewSource.includes('setIcon(arrow, "chevron-down")'));
   assert.ok(i18nSource.includes('"panelSettings.outputLanguage.custom": "自定义"'));

@@ -242,3 +242,8 @@
 - Codex CLI 输出改为读取 `--output-last-message` 文件,避免 banner/hook warning 混入翻译或摘要结果。
 - 子代理只读审查指出摘要标题窄侧栏可能挤压操作按钮,已补标题省略和操作区固定宽度。
 - 验证: `npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`,`node --experimental-strip-types --test tests/*.test.ts`,`git diff --check`,`npm run build`,`/opt/homebrew/bin/python3 -m py_compile backend/server.py` 均通过;已同步并重启 Obsidian 实机打开转写设置页。
+
+## 2026-07-02 19:19 — 设置页保存图标改回系统图标
+- 确认首页按钮使用 Obsidian `setIcon(...)` 系统图标,设置页返回按钮已是 `arrow-left`。
+- 将设置页保存按钮从手绘 SVG 改回系统 `save` 图标,删除自定义绘制方法,保持与首页图标体系一致。
+- 验证: `npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`,`node --experimental-strip-types --test tests/*.test.ts`,`git diff --check`,`npm run build` 通过;已同步并重启 Obsidian 截图确认。
