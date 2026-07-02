@@ -2,12 +2,15 @@ import { requestUrl } from "obsidian";
 import { SummarySettings } from "../types";
 import { t } from "../i18n";
 import { extractTextFromResponse } from "../utils/llmResponse";
+import { AgentBackendService } from "./AgentBackendService";
 
 export class SummaryService {
   private settings: SummarySettings;
+  private agentBackend: AgentBackendService;
 
-  constructor(settings: SummarySettings) {
+  constructor(settings: SummarySettings, agentBackend: AgentBackendService) {
     this.settings = settings;
+    this.agentBackend = agentBackend;
   }
 
   updateSettings(settings: SummarySettings): void {
@@ -15,15 +18,16 @@ export class SummaryService {
   }
 
   isConfigured(): boolean {
-    return Boolean(
-      this.settings.enabled &&
-      this.settings.apiKey?.trim() &&
-      this.settings.apiUrl?.trim() &&
-      this.settings.model?.trim(),
-    );
+    if (!this.settings.enabled) return false;
+    return this.agentBackend.isConfigured() || this.hasApiConfig();
   }
 
   async summarize(text: string, outputLanguage: string): Promise<string> {
+    const systemPrompt =
+      `你是会议记录整理助手。请将输入内容总结为${outputLanguage}的 3-6 条要点。直接输出要点列表，不要加任何前言、标题或说明文字。简洁准确，不要编造信息。`;
+    const agentResult = await this.runAgentIfConfigured(systemPrompt, text, "摘要");
+    if (agentResult) return agentResult;
+
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
     const model = this.settings.model?.trim();
     const apiKey = this.settings.apiKey?.trim();
@@ -44,8 +48,7 @@ export class SummaryService {
         messages: [
           {
             role: "system",
-            content:
-              `你是会议记录整理助手。请将输入内容总结为${outputLanguage}的 3-6 条要点。直接输出要点列表，不要加任何前言、标题或说明文字。简洁准确，不要编造信息。`,
+            content: systemPrompt,
           },
           { role: "user", content: text },
         ],
@@ -62,6 +65,12 @@ export class SummaryService {
   }
 
   async metaSummarize(summaries: string[], outputLanguage: string): Promise<string> {
+    const combined = summaries.map((s, i) => `【摘要 ${i + 1}】\n${s}`).join("\n\n");
+    const systemPrompt =
+      `你是高级会议记录整理助手。下面是多段会议摘要，请将它们综合为一份结构化的总摘要。输出${outputLanguage}，按主题分组归纳，使用 Markdown 格式（二级标题 + 要点列表）。直接输出内容，不要加任何前言或说明。简洁准确，不要编造信息。`;
+    const agentResult = await this.runAgentIfConfigured(systemPrompt, combined, "二次摘要");
+    if (agentResult) return agentResult;
+
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
     const model = this.settings.model?.trim();
     const apiKey = this.settings.apiKey?.trim();
@@ -69,8 +78,6 @@ export class SummaryService {
     if (!apiKey) throw new Error(t("summary.noApiKey"));
     if (!apiUrl) throw new Error(t("summary.noApiUrl"));
     if (!model) throw new Error(t("summary.noModel"));
-
-    const combined = summaries.map((s, i) => `【摘要 ${i + 1}】\n${s}`).join("\n\n");
 
     const response = await requestUrl({
       url: apiUrl,
@@ -84,8 +91,7 @@ export class SummaryService {
         messages: [
           {
             role: "system",
-            content:
-              `你是高级会议记录整理助手。下面是多段会议摘要，请将它们综合为一份结构化的总摘要。输出${outputLanguage}，按主题分组归纳，使用 Markdown 格式（二级标题 + 要点列表）。直接输出内容，不要加任何前言或说明。简洁准确，不要编造信息。`,
+            content: systemPrompt,
           },
           { role: "user", content: combined },
         ],
@@ -102,6 +108,11 @@ export class SummaryService {
   }
 
   async generateTitle(contentSnippet: string, outputLanguage: string): Promise<string> {
+    const systemPrompt =
+      `你是标题生成助手。根据语音转写内容拟定一个${outputLanguage}简短标题，10字以内，不带标点符号。只输出标题本身。`;
+    const agentResult = await this.runAgentIfConfigured(systemPrompt, contentSnippet, "AI 命名");
+    if (agentResult) return cleanTitle(agentResult);
+
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
     const model = this.settings.model?.trim();
     const apiKey = this.settings.apiKey?.trim();
@@ -122,8 +133,7 @@ export class SummaryService {
         messages: [
           {
             role: "system",
-            content:
-              `你是标题生成助手。根据语音转写内容拟定一个${outputLanguage}简短标题，10字以内，不带标点符号。只输出标题本身。`,
+            content: systemPrompt,
           },
           { role: "user", content: contentSnippet },
         ],
@@ -136,8 +146,25 @@ export class SummaryService {
     if (!title) {
       throw new Error(getResponseErrorMessage(data, t("summary.titleUnsupportedFormat")));
     }
-    return title.replace(/[。！？.!?"'""'']/g, "").trim();
+    return cleanTitle(title);
   }
+
+  private hasApiConfig(): boolean {
+    return Boolean(
+      this.settings.apiKey?.trim() &&
+      this.settings.apiUrl?.trim() &&
+      this.settings.model?.trim(),
+    );
+  }
+
+  private async runAgentIfConfigured(systemPrompt: string, userText: string, label: string): Promise<string | null> {
+    if (!this.agentBackend.isConfigured()) return null;
+    return this.agentBackend.run({ systemPrompt, userText, label });
+  }
+}
+
+function cleanTitle(title: string): string {
+  return title.replace(/[。！？.!?"'""'']/g, "").trim();
 }
 
 function getResponseErrorMessage(data: unknown, fallback: string): string {

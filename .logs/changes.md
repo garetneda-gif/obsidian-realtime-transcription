@@ -180,3 +180,7 @@
 - `src/i18n.ts`: 将右侧面板标题从转写显示设置改为转写设置。
 - `src/views/TranscriptionView.ts`,`src/main.ts`,`src/types.ts`: 面板设置新增复制内容设置和导出内容设置,复用已有全局配置字段。
 - `tests/clearEntriesState.test.ts`: 增加面板复制/导出内容设置链路的静态回归检查。
+## 2026-07-02 12:49 — 新增本地 Agent AI 后端
+- 新增 `src/services/AgentBackendService.ts`，提供 Claude/Codex/Opencode CLI provider 抽象与超时控制。
+- `src/services/SummaryService.ts`、`src/services/TranslationService.ts`、`src/services/FormalizeService.ts` 统一优先按 AI 后端模式调用，本地模式不经过 Claudian 插件。
+- `src/settings.ts` 与 `src/types.ts` 新增 AI 后端设置，默认保留 OpenAI 兼容 API。

@@ -1,12 +1,15 @@
 import { requestUrl } from "obsidian";
 import { TranslationSettings } from "../types";
 import { extractTextFromResponse } from "../utils/llmResponse";
+import { AgentBackendService } from "./AgentBackendService";
 
 export class TranslationService {
   private settings: TranslationSettings;
+  private agentBackend: AgentBackendService;
 
-  constructor(settings: TranslationSettings) {
+  constructor(settings: TranslationSettings, agentBackend: AgentBackendService) {
     this.settings = settings;
+    this.agentBackend = agentBackend;
   }
 
   updateSettings(settings: TranslationSettings): void {
@@ -15,17 +18,11 @@ export class TranslationService {
 
   canTranslate(): boolean {
     if (!this.settings.enabled) return false;
-    if (!this.settings.apiKey) return false;
-    if (!this.settings.apiUrl?.trim()) return false;
-    if (!this.settings.model?.trim()) return false;
-    return true;
+    return this.agentBackend.isConfigured() || this.hasApiConfig();
   }
 
   isConfigured(): boolean {
-    if (!this.settings.apiKey) return false;
-    if (!this.settings.apiUrl?.trim()) return false;
-    if (!this.settings.model?.trim()) return false;
-    return true;
+    return this.agentBackend.isConfigured() || this.hasApiConfig();
   }
 
   shouldTranslate(language: string, targetLanguage: "zh" | "en"): boolean {
@@ -57,6 +54,10 @@ export class TranslationService {
   }
 
   private async callApi(systemPrompt: string, userText: string, label: string): Promise<string> {
+    if (this.agentBackend.isConfigured()) {
+      return this.agentBackend.run({ systemPrompt, userText, label });
+    }
+
     if (!this.settings.apiKey) throw new Error(`未配置${label} API Key`);
     const model = this.settings.model?.trim();
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
@@ -104,6 +105,13 @@ export class TranslationService {
       console.error(`${label}失败:`, err);
       throw err;
     }
+  }
+
+  private hasApiConfig(): boolean {
+    if (!this.settings.apiKey) return false;
+    if (!this.settings.apiUrl?.trim()) return false;
+    if (!this.settings.model?.trim()) return false;
+    return true;
   }
 }
 

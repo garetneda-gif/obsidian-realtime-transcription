@@ -17,6 +17,15 @@ export type ExportTitleMode = "timestamp" | "ai" | "manual";
 export type CopyContentMode = "summaryOnly" | "full";
 export type CopyRangeMode = "all" | "latest";
 export type AiOutputLanguage = "auto" | "zh" | "en";
+export type AiBackendProvider = "openai-compatible" | "claude" | "codex" | "opencode";
+
+export interface AiBackendSettings {
+  provider: AiBackendProvider;
+  cliPath: string;
+  model: string;
+  timeoutSec: number;
+  extraArgs: string;
+}
 
 export interface SummarySettings {
   enabled: boolean;
@@ -92,6 +101,7 @@ export interface PluginSettings {
   translation: TranslationSettings;
   formalize: FormalizeSettings;
   summary: SummarySettings;
+  aiBackend: AiBackendSettings;
   metaSummary: MetaSummarySettings;
   exportMode: ExportMode;
   exportTitleMode: ExportTitleMode;
@@ -156,6 +166,13 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     apiKey: "",
     model: "gpt-4o-mini",
     thresholdChars: 500,
+  },
+  aiBackend: {
+    provider: "openai-compatible",
+    cliPath: "",
+    model: "",
+    timeoutSec: 90,
+    extraArgs: "",
   },
   metaSummary: {
     enabled: false,

@@ -2,12 +2,15 @@ import { requestUrl } from "obsidian";
 import { FormalizeSettings } from "../types";
 import { t } from "../i18n";
 import { extractTextFromResponse } from "../utils/llmResponse";
+import { AgentBackendService } from "./AgentBackendService";
 
 export class FormalizeService {
   private settings: FormalizeSettings;
+  private agentBackend: AgentBackendService;
 
-  constructor(settings: FormalizeSettings) {
+  constructor(settings: FormalizeSettings, agentBackend: AgentBackendService) {
     this.settings = settings;
+    this.agentBackend = agentBackend;
   }
 
   updateSettings(settings: FormalizeSettings): void {
@@ -15,7 +18,7 @@ export class FormalizeService {
   }
 
   canFormalize(): boolean {
-    return Boolean(
+    return this.agentBackend.isConfigured() || Boolean(
       this.settings.apiKey?.trim() &&
       this.settings.apiUrl?.trim() &&
       this.settings.model?.trim(),
@@ -26,6 +29,16 @@ export class FormalizeService {
     const inputText = text?.trim();
     if (!inputText) {
       throw new Error(t("formalize.emptyText"));
+    }
+
+    const systemPrompt =
+      `你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为${outputLanguage}的通顺书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。`;
+    if (this.agentBackend.isConfigured()) {
+      return this.agentBackend.run({
+        systemPrompt,
+        userText: inputText,
+        label: "润色",
+      });
     }
 
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
@@ -51,8 +64,7 @@ export class FormalizeService {
           messages: [
             {
               role: "system",
-              content:
-                `你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为${outputLanguage}的通顺书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。`,
+              content: systemPrompt,
             },
             { role: "user", content: inputText },
           ],

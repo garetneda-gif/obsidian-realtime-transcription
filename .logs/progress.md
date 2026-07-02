@@ -222,3 +222,7 @@
 - 用户要求右侧页标题改为转写设置,并新增复制内容设置/导出内容设置。
 - 已复用全局 Obsidian 设置页已有 `copyContentMode` 和 `exportMode`,不新增重复字段。
 - 复制和导出按钮无需改调用逻辑,保存面板设置后直接使用同一配置。
+## 2026-07-02 12:49 — 本地 Agent AI 后端接入
+- 完成摘要、二次摘要、AI 命名、翻译、润色的统一本地 agent 后端入口。
+- 验证：`npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`、`npm run build`、`git diff --check` 通过。
+- 额外用临时 esbuild 包驱动 `AgentBackendService` 子进程路径，确认 provider 配置能返回文本。

@@ -8,6 +8,7 @@ import { AudioCapture } from "./services/AudioCapture";
 import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
+import { AgentBackendService } from "./services/AgentBackendService";
 import { TranscriptionSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud } from "./types";
 import type { AiOutputLanguage, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, TranscriptEntry, TranscriptionResult } from "./types";
@@ -49,6 +50,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private activeSignRequestId: string | null = null;
   private recordingStartTime: number = 0;
   private audioCapture!: AudioCapture;
+  private agentBackendService!: AgentBackendService;
   private translationService!: TranslationService;
   private summaryService!: SummaryService;
   private formalizeService!: FormalizeService;
@@ -112,9 +114,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.backendManager = new BackendManager(pluginDir, this.settings);
     this.wsClient = new WebSocketClient();
     this.audioCapture = new AudioCapture();
-    this.translationService = new TranslationService(this.settings.translation);
-    this.summaryService = new SummaryService(this.settings.summary);
-    this.formalizeService = new FormalizeService(this.settings.formalize);
+    this.agentBackendService = new AgentBackendService(this.settings.aiBackend, getVaultBasePath(this.app));
+    this.translationService = new TranslationService(this.settings.translation, this.agentBackendService);
+    this.summaryService = new SummaryService(this.settings.summary, this.agentBackendService);
+    this.formalizeService = new FormalizeService(this.settings.formalize, this.agentBackendService);
     this.cloudAuthService = new CloudAuthService(this.settings.cloudAuth);
     this.cloudAuthService.setOnSettingsChanged((newSettings) => {
       this.settings.cloudAuth = newSettings;
@@ -191,6 +194,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.settings.tencentASR = { ...DEFAULT_SETTINGS.tencentASR, ...this.settings.tencentASR };
     // 深合并 cloudAuth
     this.settings.cloudAuth = { ...DEFAULT_SETTINGS.cloudAuth, ...this.settings.cloudAuth };
+    this.settings.aiBackend = { ...DEFAULT_SETTINGS.aiBackend, ...this.settings.aiBackend };
+    if (!["openai-compatible", "claude", "codex", "opencode"].includes(this.settings.aiBackend.provider)) {
+      this.settings.aiBackend.provider = DEFAULT_SETTINGS.aiBackend.provider;
+    }
     if (!["auto", "zh", "en"].includes(this.settings.aiOutputLanguage)) {
       this.settings.aiOutputLanguage = DEFAULT_SETTINGS.aiOutputLanguage;
     }
@@ -204,6 +211,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     await this.saveData(this.settings);
     setLocale(this.settings.locale ?? "zh");
     this.backendManager?.updateSettings(this.settings);
+    this.agentBackendService?.updateSettings(this.settings.aiBackend, getVaultBasePath(this.app));
     this.translationService?.updateSettings(this.settings.translation);
     this.summaryService?.updateSettings(this.settings.summary);
     this.formalizeService?.updateSettings(this.settings.formalize);
@@ -1532,8 +1540,12 @@ type VaultAdapterWithBasePath = {
   getBasePath?: () => string;
 };
 
+function getVaultBasePath(app: import("obsidian").App): string {
+  return (app.vault.adapter as VaultAdapterWithBasePath).getBasePath?.() ?? process.cwd();
+}
+
 function getVaultAbsolutePath(app: import("obsidian").App, path: string): string | null {
-  const basePath = (app.vault.adapter as VaultAdapterWithBasePath).getBasePath?.();
+  const basePath = getVaultBasePath(app);
   if (!basePath) return null;
   return `${basePath.replace(/\/$/, "")}/${path}`;
 }

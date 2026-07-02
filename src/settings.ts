@@ -1,7 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
-import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider, CopyContentMode, CopyRangeMode } from "./types";
+import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider, CopyContentMode, CopyRangeMode, AiBackendProvider } from "./types";
 import { DEFAULT_SETTINGS, isHostedCloud } from "./types";
 import { t, setLocale } from "./i18n";
 import { CloudAuthService } from "./services/CloudAuthService";
@@ -455,6 +455,80 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     }
 
+    containerEl.createEl("h2", { text: t("settings.aiBackend.title") });
+
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.provider.name"))
+      .setDesc(t("settings.aiBackend.provider.desc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("openai-compatible", t("settings.aiBackend.provider.openai"))
+          .addOption("claude", t("settings.aiBackend.provider.claude"))
+          .addOption("codex", t("settings.aiBackend.provider.codex"))
+          .addOption("opencode", t("settings.aiBackend.provider.opencode"))
+          .setValue(this.plugin.settings.aiBackend.provider)
+          .onChange(async (value: AiBackendProvider) => {
+            this.plugin.settings.aiBackend.provider = value;
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    if (this.plugin.settings.aiBackend.provider !== "openai-compatible") {
+      new Setting(containerEl)
+        .setName(t("settings.aiBackend.cliPath.name"))
+        .setDesc(t("settings.aiBackend.cliPath.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder(this.defaultAiBackendCommand(this.plugin.settings.aiBackend.provider))
+            .setValue(this.plugin.settings.aiBackend.cliPath)
+            .onChange(async (value) => {
+              this.plugin.settings.aiBackend.cliPath = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName(t("settings.aiBackend.model.name"))
+        .setDesc(t("settings.aiBackend.model.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder(t("settings.aiBackend.model.placeholder"))
+            .setValue(this.plugin.settings.aiBackend.model)
+            .onChange(async (value) => {
+              this.plugin.settings.aiBackend.model = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName(t("settings.aiBackend.timeout.name"))
+        .setDesc(t("settings.aiBackend.timeout.desc"))
+        .addSlider((slider) =>
+          slider
+            .setLimits(10, 300, 5)
+            .setValue(this.plugin.settings.aiBackend.timeoutSec)
+            .setDynamicTooltip()
+            .onChange(async (value) => {
+              this.plugin.settings.aiBackend.timeoutSec = value;
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName(t("settings.aiBackend.extraArgs.name"))
+        .setDesc(t("settings.aiBackend.extraArgs.desc"))
+        .addText((text) =>
+          text
+            .setPlaceholder(t("settings.aiBackend.extraArgs.placeholder"))
+            .setValue(this.plugin.settings.aiBackend.extraArgs)
+            .onChange(async (value) => {
+              this.plugin.settings.aiBackend.extraArgs = value.trim();
+              await this.plugin.saveSettings();
+            }),
+        );
+    }
+
     // ── 翻译设置 ──
     containerEl.createEl("h2", { text: t("settings.translation.title") });
 
@@ -893,6 +967,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       [t("settings.model.title"), "recognition"],
       [t("settings.tencent.title"), "recognition"],
       [t("settings.cloud.title"), "recognition"],
+      [t("settings.aiBackend.title"), "ai"],
       [t("settings.translation.title"), "ai"],
       [t("settings.formalize.title"), "ai"],
       [t("settings.summary.title"), "ai"],
@@ -934,6 +1009,20 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       this.plugin.settings.cloudAuth = { ...settings };
     });
     return svc;
+  }
+
+  private defaultAiBackendCommand(provider: AiBackendProvider): string {
+    switch (provider) {
+      case "claude":
+        return "claude";
+      case "codex":
+        return "codex";
+      case "opencode":
+        return "opencode";
+      case "openai-compatible":
+      default:
+        return "";
+    }
   }
 
   private ensureCloudServerUrl(): void {
