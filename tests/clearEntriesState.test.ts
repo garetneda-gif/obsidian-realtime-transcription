@@ -11,6 +11,7 @@ const backendSource = readFileSync(
   new URL("../src/services/BackendManager.ts", import.meta.url),
   "utf8",
 );
+const i18nSource = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
 
 test("clearEntries resets transient transcript and summary state", () => {
   assert.match(source, /private async clearEntries\(\): Promise<void> \{\s+this\.resetTransientTranscriptState\(\);/);
@@ -44,6 +45,7 @@ test("summary queues are checked again after stale in-flight requests finish", (
 test("normalizeLanguage prefers transcript text before recognition mode fallback", () => {
   const body = extractMethodBody("normalizeLanguage");
   assert.ok(body.includes("const latinWordCount"));
+  assert.ok(body.includes('return "hybrid";'));
   assert.ok(
     body.indexOf('if (hanCount === 0 && latinCount >= 3) return "en";') <
       body.indexOf('if (mode === "zh") return "zh";'),
@@ -53,6 +55,8 @@ test("normalizeLanguage prefers transcript text before recognition mode fallback
 test("transcription view infers display language for badges and manual translation", () => {
   const body = extractMethodBody("inferDisplayLanguage", viewSource);
   assert.ok(body.includes("const latinWordCount"));
+  assert.ok(body.includes('return "hybrid";'));
+  assert.ok(i18nSource.includes('"lang.hybrid": "混合"'));
   assert.ok(body.includes('if (hanCount === 0 && latinCount >= 3) return "en";'));
   assert.match(
     viewSource,

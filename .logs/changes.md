@@ -166,3 +166,8 @@
 ## 2026-07-02 11:32 — 重新翻译时覆盖旧译文
 - `src/views/TranscriptionView.ts`: 手动翻译再次触发时先移除旧译文并清空当前条目译文状态,加载占位直接顶替旧译文。
 - `tests/clearEntriesState.test.ts`: 增加重新翻译先清旧译文再插入 loading 的静态回归检查。
+
+## 2026-07-02 11:38 — 混合语言标签
+- `src/main.ts`,`src/views/TranscriptionView.ts`: 中英混合文本识别为 `hybrid`,历史卡片和新转写统一显示混合标签。
+- `src/i18n.ts`,`styles.css`: 新增 `混合/Hybrid` 标签文案和样式。
+- `src/services/TranslationService.ts`: 翻译提示词将 `hybrid` 显示为中英混合。

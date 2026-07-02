@@ -47,7 +47,8 @@ export class TranslationService {
     const langName =
       fromLang === "en" ? "英文" :
       fromLang === "ja" ? "日文" :
-      fromLang === "ko" ? "韩文" : fromLang;
+      fromLang === "ko" ? "韩文" :
+      fromLang === "hybrid" ? "中英混合" : fromLang;
     return this.callApi(
       `你是一个专业翻译助手。请将以下${langName}文本翻译为${outputLanguage}。只输出翻译结果，不要解释。`,
       text,

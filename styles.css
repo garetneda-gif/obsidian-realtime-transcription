@@ -591,6 +591,11 @@
   color: #f39c12;
 }
 
+.card-lang-badge.lang-hybrid {
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f9f8f;
+}
+
 .card-lang-badge.lang-summary {
   background: rgba(243, 156, 18, 0.18);
   color: #b86b00;

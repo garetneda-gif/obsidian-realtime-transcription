@@ -806,6 +806,9 @@ export class TranscriptionView extends ItemView {
 
     if (kanaCount > 0) return "ja";
     if (hangulCount > 0) return "ko";
+    if (hanCount >= 2 && latinWordCount >= 2 && latinCount >= 6) {
+      return "hybrid";
+    }
 
     if (latinWordCount >= 3 && latinCount >= Math.max(8, hanCount * 2)) {
       return "en";
