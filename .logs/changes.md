@@ -184,3 +184,5 @@
 - 新增 `src/services/AgentBackendService.ts`，提供 Claude/Codex/Opencode CLI provider 抽象与超时控制。
 - `src/services/SummaryService.ts`、`src/services/TranslationService.ts`、`src/services/FormalizeService.ts` 统一优先按 AI 后端模式调用，本地模式不经过 Claudian 插件。
 - `src/settings.ts` 与 `src/types.ts` 新增 AI 后端设置，默认保留 OpenAI 兼容 API。
+## 2026-07-02 12:55 — 明确 AI 调用方式下拉菜单文案
+- `src/i18n.ts`: 将 AI 后端设置文案改为 AI 调用方式,下拉选项明确为 API、Claude Code CLI、Codex CLI、OpenCode CLI。
