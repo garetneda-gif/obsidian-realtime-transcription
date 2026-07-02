@@ -635,23 +635,16 @@ export class TranscriptionView extends ItemView {
     const btn = card.querySelector(".formalize-btn") as HTMLElement | null;
     if (btn) {
       btn.classList.remove("loading");
-      this.showTransientSuccess(btn, "wand-2", t("view.formalize"));
+      this.showTransientSuccess(btn, "file-text", t("view.showOriginal"));
     }
 
-    // 插入或更新润色文本
-    let formalEl = card.querySelector(".card-formal") as HTMLElement | null;
-    if (!formalEl) {
-      // 在原文之后、翻译之前插入
-      const originalEl = card.querySelector(".card-original");
-      formalEl = document.createElement("div");
-      formalEl.className = "card-formal";
-      if (originalEl?.nextSibling) {
-        card.insertBefore(formalEl, originalEl.nextSibling);
-      } else {
-        card.appendChild(formalEl);
-      }
+    const oldFormalEl = card.querySelector(".card-formal");
+    if (oldFormalEl) oldFormalEl.remove();
+    const originalEl = card.querySelector(".card-original") as HTMLElement | null;
+    if (originalEl) {
+      originalEl.setText(formalText);
+      (card as HTMLElement).setAttr("data-showing-formal", "true");
     }
-    formalEl.setText(formalText);
   }
 
   private renderCard(entry: TranscriptEntry): void {
@@ -696,12 +689,10 @@ export class TranscriptionView extends ItemView {
     if (isSummary || isMetaSummary) {
       void MarkdownRenderer.render(this.app, entry.result.text, originalEl, "", this);
     } else {
-      originalEl.setText(entry.result.text);
-    }
-
-    // 润色文本（已有则直接显示）
-    if (entry.formalText) {
-      card.createDiv({ cls: "card-formal", text: entry.formalText });
+      originalEl.setText(entry.formalText ?? entry.result.text);
+      if (entry.formalText) {
+        card.setAttr("data-showing-formal", "true");
+      }
     }
 
     if (!isSummary && !isMetaSummary) {
@@ -715,6 +706,7 @@ export class TranscriptionView extends ItemView {
     } else if (this.shouldShowTranslationPlaceholder(entry.result.language)) {
       const loadingEl = card.createDiv("card-translation-loading");
       loadingEl.setText(t("view.translating"));
+      loadingEl.setAttr("data-loading-text", t("view.translating"));
     }
   }
 
@@ -745,11 +737,20 @@ export class TranscriptionView extends ItemView {
       cls: "entry-action-btn formalize-btn",
       attr: { type: "button" },
     });
-    this.setIconButton(formalizeBtn, "wand-2", t("view.formalize"));
+    this.setIconButton(
+      formalizeBtn,
+      entry.formalText ? "file-text" : "wand-2",
+      entry.formalText ? t("view.showOriginal") : t("view.formalize"),
+    );
 
     formalizeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (formalizeBtn.classList.contains("loading") || formalizeBtn.classList.contains("done")) {
+        return;
+      }
+      const currentEntry = this.entries.find((item) => item.id === entry.id) ?? entry;
+      if (currentEntry.formalText) {
+        this.toggleFormalizedText(currentEntry, formalizeBtn, card);
         return;
       }
       void this.handleFormalizeClick(entry.id, entry.result.text, formalizeBtn, card);
@@ -773,6 +774,27 @@ export class TranscriptionView extends ItemView {
     }, 2000);
   }
 
+  private toggleFormalizedText(
+    entry: TranscriptEntry,
+    btn: HTMLElement,
+    card: HTMLElement,
+  ): void {
+    const originalEl = card.querySelector(".card-original") as HTMLElement | null;
+    if (!originalEl || !entry.formalText) return;
+
+    const showingFormal = card.getAttr("data-showing-formal") === "true";
+    if (showingFormal) {
+      originalEl.setText(entry.result.text);
+      card.setAttr("data-showing-formal", "false");
+      this.setIconButton(btn, "wand-2", t("view.showFormalized"));
+      return;
+    }
+
+    originalEl.setText(entry.formalText);
+    card.setAttr("data-showing-formal", "true");
+    this.setIconButton(btn, "file-text", t("view.showOriginal"));
+  }
+
   private async handleTranslateClick(
     entry: TranscriptEntry,
     btn: HTMLElement,
@@ -791,6 +813,7 @@ export class TranscriptionView extends ItemView {
     const loadingEl = document.createElement("div");
     loadingEl.className = "card-translation-loading";
     loadingEl.textContent = t("view.translating");
+    loadingEl.setAttr("data-loading-text", t("view.translating"));
     card.appendChild(loadingEl);
 
     try {
@@ -830,6 +853,7 @@ export class TranscriptionView extends ItemView {
     const loadingEl = document.createElement("div");
     loadingEl.className = "card-formal-loading";
     loadingEl.textContent = t("view.formalizeLoading");
+    loadingEl.setAttr("data-loading-text", t("view.formalizeLoading"));
     if (originalEl?.nextSibling) {
       card.insertBefore(loadingEl, originalEl.nextSibling);
     } else {

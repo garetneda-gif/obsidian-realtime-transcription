@@ -143,3 +143,10 @@
 - `src/settings.ts`: 重绘设置页前先读取滚动位置并初始化标题宽度,避免切换分区时标题条跳动。
 - `src/views/TranscriptionView.ts`,`styles.css`: 自动翻译/自动润色开关改为与左侧标题同一行。
 - `styles.css`: 设置页顶部返回/保存 SVG 统一强调色并补 hover 效果。
+- `styles.css`: 设置页紧凑标题去掉省略号,在侧栏宽度内完整显示 `Realtime-Transcription`。
+
+## 2026-07-02 10:55 — 润色覆盖原文与加载动效修正
+- `src/views/TranscriptionView.ts`: 润色结果直接覆盖原文区域显示,继承原文字号; 润色按钮在已有结果时切换显示原文/润色。
+- `src/i18n.ts`: 新增显示原文/显示润色按钮文案。
+- `styles.css`: 翻译/润色加载文案改为文字伪元素 shimmer,并移除独立润色文本样式。
+- `styles.css`: 设置页标题图标和文字行改为垂直居中。

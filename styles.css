@@ -662,7 +662,6 @@
 
 .card-translation-loading {
   font-size: 11px;
-  color: var(--text-faint);
   padding-top: 5px;
   margin-top: 5px;
   border-top: 1px dashed var(--background-modifier-border);
@@ -671,17 +670,30 @@
 
 .card-translation-loading,
 .card-formal-loading {
+  position: relative;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.card-translation-loading::after,
+.card-formal-loading::after {
+  content: attr(data-loading-text);
+  position: absolute;
+  top: 5px;
+  left: 0;
+  white-space: nowrap;
+  color: transparent;
   background: linear-gradient(
     90deg,
-    var(--text-faint) 0%,
-    var(--text-muted) 45%,
-    var(--text-faint) 90%
+    var(--text-muted) 0%,
+    var(--text-normal) 45%,
+    var(--text-muted) 90%
   );
   background-size: 220% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: rt-loading-shimmer 1.2s linear infinite;
+  animation: rt-loading-shimmer 1.1s linear infinite;
 }
 
 @keyframes rt-loading-shimmer {
@@ -809,23 +821,13 @@
   height: 16px;
 }
 
-/* ── 润色文本 ── */
-.card-formal {
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--text-normal);
-  margin-top: 4px;
-}
-
 .card-formal-loading {
   font-size: 11px;
-  color: var(--text-faint);
   padding-top: 5px;
   margin-top: 5px;
   font-style: italic;
 }
 
-.card-formal,
 .card-formal-loading {
   user-select: text !important;
   -webkit-user-select: text !important;
@@ -912,9 +914,9 @@
 .realtime-settings-header.is-compact {
   width: var(--rt-nav-width);
   max-width: var(--rt-nav-width);
-  justify-content: center;
-  gap: 6px;
-  padding: 8px;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 8px 9px;
   border-radius: 12px;
   box-shadow:
     0 0 0 10px var(--background-primary),
@@ -937,6 +939,8 @@
 .realtime-settings-header-text {
   min-width: 0;
   max-width: 420px;
+  display: flex;
+  align-items: center;
   overflow: hidden;
   opacity: 1;
   transition:
@@ -945,12 +949,14 @@
 }
 
 .realtime-settings-header.is-compact .realtime-settings-header-text {
-  max-width: 122px;
+  max-width: calc(var(--rt-nav-width) - 50px);
   opacity: 1;
 }
 
 .realtime-settings-header.is-compact .realtime-settings-title {
-  font-size: 12px;
+  font-size: 10px;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .realtime-settings-header.is-compact .realtime-settings-version {
@@ -959,7 +965,7 @@
 
 .realtime-settings-title-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 7px;
   min-height: 20px;
   min-width: 0;
@@ -968,6 +974,7 @@
 .realtime-settings-title {
   font-size: 16px;
   font-weight: 650;
+  line-height: 1;
   color: var(--text-normal);
   overflow: hidden;
   text-overflow: ellipsis;
