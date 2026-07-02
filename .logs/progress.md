@@ -226,3 +226,6 @@
 - 完成摘要、二次摘要、AI 命名、翻译、润色的统一本地 agent 后端入口。
 - 验证：`npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`、`npm run build`、`git diff --check` 通过。
 - 额外用临时 esbuild 包驱动 `AgentBackendService` 子进程路径，确认 provider 配置能返回文本。
+## 2026-07-02 12:59 — 调整 shimmer 高光范围
+- 用户要求 shimmer 只高亮字体,不要扫过整个区域。
+- 已将 loading 高光从区域伪元素改为文字背景裁剪; `npm run build` 和 `git diff --check` 通过。

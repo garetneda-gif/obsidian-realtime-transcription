@@ -186,3 +186,5 @@
 - `src/settings.ts` 与 `src/types.ts` 新增 AI 后端设置，默认保留 OpenAI 兼容 API。
 ## 2026-07-02 12:55 — 明确 AI 调用方式下拉菜单文案
 - `src/i18n.ts`: 将 AI 后端设置文案改为 AI 调用方式,下拉选项明确为 API、Claude Code CLI、Codex CLI、OpenCode CLI。
+## 2026-07-02 12:59 — Shimmer 仅作用于 loading 文本
+- `styles.css`: 移除翻译中/润色中 loading 的整行遮罩伪元素,改为 `background-clip: text` 文字高光。
