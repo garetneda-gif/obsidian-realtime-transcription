@@ -852,6 +852,9 @@ export class TranscriptionView extends ItemView {
 
     const oldLoading = card.querySelector(".card-translation-loading");
     if (oldLoading) oldLoading.remove();
+    const oldTranslation = card.querySelector(".card-translation");
+    if (oldTranslation) oldTranslation.remove();
+    entry.translation = null;
     const loadingEl = document.createElement("div");
     loadingEl.className = "card-translation-loading";
     loadingEl.textContent = t("view.translating");

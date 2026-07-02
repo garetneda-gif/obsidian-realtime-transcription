@@ -64,6 +64,16 @@ test("transcription view infers display language for badges and manual translati
   );
 });
 
+test("manual translation replaces existing translation with the loading placeholder", () => {
+  const body = extractMethodBody("handleTranslateClick", viewSource);
+  assert.ok(
+    body.indexOf('card.querySelector(".card-translation")') <
+      body.indexOf('document.createElement("div")'),
+  );
+  assert.ok(body.includes("oldTranslation.remove()"));
+  assert.ok(body.includes("entry.translation = null"));
+});
+
 test("recording toggle ignores concurrent start and stop transitions", () => {
   const body = extractMethodBody("toggleRecording");
   assert.ok(source.includes("private recordingTransition = false"));

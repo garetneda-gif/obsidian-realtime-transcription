@@ -162,3 +162,7 @@
 - `src/services/BackendManager.ts`: 启动前先复用已可连接的本地后端,避免插件重载后先杀健康残留进程。
 - `src/services/BackendManager.ts`: 后端进程退出日志补充 signal,避免真实崩溃时只看到 `退出码:null`。
 - `tests/clearEntriesState.test.ts`: 增加录制互斥和后端复用顺序的静态回归检查。
+
+## 2026-07-02 11:32 — 重新翻译时覆盖旧译文
+- `src/views/TranscriptionView.ts`: 手动翻译再次触发时先移除旧译文并清空当前条目译文状态,加载占位直接顶替旧译文。
+- `tests/clearEntriesState.test.ts`: 增加重新翻译先清旧译文再插入 loading 的静态回归检查。

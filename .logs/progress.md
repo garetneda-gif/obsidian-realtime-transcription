@@ -202,3 +202,8 @@
 - 已加 `recordingTransition` 防重入,并让 `BackendManager.start()` 先复用可达后端。
 - 后端退出日志补 signal,后续真崩溃不再只有 `退出码:null`。
 - 验证: `git diff --check`,`npx tsc --noEmit`,`node --experimental-strip-types --test tests/*.test.ts`,`npm run build`,`scripts/post-sync-refresh.sh` 和临时端口 Python 后端启动均通过。
+
+## 2026-07-02 11:32 — 重新翻译覆盖旧译文
+- 用户反馈再次点击翻译时旧译文仍显示在 loading 上方。
+- 已在 `handleTranslateClick()` 中先移除 `.card-translation`,再插入 `.card-translation-loading`。
+- 补静态检查锁住旧译文移除顺序。
