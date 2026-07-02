@@ -16,6 +16,7 @@ export type ExportMode = "summaryOnly" | "full";
 export type ExportTitleMode = "timestamp" | "ai" | "manual";
 export type CopyContentMode = "summaryOnly" | "full";
 export type CopyRangeMode = "all" | "latest";
+export type AiOutputLanguage = "auto" | "zh" | "en";
 
 export interface SummarySettings {
   enabled: boolean;
@@ -96,9 +97,19 @@ export interface PluginSettings {
   exportTitleMode: ExportTitleMode;
   copyContentMode: CopyContentMode;
   copyRangeMode: CopyRangeMode;
+  aiOutputLanguage: AiOutputLanguage;
+  transcriptFontSize: number;
+  autoFormalize: boolean;
   claudianPrompt: string;
   vad: VadSettings;
   aggregation: AggregationSettings;
+}
+
+export interface PanelSettingsValues {
+  aiOutputLanguage: AiOutputLanguage;
+  transcriptFontSize: number;
+  autoTranslate: boolean;
+  autoFormalize: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -152,6 +163,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   exportTitleMode: "timestamp",
   copyContentMode: "full",
   copyRangeMode: "all",
+  aiOutputLanguage: "auto",
+  transcriptFontSize: 15,
+  autoFormalize: false,
   claudianPrompt: "请参考转写上下文： @ {{contextFile}} 并回答",
   vad: {
     threshold: 0.5,

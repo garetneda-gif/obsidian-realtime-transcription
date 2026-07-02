@@ -121,3 +121,25 @@
 - `src/views/TranscriptionView.ts`: 润色加载态从魔杖自转改为圆形 loader 转圈。
 - `styles.css`: footer 在 `focus-within` 时显示,避免键盘焦点落到不可见按钮。
 - `styles.css`: 保留摘要/二次摘要的结构化样式,避免摘要与普通原文混在一起。
+
+## 2026-07-02 09:57 — 转写面板快捷设置与手动翻译
+- `src/views/TranscriptionView.ts`,`styles.css`: 条目操作区新增手动翻译按钮,翻译/润色成功勾 2 秒后恢复为原 SVG。
+- `src/main.ts`,`src/types.ts`,`src/i18n.ts`: 垃圾桶旁新增设置按钮,弹窗支持转写字号和 AI 返回语言。
+- `src/services/SummaryService.ts`,`src/services/TranslationService.ts`,`src/services/FormalizeService.ts`: 摘要、翻译、润色共享返回语言,且不再传 `max_tokens`。
+- `tests/clearEntriesState.test.ts`: 更新摘要调用签名断言。
+
+## 2026-07-02 10:12 — 覆盖式面板设置与加载动效
+- `src/views/TranscriptionView.ts`,`styles.css`: 设置按钮移到垃圾桶左侧,改为覆盖插件首页的设置页,顶部提供返回和保存 SVG 按钮。
+- `src/main.ts`,`src/types.ts`,`src/i18n.ts`: 面板设置新增自动触发翻译、自动触发润色,自动翻译复用 `translation.enabled`,自动润色新增 `autoFormalize`。
+- `styles.css`: `翻译中...` 和 `正在润色...` 文案新增 shimmer loading 效果。
+- `styles.css`: 设置页返回/保存按钮去掉默认按钮底色、边框和阴影,保持与其他 SVG 按钮一致。
+
+## 2026-07-02 10:24 — 修正语言标签和设置页布局
+- `src/main.ts`: 语言标签优先按实际转写文本脚本判断,再用识别模式兜底,避免英文内容被标成中文。
+- `tests/clearEntriesState.test.ts`: 增加语言判断顺序静态检查。
+- `src/settings.ts`,`styles.css`: 设置页紧凑标题同时显示麦克风 SVG 和 `Realtime-Transcription`。
+- `styles.css`: 面板设置行改为纵向分组,避免标题/说明被挤压和滑动条溢出。
+- `styles.css`: 设置页紧凑标题宽度恢复与左侧导航栏一致,隐藏版本号并缩小标题防止撑宽。
+- `src/settings.ts`: 重绘设置页前先读取滚动位置并初始化标题宽度,避免切换分区时标题条跳动。
+- `src/views/TranscriptionView.ts`,`styles.css`: 自动翻译/自动润色开关改为与左侧标题同一行。
+- `styles.css`: 设置页顶部返回/保存 SVG 统一强调色并补 hover 效果。

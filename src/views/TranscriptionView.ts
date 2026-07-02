@@ -1,6 +1,6 @@
 import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS, PLUGIN_ID } from "../constants";
-import { TranscriptEntry, TranscriptionResult, SummaryDisplayMode } from "../types";
+import type { TranscriptEntry, TranscriptionResult, SummaryDisplayMode, PanelSettingsValues, AiOutputLanguage } from "../types";
 import { t } from "../i18n";
 import { executeObsidianCommand } from "../utils/obsidianCommands";
 
@@ -16,6 +16,7 @@ export class TranscriptionView extends ItemView {
   private copyBtn!: HTMLButtonElement;
   private claudianBtn!: HTMLButtonElement;
   private clearBtn!: HTMLButtonElement;
+  private settingsBtn!: HTMLButtonElement;
   private statusDot!: HTMLElement;
   private statusText!: HTMLElement;
   private streamingCard: HTMLElement | null = null;
@@ -24,8 +25,15 @@ export class TranscriptionView extends ItemView {
   private streamingLangBadgeEl: HTMLElement | null = null;
   private streamingOriginalEl: HTMLElement | null = null;
   private scrollToBottomBtn!: HTMLElement;
+  private settingsPage: HTMLElement | null = null;
   private pinnedToBottom = true;
   private entries: TranscriptEntry[] = [];
+  private panelSettingsValues: PanelSettingsValues = {
+    aiOutputLanguage: "auto",
+    transcriptFontSize: 15,
+    autoTranslate: false,
+    autoFormalize: false,
+  };
 
   // 外部注入的回调
   onToggleRecording: (() => void | Promise<void>) | null = null;
@@ -34,7 +42,9 @@ export class TranscriptionView extends ItemView {
   onCopyTranscripts: (() => void | Promise<void>) | null = null;
   onSendToClaudian: (() => void | Promise<void>) | null = null;
   onFormalize: ((entryId: string, text: string) => Promise<string>) | null = null;
+  onTranslate: ((entryId: string, text: string, language: string) => Promise<string>) | null = null;
   onClearTranscripts: (() => void | Promise<void>) | null = null;
+  onSavePanelSettings: ((values: PanelSettingsValues) => void | Promise<void>) | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -169,6 +179,15 @@ export class TranscriptionView extends ItemView {
       void this.onSendToClaudian?.();
     });
 
+    this.settingsBtn = this.controlBar.createEl("button", {
+      cls: "action-btn panel-settings-btn",
+      attr: { "aria-label": t("view.panelSettings"), type: "button" },
+    });
+    setIcon(this.settingsBtn, "settings");
+    this.settingsBtn.addEventListener("click", () => {
+      this.showPanelSettingsPage();
+    });
+
     // 清除按钮
     this.clearBtn = this.controlBar.createEl("button", {
       cls: "action-btn clear-btn",
@@ -193,6 +212,7 @@ export class TranscriptionView extends ItemView {
     this.copyBtn?.setAttribute("aria-label", t("view.copyRecords"));
     this.claudianBtn?.setAttribute("aria-label", t("view.sendToClaudian"));
     this.clearBtn?.setAttribute("aria-label", t("view.clearRecords"));
+    this.settingsBtn?.setAttribute("aria-label", t("view.panelSettings"));
 
     // Update status text based on current state
     if (this.statusDot?.hasClass("recording")) {
@@ -231,6 +251,188 @@ export class TranscriptionView extends ItemView {
       this.summaryBtn.removeClass("active");
       this.summaryBtn.setAttribute("aria-label", t("view.switchToSummaryOnly"));
       this.transcriptContainer.removeClass("summary-only");
+    }
+  }
+
+  applyTranscriptFontSize(size: number): void {
+    if (!this.transcriptContainer) return;
+    this.transcriptContainer.style.setProperty("--rt-transcript-font-size", `${size}px`);
+  }
+
+  setPanelSettings(values: PanelSettingsValues): void {
+    this.panelSettingsValues = {
+      aiOutputLanguage: isAiOutputLanguage(values.aiOutputLanguage)
+        ? values.aiOutputLanguage
+        : "auto",
+      transcriptFontSize: clampPanelFontSize(values.transcriptFontSize),
+      autoTranslate: Boolean(values.autoTranslate),
+      autoFormalize: Boolean(values.autoFormalize),
+    };
+    this.applyTranscriptFontSize(this.panelSettingsValues.transcriptFontSize);
+    if (this.settingsPage) {
+      this.showPanelSettingsPage();
+    }
+  }
+
+  private showPanelSettingsPage(): void {
+    const root = this.containerEl.children[1] as HTMLElement | undefined;
+    if (!root) return;
+
+    if (this.settingsPage) {
+      this.settingsPage.remove();
+    }
+
+    const draft: PanelSettingsValues = { ...this.panelSettingsValues };
+    const page = root.createDiv("panel-settings-page");
+    this.settingsPage = page;
+
+    const toolbar = page.createDiv("panel-settings-toolbar");
+    const backBtn = toolbar.createEl("button", {
+      cls: "panel-settings-icon-btn",
+      attr: { type: "button", "aria-label": t("panelSettings.back"), title: t("panelSettings.back") },
+    });
+    setIcon(backBtn, "arrow-left");
+    backBtn.addEventListener("click", () => {
+      this.applyTranscriptFontSize(this.panelSettingsValues.transcriptFontSize);
+      this.hidePanelSettingsPage();
+    });
+
+    toolbar.createEl("div", {
+      cls: "panel-settings-title",
+      text: t("panelSettings.title"),
+    });
+
+    const saveBtn = toolbar.createEl("button", {
+      cls: "panel-settings-icon-btn save-btn",
+      attr: { type: "button", "aria-label": t("panelSettings.save"), title: t("panelSettings.save") },
+    });
+    setIcon(saveBtn, "save");
+
+    const content = page.createDiv("panel-settings-content");
+
+    const fontRow = this.createPanelSettingRow(
+      content,
+      t("panelSettings.fontSize.name"),
+      t("panelSettings.fontSize.desc"),
+    );
+    const fontControls = fontRow.createDiv("panel-settings-control-row");
+    const fontValue = fontControls.createEl("span", {
+      cls: "panel-settings-value",
+      text: `${draft.transcriptFontSize}px`,
+    });
+    const fontInput = fontControls.createEl("input", {
+      cls: "panel-settings-range",
+      attr: {
+        type: "range",
+        min: "12",
+        max: "24",
+        step: "1",
+        value: String(draft.transcriptFontSize),
+      },
+    }) as HTMLInputElement;
+    fontInput.addEventListener("input", () => {
+      draft.transcriptFontSize = clampPanelFontSize(Number(fontInput.value));
+      fontValue.setText(`${draft.transcriptFontSize}px`);
+      this.applyTranscriptFontSize(draft.transcriptFontSize);
+    });
+
+    const languageRow = this.createPanelSettingRow(
+      content,
+      t("panelSettings.outputLanguage.name"),
+      t("panelSettings.outputLanguage.desc"),
+    );
+    const languageSelect = languageRow.createEl("select", {
+      cls: "panel-settings-select",
+    }) as HTMLSelectElement;
+    this.appendLanguageOption(languageSelect, "auto", t("panelSettings.outputLanguage.auto"));
+    this.appendLanguageOption(languageSelect, "zh", t("panelSettings.outputLanguage.zh"));
+    this.appendLanguageOption(languageSelect, "en", t("panelSettings.outputLanguage.en"));
+    languageSelect.value = draft.aiOutputLanguage;
+    languageSelect.addEventListener("change", () => {
+      draft.aiOutputLanguage = isAiOutputLanguage(languageSelect.value)
+        ? languageSelect.value
+        : "auto";
+    });
+
+    this.createPanelToggleRow(
+      content,
+      t("panelSettings.autoTranslate.name"),
+      t("panelSettings.autoTranslate.desc"),
+      draft.autoTranslate,
+      (checked) => {
+        draft.autoTranslate = checked;
+      },
+    );
+
+    this.createPanelToggleRow(
+      content,
+      t("panelSettings.autoFormalize.name"),
+      t("panelSettings.autoFormalize.desc"),
+      draft.autoFormalize,
+      (checked) => {
+        draft.autoFormalize = checked;
+      },
+    );
+
+    saveBtn.addEventListener("click", () => {
+      void this.savePanelSettingsDraft(draft, saveBtn);
+    });
+  }
+
+  private hidePanelSettingsPage(): void {
+    this.settingsPage?.remove();
+    this.settingsPage = null;
+  }
+
+  private createPanelSettingRow(container: HTMLElement, name: string, desc: string): HTMLElement {
+    const row = container.createDiv("panel-settings-row");
+    const text = row.createDiv("panel-settings-row-text");
+    text.createEl("div", { cls: "panel-settings-row-name", text: name });
+    text.createEl("div", { cls: "panel-settings-row-desc", text: desc });
+    return row;
+  }
+
+  private createPanelToggleRow(
+    container: HTMLElement,
+    name: string,
+    desc: string,
+    checked: boolean,
+    onChange: (checked: boolean) => void,
+  ): void {
+    const row = this.createPanelSettingRow(container, name, desc);
+    row.addClass("panel-settings-toggle-row");
+    const label = row.createEl("label", { cls: "panel-settings-toggle" });
+    const input = label.createEl("input", {
+      attr: { type: "checkbox" },
+    }) as HTMLInputElement;
+    input.checked = checked;
+    label.createEl("span", { cls: "panel-settings-toggle-track" });
+    input.addEventListener("change", () => {
+      onChange(input.checked);
+    });
+  }
+
+  private appendLanguageOption(select: HTMLSelectElement, value: AiOutputLanguage, text: string): void {
+    const option = select.createEl("option", {
+      text,
+      attr: { value },
+    }) as HTMLOptionElement;
+    option.value = value;
+  }
+
+  private async savePanelSettingsDraft(
+    draft: PanelSettingsValues,
+    saveBtn: HTMLButtonElement,
+  ): Promise<void> {
+    saveBtn.disabled = true;
+    try {
+      await Promise.resolve(this.onSavePanelSettings?.({ ...draft }));
+      this.setPanelSettings(draft);
+      this.hidePanelSettingsPage();
+    } catch (err) {
+      const detail = err instanceof Error && err.message ? err.message : "unknown error";
+      new Notice(`${t("panelSettings.saveFailed")}: ${detail}`);
+      saveBtn.disabled = false;
     }
   }
 
@@ -328,10 +530,9 @@ export class TranscriptionView extends ItemView {
       }
     }
 
-    // 提交时为非摘要卡片追加润色按钮
     const isSummary = entry.result.language === "summary";
     if (!isSummary && !this.streamingCard.querySelector(".card-footer")) {
-      this.appendFormalizeButton(this.streamingCard, entry);
+      this.appendEntryActions(this.streamingCard, entry);
     }
 
     if (!this.entries.find((e) => e.id === entry.id)) {
@@ -434,8 +635,7 @@ export class TranscriptionView extends ItemView {
     const btn = card.querySelector(".formalize-btn") as HTMLElement | null;
     if (btn) {
       btn.classList.remove("loading");
-      btn.classList.add("done");
-      this.setFormalizeButton(btn, "check", t("view.formalized"));
+      this.showTransientSuccess(btn, "wand-2", t("view.formalize"));
     }
 
     // 插入或更新润色文本
@@ -504,9 +704,8 @@ export class TranscriptionView extends ItemView {
       card.createDiv({ cls: "card-formal", text: entry.formalText });
     }
 
-    // 润色按钮（非摘要卡片显示）
     if (!isSummary && !isMetaSummary) {
-      this.appendFormalizeButton(card as HTMLElement, entry);
+      this.appendEntryActions(card as HTMLElement, entry);
     }
 
     // 译文
@@ -519,14 +718,34 @@ export class TranscriptionView extends ItemView {
     }
   }
 
-  private appendFormalizeButton(card: HTMLElement, entry: TranscriptEntry): void {
+  private appendEntryActions(card: HTMLElement, entry: TranscriptEntry): void {
     const footer = card.createDiv("card-footer");
-    const label = entry.formalText ? t("view.formalized") : t("view.formalize");
-    const formalizeBtn = footer.createEl("button", {
-      cls: entry.formalText ? "formalize-btn done" : "formalize-btn",
+    this.appendTranslateButton(footer, card, entry);
+    this.appendFormalizeButton(footer, card, entry);
+  }
+
+  private appendTranslateButton(footer: HTMLElement, card: HTMLElement, entry: TranscriptEntry): void {
+    const translateBtn = footer.createEl("button", {
+      cls: "entry-action-btn translate-btn",
       attr: { type: "button" },
     });
-    this.setFormalizeButton(formalizeBtn, entry.formalText ? "check" : "wand-2", label);
+    this.setIconButton(translateBtn, "languages", t("view.translate"));
+
+    translateBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (translateBtn.classList.contains("loading") || translateBtn.classList.contains("done")) {
+        return;
+      }
+      void this.handleTranslateClick(entry, translateBtn, card);
+    });
+  }
+
+  private appendFormalizeButton(footer: HTMLElement, card: HTMLElement, entry: TranscriptEntry): void {
+    const formalizeBtn = footer.createEl("button", {
+      cls: "entry-action-btn formalize-btn",
+      attr: { type: "button" },
+    });
+    this.setIconButton(formalizeBtn, "wand-2", t("view.formalize"));
 
     formalizeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -537,12 +756,57 @@ export class TranscriptionView extends ItemView {
     });
   }
 
-  private setFormalizeButton(btn: HTMLElement, icon: string, label: string): void {
+  private setIconButton(btn: HTMLElement, icon: string, label: string): void {
     btn.empty();
     btn.setAttr("aria-label", label);
     btn.setAttr("title", label);
-    const btnIcon = btn.createDiv("formalize-btn-icon");
+    const btnIcon = btn.createDiv("entry-action-btn-icon");
     setIcon(btnIcon, icon);
+  }
+
+  private showTransientSuccess(btn: HTMLElement, resetIcon: string, resetLabel: string): void {
+    btn.classList.add("done");
+    this.setIconButton(btn, "check", t("view.actionDone"));
+    window.setTimeout(() => {
+      btn.classList.remove("done");
+      this.setIconButton(btn, resetIcon, resetLabel);
+    }, 2000);
+  }
+
+  private async handleTranslateClick(
+    entry: TranscriptEntry,
+    btn: HTMLElement,
+    card: HTMLElement,
+  ): Promise<void> {
+    if (!this.onTranslate) {
+      new Notice(t("view.translateNotConfigured"));
+      return;
+    }
+
+    btn.classList.add("loading");
+    this.setIconButton(btn, "loader-circle", t("view.translating"));
+
+    const oldLoading = card.querySelector(".card-translation-loading");
+    if (oldLoading) oldLoading.remove();
+    const loadingEl = document.createElement("div");
+    loadingEl.className = "card-translation-loading";
+    loadingEl.textContent = t("view.translating");
+    card.appendChild(loadingEl);
+
+    try {
+      const result = await Promise.resolve(
+        this.onTranslate(entry.id, entry.result.text, entry.result.language),
+      );
+      this.updateTranslation(entry.id, result);
+      btn.classList.remove("loading");
+      this.showTransientSuccess(btn, "languages", t("view.translate"));
+    } catch (err) {
+      loadingEl.remove();
+      btn.classList.remove("loading");
+      this.setIconButton(btn, "languages", t("view.translate"));
+      const detail = err instanceof Error ? err.message : "unknown error";
+      new Notice(`${t("view.translateFailed")}: ${detail}`);
+    }
   }
 
   private async handleFormalizeClick(
@@ -557,7 +821,7 @@ export class TranscriptionView extends ItemView {
     }
 
     btn.classList.add("loading");
-    this.setFormalizeButton(btn, "loader-circle", t("view.formalizing"));
+    this.setIconButton(btn, "loader-circle", t("view.formalizing"));
 
     // 添加加载占位
     const oldLoading = card.querySelector(".card-formal-loading");
@@ -576,7 +840,7 @@ export class TranscriptionView extends ItemView {
       if (!btn.classList.contains("loading")) return;
       loadingEl.remove();
       btn.classList.remove("loading");
-      this.setFormalizeButton(btn, "wand-2", t("view.formalize"));
+      this.setIconButton(btn, "wand-2", t("view.formalize"));
       new Notice(`${t("view.formalizeTimeout")}(>${Math.floor(FORMALIZE_UI_TIMEOUT_MS / 1000)}${t("view.formalizeTimeoutDetail")}`);
     }, FORMALIZE_UI_TIMEOUT_MS + 1000);
 
@@ -590,7 +854,7 @@ export class TranscriptionView extends ItemView {
     } catch (err) {
       loadingEl.remove();
       btn.classList.remove("loading");
-      this.setFormalizeButton(btn, "wand-2", t("view.formalize"));
+      this.setIconButton(btn, "wand-2", t("view.formalize"));
       const detail = err instanceof Error ? err.message : "unknown error";
       new Notice(`${t("view.formalizeFailed")}: ${detail}`);
     } finally {
@@ -601,8 +865,8 @@ export class TranscriptionView extends ItemView {
     }
   }
 
-  private shouldShowTranslationPlaceholder(language: string): boolean {
-    return language === "en";
+  private shouldShowTranslationPlaceholder(_language: string): boolean {
+    return false;
   }
 
   private formatWallTime(date: Date): string {
@@ -652,4 +916,14 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number, timeoutMessage: str
       },
     );
   });
+}
+
+function clampPanelFontSize(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return 15;
+  return Math.min(24, Math.max(12, Math.round(numeric)));
+}
+
+function isAiOutputLanguage(value: unknown): value is AiOutputLanguage {
+  return value === "auto" || value === "zh" || value === "en";
 }

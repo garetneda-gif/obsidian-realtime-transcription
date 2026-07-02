@@ -13,37 +13,43 @@ export class TranslationService {
     this.settings = settings;
   }
 
-  shouldTranslate(language: string): boolean {
+  canTranslate(): boolean {
     if (!this.settings.enabled) return false;
-    if (!this.settings.apiKey) return false;
-    if (!this.settings.apiUrl?.trim()) return false;
-    if (!this.settings.model?.trim()) return false;
-    return language === "en" || language === "ja" || language === "ko";
-  }
-
-  canFormalize(): boolean {
     if (!this.settings.apiKey) return false;
     if (!this.settings.apiUrl?.trim()) return false;
     if (!this.settings.model?.trim()) return false;
     return true;
   }
 
-  async formalize(text: string): Promise<string> {
+  isConfigured(): boolean {
+    if (!this.settings.apiKey) return false;
+    if (!this.settings.apiUrl?.trim()) return false;
+    if (!this.settings.model?.trim()) return false;
+    return true;
+  }
+
+  shouldTranslate(language: string, targetLanguage: "zh" | "en"): boolean {
+    if (!this.canTranslate()) return false;
+    const normalized = language === "yue" ? "zh" : language;
+    return normalized !== targetLanguage && language !== "summary" && language !== "meta-summary";
+  }
+
+  async formalize(text: string, outputLanguage: string): Promise<string> {
     // 复用 translate 的完整调用链，仅替换 system prompt
     return this.callApi(
-      "你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为通顺的书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。",
+      `你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为${outputLanguage}的通顺书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。`,
       text,
       "润色",
     );
   }
 
-  async translate(text: string, fromLang: string): Promise<string> {
+  async translate(text: string, fromLang: string, outputLanguage: string): Promise<string> {
     const langName =
       fromLang === "en" ? "英文" :
       fromLang === "ja" ? "日文" :
       fromLang === "ko" ? "韩文" : fromLang;
     return this.callApi(
-      `你是一个专业翻译助手。请将以下${langName}文本翻译为简体中文。只输出翻译结果，不要解释。`,
+      `你是一个专业翻译助手。请将以下${langName}文本翻译为${outputLanguage}。只输出翻译结果，不要解释。`,
       text,
       "翻译",
     );
@@ -75,7 +81,6 @@ export class TranslationService {
             { role: "user", content: userText },
           ],
           temperature: 0.3,
-          max_tokens: 1024,
         }),
       });
       clearTimeout(timer);

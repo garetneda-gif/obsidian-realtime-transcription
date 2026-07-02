@@ -9,7 +9,8 @@ import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
 import { TranscriptionSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult, SerializedTranscriptEntry, isCloudASR, isHostedCloud } from "./types";
+import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud } from "./types";
+import type { AiOutputLanguage, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, TranscriptEntry, TranscriptionResult } from "./types";
 import { CloudAuthService } from "./services/CloudAuthService";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
@@ -189,6 +190,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.settings.tencentASR = { ...DEFAULT_SETTINGS.tencentASR, ...this.settings.tencentASR };
     // 深合并 cloudAuth
     this.settings.cloudAuth = { ...DEFAULT_SETTINGS.cloudAuth, ...this.settings.cloudAuth };
+    if (!["auto", "zh", "en"].includes(this.settings.aiOutputLanguage)) {
+      this.settings.aiOutputLanguage = DEFAULT_SETTINGS.aiOutputLanguage;
+    }
+    this.settings.transcriptFontSize = clampFontSize(this.settings.transcriptFontSize);
+    if (typeof this.settings.autoFormalize !== "boolean") {
+      this.settings.autoFormalize = DEFAULT_SETTINGS.autoFormalize;
+    }
   }
 
   async saveSettings(): Promise<void> {
@@ -203,6 +211,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const view = this.getView();
     if (view) {
       view.setDisplayMode(this.settings.summary.displayMode);
+      view.setPanelSettings(this.getPanelSettingsValues());
       view.refreshLocale();
     }
   }
@@ -721,12 +730,15 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.commitStreamingTranscript(entry);
     this.addEntry(entry);
     this.enqueueSummaryText(entry.result.text, entry.wallTime);
+    this.maybeAutoFormalizeEntry(entry);
 
-    if (this.translationService.shouldTranslate(entry.result.language)) {
+    const targetLanguage = this.resolveAiOutputLanguageCode();
+    if (this.translationService.shouldTranslate(entry.result.language, targetLanguage)) {
       try {
         const translation = await this.translationService.translate(
           entry.result.text,
           entry.result.language,
+          outputLanguageName(targetLanguage),
         );
         entry.translation = translation;
         view.updateTranslation(entry.id, translation);
@@ -741,36 +753,33 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
   private normalizeLanguage(rawLanguage: string, text: string): string {
     const mode = this.settings.recognitionMode ?? "zh-en";
-    if (mode === "zh") return "zh";
-    if (mode === "en") return "en";
-
     const language = (rawLanguage || "auto").toLowerCase();
 
     const hanCount = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
     const latinCount = (text.match(/[A-Za-z]/g) ?? []).length;
+    const latinWordCount = (text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? []).length;
     const kanaCount = (text.match(/[\u3040-\u30ff]/g) ?? []).length;
     const hangulCount = (text.match(/[\uac00-\ud7af]/g) ?? []).length;
 
-    // 日语/韩语脚本出现时优先保留
     if (kanaCount > 0) return "ja";
     if (hangulCount > 0) return "ko";
 
-    // 汉字为主时，优先中文（粤语标签保留）
+    if (latinWordCount >= 3 && latinCount >= Math.max(8, hanCount * 2)) {
+      return "en";
+    }
+    if (hanCount === 0 && latinCount >= 3) return "en";
+
     if (hanCount >= 2) {
-      if (latinCount >= Math.max(12, Math.floor(hanCount * 2.5))) {
-        return "en";
-      }
       return language === "yue" ? "yue" : "zh";
     }
 
-    // 单汉字 + 大量英文，按英文处理；否则中文
     if (hanCount === 1) {
       if (latinCount >= 8) return "en";
       return language === "yue" ? "yue" : "zh";
     }
 
-    // 纯英文/短英文句子也要识别为英文（例如 "The." / "Hello"）
-    if (hanCount === 0 && latinCount >= 3) return "en";
+    if (mode === "zh") return "zh";
+    if (mode === "en") return "en";
 
     if (language === "ja" || language === "ko" || language === "yue" || language === "en") {
       return language;
@@ -964,6 +973,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private syncViewControlStates(view: TranscriptionView): void {
     view.setRecordingState(this.recording);
     view.setDisplayMode(this.settings.summary.displayMode);
+    view.setPanelSettings(this.getPanelSettingsValues());
   }
 
   private bindViewCallbacks(view: TranscriptionView): void {
@@ -973,7 +983,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.onCopyTranscripts = () => this.copyTranscriptsToClipboard();
     view.onSendToClaudian = () => this.sendToClaudian();
     view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
+    view.onTranslate = (entryId, text, language) => this.translateEntry(entryId, text, language);
     view.onClearTranscripts = () => this.clearEntries();
+    view.onSavePanelSettings = (values) => this.savePanelSettings(values);
   }
 
   private async refreshLegacyTranscriptionViews(): Promise<void> {
@@ -1027,7 +1039,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.summaryInFlight = true;
 
     try {
-      const summaryText = await this.summaryService.summarize(source);
+      const summaryText = await this.summaryService.summarize(source, this.outputLanguageName());
       if (sessionVersion !== this.transcriptSessionVersion) return;
       this.entryCounter++;
       const view = this.getView();
@@ -1088,7 +1100,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.metaSummaryInFlight = true;
 
     try {
-      const metaText = await this.summaryService.metaSummarize(texts);
+      const metaText = await this.summaryService.metaSummarize(texts, this.outputLanguageName());
       if (sessionVersion !== this.transcriptSessionVersion) return;
       this.entryCounter++;
       const view = this.getView();
@@ -1129,13 +1141,67 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (!this.formalizeService.canFormalize()) {
       throw new Error(t("notice.configureFormalizeApi"));
     }
-    const result = await this.formalizeService.formalize(text);
+    const result = await this.formalizeService.formalize(text, this.outputLanguageName());
     const view = this.getView();
     if (view) {
       view.updateFormalText(entryId, result);
     }
     this.updateEntry(entryId, { formalText: result });
     return result;
+  }
+
+  private async translateEntry(entryId: string, text: string, language: string): Promise<string> {
+    if (!this.translationService.isConfigured()) {
+      throw new Error(t("notice.configureTranslationApi"));
+    }
+    const result = await this.translationService.translate(text, language, this.outputLanguageName());
+    const view = this.getView();
+    if (view) {
+      view.updateTranslation(entryId, result);
+    }
+    this.updateEntry(entryId, { translation: result });
+    return result;
+  }
+
+  private maybeAutoFormalizeEntry(entry: TranscriptEntry): void {
+    if (!this.settings.autoFormalize) return;
+    if (!this.formalizeService.canFormalize()) return;
+
+    void this.formalizeEntry(entry.id, entry.result.text).catch((err) => {
+      console.error("自动润色失败:", err);
+      const detail = err instanceof Error && err.message ? err.message : "未知错误";
+      new Notice(`${t("view.formalizeFailed")}: ${detail}`);
+    });
+  }
+
+  private getPanelSettingsValues(): PanelSettingsValues {
+    return {
+      aiOutputLanguage: this.settings.aiOutputLanguage,
+      transcriptFontSize: this.settings.transcriptFontSize,
+      autoTranslate: this.settings.translation.enabled,
+      autoFormalize: this.settings.autoFormalize,
+    };
+  }
+
+  private async savePanelSettings(values: PanelSettingsValues): Promise<void> {
+    this.settings.aiOutputLanguage = isAiOutputLanguage(values.aiOutputLanguage)
+      ? values.aiOutputLanguage
+      : DEFAULT_SETTINGS.aiOutputLanguage;
+    this.settings.transcriptFontSize = clampFontSize(values.transcriptFontSize);
+    this.settings.translation.enabled = Boolean(values.autoTranslate);
+    this.settings.autoFormalize = Boolean(values.autoFormalize);
+    await this.saveSettings();
+  }
+
+  private resolveAiOutputLanguageCode(): "zh" | "en" {
+    if (this.settings.aiOutputLanguage === "zh" || this.settings.aiOutputLanguage === "en") {
+      return this.settings.aiOutputLanguage;
+    }
+    return this.settings.locale === "en" ? "en" : "zh";
+  }
+
+  private outputLanguageName(): string {
+    return outputLanguageName(this.resolveAiOutputLanguageCode());
   }
 
   private async copyTranscriptsToClipboard(): Promise<void> {
@@ -1259,7 +1325,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
             .map((e) => e.result.text)
             .join("\n")
             .slice(0, 2000);
-          const aiTitle = await this.summaryService.generateTitle(contentSnippet);
+          const aiTitle = await this.summaryService.generateTitle(contentSnippet, this.outputLanguageName());
           title = this.sanitizeFileName(aiTitle) || timestampTitle;
         } catch (err) {
           console.error("[Transcription] AI 命名失败:", err);
@@ -1399,6 +1465,20 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
   }
 
+}
+
+function clampFontSize(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_SETTINGS.transcriptFontSize;
+  return Math.min(24, Math.max(12, Math.round(numeric)));
+}
+
+function isAiOutputLanguage(value: unknown): value is AiOutputLanguage {
+  return value === "auto" || value === "zh" || value === "en";
+}
+
+function outputLanguageName(language: "zh" | "en"): string {
+  return language === "en" ? "英文" : "简体中文";
 }
 
 async function writeTextToClipboard(text: string): Promise<void> {

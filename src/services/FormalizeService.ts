@@ -22,7 +22,7 @@ export class FormalizeService {
     );
   }
 
-  async formalize(text: string): Promise<string> {
+  async formalize(text: string, outputLanguage: string): Promise<string> {
     const inputText = text?.trim();
     if (!inputText) {
       throw new Error(t("formalize.emptyText"));
@@ -52,12 +52,11 @@ export class FormalizeService {
             {
               role: "system",
               content:
-                "你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为通顺的书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。",
+                `你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为${outputLanguage}的通顺书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。`,
             },
             { role: "user", content: inputText },
           ],
           temperature: 0.3,
-          max_tokens: 1024,
         }),
       });
 

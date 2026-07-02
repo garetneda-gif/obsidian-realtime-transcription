@@ -823,15 +823,21 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       this.activeSettingsSection = "general";
     }
 
+    const scrollEl = this.findScrollParent(this.containerEl);
+    const compactHeader = scrollEl.scrollTop > 4;
+
     containerEl.empty();
     containerEl.addClass("realtime-settings-root");
 
-    const header = containerEl.createDiv("realtime-settings-header");
+    const header = document.createElement("div");
+    header.addClass("realtime-settings-header");
+    if (compactHeader) header.addClass("is-compact");
+    containerEl.appendChild(header);
     const headerIcon = header.createDiv("realtime-settings-header-icon");
     setIcon(headerIcon, "mic");
     const headerText = header.createDiv("realtime-settings-header-text");
     const titleRow = headerText.createDiv("realtime-settings-title-row");
-    titleRow.createEl("span", { cls: "realtime-settings-title", text: "Realtime Transcription" });
+    titleRow.createEl("span", { cls: "realtime-settings-title", text: "Realtime-Transcription" });
     titleRow.createEl("span", { cls: "realtime-settings-version", text: `v${this.plugin.manifest.version}` });
 
     const layout = containerEl.createDiv("realtime-settings-layout");
@@ -844,11 +850,10 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     const activeContent = sections.get(this.activeSettingsSection);
     if (activeContent) content.appendChild(activeContent);
 
-    this.bindHeaderCollapse(header);
+    this.bindHeaderCollapse(header, scrollEl);
   }
 
-  private bindHeaderCollapse(header: HTMLElement): void {
-    const scrollEl = this.findScrollParent(this.containerEl);
+  private bindHeaderCollapse(header: HTMLElement, scrollEl = this.findScrollParent(this.containerEl)): void {
     const update = () => {
       header.classList.toggle("is-compact", scrollEl.scrollTop > 4);
     };
