@@ -478,9 +478,7 @@ export class TranscriptionView extends ItemView {
       this.streamingTimeEl.setText(this.formatWallTime(wallTime));
     }
     if (this.streamingLangBadgeEl) {
-      this.streamingLangBadgeEl.className = "card-lang-badge";
-      this.streamingLangBadgeEl.addClass(`lang-${language}`);
-      this.streamingLangBadgeEl.setText(LANG_LABELS[language] ?? language);
+      this.updateLanguageBadge(this.streamingLangBadgeEl, language, text);
     }
     if (this.streamingOriginalEl) {
       this.streamingOriginalEl.setText(text);
@@ -514,10 +512,10 @@ export class TranscriptionView extends ItemView {
       this.streamingTimeEl.setText(this.formatWallTime(entry.wallTime));
     }
     if (this.streamingLangBadgeEl) {
-      this.streamingLangBadgeEl.className = "card-lang-badge";
-      this.streamingLangBadgeEl.addClass(`lang-${entry.result.language}`);
-      this.streamingLangBadgeEl.setText(
-        LANG_LABELS[entry.result.language] ?? entry.result.language,
+      this.updateLanguageBadge(
+        this.streamingLangBadgeEl,
+        entry.result.language,
+        entry.result.text,
       );
     }
     if (this.streamingOriginalEl) {
@@ -668,8 +666,7 @@ export class TranscriptionView extends ItemView {
     timeEl.setText(this.formatWallTime(entry.wallTime));
 
     const langBadge = cardHeader.createEl("span", { cls: "card-lang-badge" });
-    langBadge.setText(LANG_LABELS[entry.result.language] ?? entry.result.language);
-    langBadge.addClass(`lang-${entry.result.language}`);
+    this.updateLanguageBadge(langBadge, entry.result.language, entry.result.text);
 
     // 摘要/二次摘要标题
     if (isMetaSummary) {
@@ -795,6 +792,51 @@ export class TranscriptionView extends ItemView {
     this.setIconButton(btn, "file-text", t("view.showOriginal"));
   }
 
+  private inferDisplayLanguage(rawLanguage: string, text: string): string {
+    const language = (rawLanguage || "auto").toLowerCase();
+    if (language === "summary" || language === "meta-summary") {
+      return language;
+    }
+
+    const hanCount = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
+    const latinCount = (text.match(/[A-Za-z]/g) ?? []).length;
+    const latinWordCount = (text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? []).length;
+    const kanaCount = (text.match(/[\u3040-\u30ff]/g) ?? []).length;
+    const hangulCount = (text.match(/[\uac00-\ud7af]/g) ?? []).length;
+
+    if (kanaCount > 0) return "ja";
+    if (hangulCount > 0) return "ko";
+
+    if (latinWordCount >= 3 && latinCount >= Math.max(8, hanCount * 2)) {
+      return "en";
+    }
+    if (hanCount === 0 && latinCount >= 3) return "en";
+
+    if (hanCount >= 2) {
+      return language === "yue" ? "yue" : "zh";
+    }
+
+    if (hanCount === 1) {
+      if (latinCount >= 8) return "en";
+      return language === "yue" ? "yue" : "zh";
+    }
+
+    if (language === "ja" || language === "ko" || language === "yue" || language === "en") {
+      return language;
+    }
+    if (language === "zh") return "zh";
+
+    return "zh";
+  }
+
+  private updateLanguageBadge(badge: HTMLElement, language: string, text: string): string {
+    const displayLanguage = this.inferDisplayLanguage(language, text);
+    badge.className = "card-lang-badge";
+    badge.addClass(`lang-${displayLanguage}`);
+    badge.setText(LANG_LABELS[displayLanguage] ?? displayLanguage);
+    return displayLanguage;
+  }
+
   private async handleTranslateClick(
     entry: TranscriptEntry,
     btn: HTMLElement,
@@ -817,8 +859,12 @@ export class TranscriptionView extends ItemView {
     card.appendChild(loadingEl);
 
     try {
+      const sourceLanguage = this.inferDisplayLanguage(
+        entry.result.language,
+        entry.result.text,
+      );
       const result = await Promise.resolve(
-        this.onTranslate(entry.id, entry.result.text, entry.result.language),
+        this.onTranslate(entry.id, entry.result.text, sourceLanguage),
       );
       this.updateTranslation(entry.id, result);
       btn.classList.remove("loading");

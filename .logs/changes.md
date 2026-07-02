@@ -150,3 +150,9 @@
 - `src/i18n.ts`: 新增显示原文/显示润色按钮文案。
 - `styles.css`: 翻译/润色加载文案改为文字伪元素 shimmer,并移除独立润色文本样式。
 - `styles.css`: 设置页标题图标和文字行改为垂直居中。
+
+## 2026-07-02 11:11 — 历史转写语言标签按内容推断
+- `src/views/TranscriptionView.ts`: 渲染语言标签时按文本内容重新判断中英日韩,旧记录英文内容不再因持久化语言码显示为中文。
+- `src/views/TranscriptionView.ts`: 手动翻译源语言改用同一推断结果,避免旧英文记录按中文发起翻译。
+- `styles.css`: 将翻译/润色加载 shimmer 调慢并扩大高光过渡区域,降低闪烁和卡顿感。
+- `tests/clearEntriesState.test.ts`: 增加视图层语言推断和手动翻译调用路径的静态回归检查。

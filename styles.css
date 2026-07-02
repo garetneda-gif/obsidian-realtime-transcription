@@ -686,22 +686,25 @@
   background: linear-gradient(
     90deg,
     var(--text-muted) 0%,
-    var(--text-normal) 45%,
-    var(--text-muted) 90%
+    var(--text-muted) 34%,
+    var(--text-normal) 50%,
+    var(--text-muted) 66%,
+    var(--text-muted) 100%
   );
-  background-size: 220% 100%;
+  background-size: 320% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: rt-loading-shimmer 1.1s linear infinite;
+  animation: rt-loading-shimmer 2.4s ease-in-out infinite;
+  will-change: background-position;
 }
 
 @keyframes rt-loading-shimmer {
   from {
-    background-position: 120% 0;
+    background-position: 180% 0;
   }
   to {
-    background-position: -120% 0;
+    background-position: -180% 0;
   }
 }
 

@@ -190,3 +190,9 @@
 - 用户反馈设置页标题条需要同时显示 SVG 和 Realtime-Transcription,已取消紧凑态隐藏文字。
 - 用户反馈面板设置行布局挤压,已调整两栏比例和控件宽度。
 - 下一步: 重新验证、覆盖本机 vault,提交并推送。
+
+## 2026-07-02 11:11 — 历史语言标签与 shimmer 质感修正
+- 历史/恢复的转写卡片语言标签改为按文本脚本重新推断,旧英文记录不再显示为中文。
+- 手动翻译源语言复用同一推断结果,避免旧记录按错误语言发起翻译。
+- 翻译/润色加载 shimmer 改为 2.4 秒宽光带 ease-in-out,降低过快和跳帧观感。
+- 验证: `git diff --check`,`npx tsc --noEmit`,`node --experimental-strip-types --test tests/*.test.ts`,`npm run build`,`scripts/post-sync-refresh.sh` 均通过。
