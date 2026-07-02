@@ -171,3 +171,7 @@
 - `src/main.ts`,`src/views/TranscriptionView.ts`: 中英混合文本识别为 `hybrid`,历史卡片和新转写统一显示混合标签。
 - `src/i18n.ts`,`styles.css`: 新增 `混合/Hybrid` 标签文案和样式。
 - `src/services/TranslationService.ts`: 翻译提示词将 `hybrid` 显示为中英混合。
+
+## 2026-07-02 12:23 — 重做 loading shimmer
+- `styles.css`: 参考常见 skeleton shimmer 实现,将 loading 动画从文字背景位移改为独立伪元素光带 `transform` 扫过。
+- `styles.css`: 保留原 loading 文案和虚线布局,新增 `prefers-reduced-motion` 时关闭扫光动画。

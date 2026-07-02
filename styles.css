@@ -676,6 +676,7 @@
 .card-translation-loading,
 .card-formal-loading {
   position: relative;
+  overflow: hidden;
   color: transparent;
   -webkit-text-fill-color: transparent;
 }
@@ -686,30 +687,40 @@
   position: absolute;
   top: 5px;
   left: 0;
+  z-index: 1;
   white-space: nowrap;
-  color: transparent;
-  background: linear-gradient(
-    90deg,
-    var(--text-muted) 0%,
-    var(--text-muted) 34%,
-    var(--text-normal) 50%,
-    var(--text-muted) 66%,
-    var(--text-muted) 100%
-  );
-  background-size: 320% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: rt-loading-shimmer 2.4s ease-in-out infinite;
-  will-change: background-position;
+  color: var(--text-muted);
+  -webkit-text-fill-color: var(--text-muted);
+}
+
+.card-translation-loading::before,
+.card-formal-loading::before {
+  content: "";
+  position: absolute;
+  inset: 5px 0 0 0;
+  z-index: 2;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.68) 45%, transparent 70%);
+  mix-blend-mode: screen;
+  transform: translateX(-130%);
+  animation: rt-loading-shimmer 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+  pointer-events: none;
 }
 
 @keyframes rt-loading-shimmer {
   from {
-    background-position: 180% 0;
+    transform: translateX(-130%);
   }
   to {
-    background-position: -180% 0;
+    transform: translateX(130%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-translation-loading::before,
+  .card-formal-loading::before {
+    animation: none;
+    opacity: 0;
   }
 }
 
