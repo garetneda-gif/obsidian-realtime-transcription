@@ -1,8 +1,6 @@
 # 实时语音转写 for Obsidian
 
-<p align="center">
-  <a href="https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README.md">中文</a> | <a href="https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README_EN.md">English</a>
-</p>
+[中文](https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README.md) | [English](https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README_EN.md)
 
 <p align="center">
   基于 <strong>SenseVoice-Small + Silero VAD + sherpa-onnx</strong> 的本地实时语音转写 Obsidian 插件
@@ -23,7 +21,7 @@
 |------|------|
 | **本地实时转写** | 完全本地运行，无需联网，支持边说边显示 |
 | **多语言识别** | 中文 / 英文 / 日文 / 韩文 / 粤语 |
-| **识别语言范围** | 可限定为纯中文、纯英文或中英混杂模式 |
+| **识别模式** | 可限定本地识别引擎输出为纯中文、纯英文或中英混杂模式 |
 | **实时预览模式** | 稳态档（更准）/ 极速档（更快）两档切换 |
 | **自动翻译** | 检测到非中文内容时，自动调用 OpenAI 兼容 API 翻译成中文 |
 | **AI 文本润色** | 手动触发，将口语化转写润色为规范书面语 |
@@ -264,7 +262,7 @@ ls ~/obsidian-models
 #### 模型设置
 
 - `模型目录`：填入第四步中创建的目录完整路径
-- `识别语言范围`：`中英混杂`（默认）/ `纯中文` / `纯英文`
+- `识别模式`：`中英混杂`（默认）/ `纯中文` / `纯英文`
 
   > 说中文时识别出日语或韩语？将此项改为「纯中文」。
 

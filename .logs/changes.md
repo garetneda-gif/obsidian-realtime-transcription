@@ -232,3 +232,21 @@
 ## 2026-07-03 12:43 — 折叠摘要信息栏图标对齐
 - `styles.css`: 折叠态摘要头部改为两列 grid,左侧标题/提示和右侧操作按钮分离。
 - `styles.css`: 折叠态标题图标与复制、重新生成、展开按钮统一 22px 行高并移除操作区顶部偏移。
+## 2026-07-03 13:05 — 折叠摘要对齐与批量选择入口
+- `src/views/TranscriptionView.ts` 新增标题左侧选择模式按钮、段落勾选状态和批量工具条，批量润色/翻译/Claudian 只处理显式选中的段落。
+- `src/main.ts` 增加按 entry id 过滤的批量润色/翻译/Claudian 回调；失败按批次汇总通知，避免刷屏。
+- `styles.css` 将折叠摘要头部改为固定网格对齐，并补充选择模式样式。
+- 验证：`npm run build`、`node --test tests/*.test.ts`、`npx tsc --noEmit --outDir /tmp/rt-tsc-check`、`git diff --check` 均通过；Obsidian 运行时确认批量入口和折叠摘要对齐生效。
+
+## 2026-07-03 14:09 — 批量选择栏和 AI 命名修正
+- `src/views/TranscriptionView.ts`: 批量选择栏改为纯 SVG 图标按钮,支持点击计数区域显式全选/取消全选,段落区域点击即可切换选中。
+- `src/main.ts`,`src/i18n.ts`: AI 命名改走快速模型档位,智能模型文案移除 AI 命名;命名未配置提示改为快速模型。
+- `styles.css`: 批量栏、返回/保存按钮统一为透明 SVG 变色反馈,去掉选中态左侧细线和卡片式灰底。
+- `README.md`,`README_EN.md`: 语言切换改为 Markdown 超链接,避免 Obsidian 插件市场中 HTML 链接点击无反应。
+- 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`git diff --check` 通过;已同步并重载本机 Obsidian。
+
+## 2026-07-03 15:54 — 批量栏全选和终止任务
+- `src/views/TranscriptionView.ts`: “已选几段”改回纯状态显示,全选/取消全选放入右侧 SVG 图标组;批量任务运行时最右按钮切换为终止任务。
+- `src/main.ts`: 批量润色/翻译接入取消标记,终止后停止继续处理剩余段落,避免误操作继续消耗请求。
+- `src/i18n.ts`,`README.md`: “识别语言范围”改为“识别模式”,说明该项仍会传给本地识别引擎,语言标签另按文本内容智能判断。
+- 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`git diff --check` 通过;已同步并重载 Obsidian,运行时 DOM 确认批量栏为 5 个图标按钮且运行态显示终止任务。

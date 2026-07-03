@@ -35,6 +35,10 @@ test("AI backend connection test uses the selected fast or smart profile", () =>
   assert.ok(mainSource.includes("new TranslationService(this.settings.translation, this.fastAgentBackendService)"));
   assert.ok(mainSource.includes("new FormalizeService(this.settings.formalize, this.fastAgentBackendService)"));
   assert.ok(mainSource.includes("new SummaryService(this.settings.summary, this.smartAgentBackendService)"));
+  assert.ok(mainSource.includes("const TITLE_SERVICE_SETTINGS: SummarySettings"));
+  assert.ok(mainSource.includes("this.titleService = new SummaryService(TITLE_SERVICE_SETTINGS, this.fastAgentBackendService)"));
+  assert.ok(mainSource.includes("const aiTitle = await this.titleService.generateTitle"));
+  assert.ok(!i18nSource.includes("AI 命名等分析性任务"));
   assert.ok(mainSource.includes("role === \"fast\""));
   assert.ok(mainSource.includes("return service.testConnection()"));
   assert.ok(agentSource.includes("async testConnection(): Promise<string>"));

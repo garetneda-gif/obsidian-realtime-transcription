@@ -11,7 +11,7 @@ import { FormalizeService } from "./services/FormalizeService";
 import { AgentBackendService, isAiBackendCliPathCompatible, resolveAiBackendCliPath } from "./services/AgentBackendService";
 import { TranscriptionSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud, normalizeAiBackendSettings } from "./types";
-import type { AiOutputLanguage, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, TranscriptEntry, TranscriptionResult } from "./types";
+import type { AiOutputLanguage, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, SummarySettings, TranscriptEntry, TranscriptionResult } from "./types";
 import type { AiBackendProfileRole, AiBackendProfileSettings, AiBackendProvider } from "./types";
 import { CloudAuthService } from "./services/CloudAuthService";
 import { resolvePluginDir } from "./utils/pluginPaths";
@@ -37,6 +37,14 @@ import { t, setLocale } from "./i18n";
 const AI_SUMMARY_FAILURE_RETRY_MS = 60_000;
 const FORMALIZE_CONTEXT_MAX_CHARS = 180;
 const AI_BACKEND_PROFILE_ROLES: AiBackendProfileRole[] = ["fast", "smart"];
+const TITLE_SERVICE_SETTINGS: SummarySettings = {
+  enabled: false,
+  displayMode: "both",
+  apiUrl: "",
+  apiKey: "",
+  model: "",
+  thresholdChars: 500,
+};
 
 interface PendingTranscript {
   id: string;
@@ -60,6 +68,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private smartAgentBackendService!: AgentBackendService;
   private translationService!: TranslationService;
   private summaryService!: SummaryService;
+  private titleService!: SummaryService;
   private formalizeService!: FormalizeService;
   private aiBackendTestInFlight: Partial<Record<AiBackendProfileRole, Promise<string>>> = {};
   private recording = false;
@@ -73,6 +82,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private summaryBuffer = "";
   private summaryInFlight = false;
   private summaryRetryAfter = 0;
+  private batchTaskCancelRequested = false;
   private metaSummaryTexts: string[] = [];
   private metaSummaryInFlight = false;
   private metaSummaryRetryAfter = 0;
@@ -129,6 +139,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.smartAgentBackendService = new AgentBackendService(this.settings.aiBackend.smart, getVaultBasePath(this.app));
     this.translationService = new TranslationService(this.settings.translation, this.fastAgentBackendService);
     this.summaryService = new SummaryService(this.settings.summary, this.smartAgentBackendService);
+    this.titleService = new SummaryService(TITLE_SERVICE_SETTINGS, this.fastAgentBackendService);
     this.formalizeService = new FormalizeService(this.settings.formalize, this.fastAgentBackendService);
     this.cloudAuthService = new CloudAuthService(this.settings.cloudAuth);
     this.cloudAuthService.setOnSettingsChanged((newSettings) => {
@@ -237,6 +248,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.smartAgentBackendService?.updateSettings(this.settings.aiBackend.smart, getVaultBasePath(this.app));
     this.translationService?.updateSettings(this.settings.translation);
     this.summaryService?.updateSettings(this.settings.summary);
+    this.titleService?.updateSettings(TITLE_SERVICE_SETTINGS);
     this.formalizeService?.updateSettings(this.settings.formalize);
     this.tencentClient?.updateSettings(this.settings.tencentASR);
     this.cloudAuthService?.updateSettings(this.settings.cloudAuth);
@@ -1076,6 +1088,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.onExport = () => this.exportToNote();
     view.onCopyTranscripts = () => this.copyTranscriptsToClipboard();
     view.onSendToClaudian = () => this.sendToClaudian();
+    view.onBatchFormalize = (entryIds) => this.batchFormalizeEntries(entryIds);
+    view.onBatchTranslate = (entryIds) => this.batchTranslateEntries(entryIds);
+    view.onBatchSendToClaudian = (entryIds) => this.sendToClaudian(entryIds);
+    view.onCancelBatchTask = () => this.cancelBatchTask();
     view.onCopyEntryText = (_entryId, text) => writeTextToClipboard(text);
     view.onRegenerateSummary = (entryId, sourceText, kind) =>
       this.regenerateSummaryEntry(entryId, sourceText, kind);
@@ -1297,6 +1313,73 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     return result;
   }
 
+  private getBatchTranscriptEntries(entryIds: string[]): TranscriptEntry[] {
+    const selectedIds = new Set(entryIds);
+    return this.transcriptEntries.filter((entry) => selectedIds.has(entry.id) && isFormalizeContextEntry(entry));
+  }
+
+  private async batchFormalizeEntries(entryIds: string[]): Promise<void> {
+    const entries = this.getBatchTranscriptEntries(entryIds);
+    if (entries.length === 0) {
+      new Notice(t("view.noSelectedTranscripts"));
+      return;
+    }
+    if (!this.formalizeService.canFormalize()) {
+      new Notice(t("notice.configureFormalizeApi"));
+      return;
+    }
+
+    this.batchTaskCancelRequested = false;
+    let completed = 0;
+    let failed = 0;
+    for (const entry of entries) {
+      if (this.batchTaskCancelRequested) break;
+      try {
+        await this.formalizeEntry(entry.id, entry.result.text);
+        completed++;
+      } catch (err) {
+        failed++;
+        console.error("[Transcription] 批量润色失败:", err);
+      }
+    }
+    const prefix = this.batchTaskCancelRequested ? t("notice.batchCancelled") : t("notice.batchFormalizeDone");
+    new Notice(`${prefix}: ${completed}/${entries.length}${failed > 0 ? `, ${t("notice.batchFailed")}: ${failed}` : ""}`);
+  }
+
+  private async batchTranslateEntries(entryIds: string[]): Promise<void> {
+    const entries = this.getBatchTranscriptEntries(entryIds);
+    if (entries.length === 0) {
+      new Notice(t("view.noSelectedTranscripts"));
+      return;
+    }
+    if (!this.translationService.isConfigured()) {
+      new Notice(t("notice.configureTranslationApi"));
+      return;
+    }
+
+    this.batchTaskCancelRequested = false;
+    let completed = 0;
+    let failed = 0;
+    for (const entry of entries) {
+      if (this.batchTaskCancelRequested) break;
+      try {
+        const sourceLanguage = this.normalizeLanguage(entry.result.language, entry.result.text);
+        await this.translateEntry(entry.id, entry.result.text, sourceLanguage);
+        completed++;
+      } catch (err) {
+        failed++;
+        console.error("[Transcription] 批量翻译失败:", err);
+      }
+    }
+    const prefix = this.batchTaskCancelRequested ? t("notice.batchCancelled") : t("notice.batchTranslateDone");
+    new Notice(`${prefix}: ${completed}/${entries.length}${failed > 0 ? `, ${t("notice.batchFailed")}: ${failed}` : ""}`);
+  }
+
+  private cancelBatchTask(): void {
+    this.batchTaskCancelRequested = true;
+    new Notice(t("notice.batchCancelled"));
+  }
+
   private maybeAutoFormalizeEntry(entry: TranscriptEntry): void {
     if (!this.settings.autoFormalize) return;
     if (!this.formalizeService.canFormalize()) return;
@@ -1426,11 +1509,14 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       : scopedEntries;
   }
 
-  private async sendToClaudian(): Promise<void> {
+  private async sendToClaudian(entryIds?: string[]): Promise<void> {
     const view = this.getView();
     if (!view) return;
 
-    const entries = view.getEntries();
+    const selectedIds = entryIds ? new Set(entryIds) : null;
+    const entries = selectedIds
+      ? view.getEntries().filter((entry) => selectedIds.has(entry.id) && isFormalizeContextEntry(entry))
+      : view.getEntries();
     if (entries.length === 0) {
       new Notice(t("notice.noTranscriptToClaudian"));
       return;
@@ -1507,7 +1593,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         break;
       }
       case "ai": {
-        if (!this.summaryService.isConfigured()) {
+        if (!this.titleService.isConfigured()) {
           new Notice(t("notice.aiNamingNeedConfig"));
           title = timestampTitle;
           break;
@@ -1518,7 +1604,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
             .map((e) => e.result.text)
             .join("\n")
             .slice(0, 2000);
-          const aiTitle = await this.summaryService.generateTitle(contentSnippet, this.outputLanguageName());
+          const aiTitle = await this.titleService.generateTitle(contentSnippet, this.outputLanguageName());
           title = this.sanitizeFileName(aiTitle) || timestampTitle;
         } catch (err) {
           console.error("[Transcription] AI 命名失败:", err);

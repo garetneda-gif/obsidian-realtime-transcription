@@ -10,7 +10,10 @@ const FORMALIZE_UI_TIMEOUT_MS = 35000;
 export class TranscriptionView extends ItemView {
   private controlBar!: HTMLElement;
   private statusBar!: HTMLElement;
+  private transcriptWrapper!: HTMLElement;
   private transcriptContainer!: HTMLElement;
+  private batchSelectBtn!: HTMLButtonElement;
+  private batchSelectionBar: HTMLElement | null = null;
   private recordBtn!: HTMLButtonElement;
   private summaryBtn!: HTMLButtonElement;
   private exportBtn!: HTMLButtonElement;
@@ -28,6 +31,9 @@ export class TranscriptionView extends ItemView {
   private scrollToBottomBtn!: HTMLElement;
   private settingsPage: HTMLElement | null = null;
   private panelSettingsCleanup: Array<() => void> = [];
+  private batchSelectionMode = false;
+  private batchTaskRunning = false;
+  private selectedEntryIds = new Set<string>();
   private pinnedToBottom = true;
   private entries: TranscriptEntry[] = [];
   private panelSettingsValues: PanelSettingsValues = {
@@ -47,6 +53,10 @@ export class TranscriptionView extends ItemView {
   onExport: (() => void) | null = null;
   onCopyTranscripts: (() => void | Promise<void>) | null = null;
   onSendToClaudian: (() => void | Promise<void>) | null = null;
+  onBatchFormalize: ((entryIds: string[]) => void | Promise<void>) | null = null;
+  onBatchTranslate: ((entryIds: string[]) => void | Promise<void>) | null = null;
+  onBatchSendToClaudian: ((entryIds: string[]) => void | Promise<void>) | null = null;
+  onCancelBatchTask: (() => void | Promise<void>) | null = null;
   onCopyEntryText: ((entryId: string, text: string) => void | Promise<void>) | null = null;
   onRegenerateSummary: ((
     entryId: string,
@@ -81,6 +91,14 @@ export class TranscriptionView extends ItemView {
 
     // 头部标题
     const header = container.createDiv("transcription-header");
+    this.batchSelectBtn = header.createEl("button", {
+      cls: "title-batch-select-btn",
+      attr: { type: "button", "aria-label": t("view.batchSelect"), title: t("view.batchSelect") },
+    });
+    setIcon(this.batchSelectBtn, "list-checks");
+    this.batchSelectBtn.addEventListener("click", () => {
+      this.setBatchSelectionMode(!this.batchSelectionMode);
+    });
     const titleEl = header.createEl("span", { cls: "transcription-title" });
     titleEl.setText(t("view.title"));
 
@@ -98,11 +116,11 @@ export class TranscriptionView extends ItemView {
     this.statusBar = statusIndicator;
 
     // 转写结果区域（需要 wrapper 定位浮动按钮）
-    const transcriptWrapper = container.createDiv("transcript-wrapper");
-    this.transcriptContainer = transcriptWrapper.createDiv("transcript-container");
+    this.transcriptWrapper = container.createDiv("transcript-wrapper");
+    this.transcriptContainer = this.transcriptWrapper.createDiv("transcript-container");
 
     // 滚动到底部浮动按钮
-    this.scrollToBottomBtn = transcriptWrapper.createDiv("scroll-to-bottom-btn");
+    this.scrollToBottomBtn = this.transcriptWrapper.createDiv("scroll-to-bottom-btn");
     setIcon(this.scrollToBottomBtn, "chevron-down");
     this.scrollToBottomBtn.addEventListener("click", () => {
       this.pinnedToBottom = true;
@@ -224,6 +242,8 @@ export class TranscriptionView extends ItemView {
     this.exportBtn?.setAttribute("aria-label", t("view.exportNote"));
     this.copyBtn?.setAttribute("aria-label", t("view.copyRecords"));
     this.claudianBtn?.setAttribute("aria-label", t("view.sendToClaudian"));
+    this.updateBatchSelectButton();
+    this.updateBatchSelectionBar();
     this.clearBtn?.setAttribute("aria-label", t("view.clearRecords"));
     this.settingsBtn?.setAttribute("aria-label", t("view.panelSettings"));
 
@@ -260,11 +280,18 @@ export class TranscriptionView extends ItemView {
       this.summaryBtn.addClass("active");
       this.summaryBtn.setAttribute("aria-label", t("view.switchToBoth"));
       this.transcriptContainer.addClass("summary-only");
+      this.setSummaryModeIcon("list-plus");
     } else {
       this.summaryBtn.removeClass("active");
       this.summaryBtn.setAttribute("aria-label", t("view.switchToSummaryOnly"));
       this.transcriptContainer.removeClass("summary-only");
+      this.setSummaryModeIcon("sparkles");
     }
+  }
+
+  private setSummaryModeIcon(icon: string): void {
+    this.summaryBtn.empty();
+    setIcon(this.summaryBtn, icon);
   }
 
   applyTranscriptFontSize(size: number): void {
@@ -724,6 +751,10 @@ export class TranscriptionView extends ItemView {
       this.streamingCard.removeClass("summary-card");
       const title = this.streamingCard.querySelector(".summary-title-row");
       if (title) title.remove();
+      const header = this.streamingCard.querySelector(".card-header") as HTMLElement | null;
+      if (header && !header.querySelector(".entry-select-toggle")) {
+        this.prependEntrySelectButton(header, this.streamingCard, entry);
+      }
     }
 
     if (this.streamingTimeEl) {
@@ -810,6 +841,7 @@ export class TranscriptionView extends ItemView {
   clearTranscripts(): void {
     this.entries = [];
     this.clearStreamingTranscript();
+    this.setBatchSelectionMode(false);
     this.transcriptContainer.empty();
     this.showEmptyState();
     void this.onClearTranscripts?.();
@@ -830,6 +862,7 @@ export class TranscriptionView extends ItemView {
     for (const entry of this.entries) {
       this.renderCard(entry);
     }
+    this.updateBatchSelectionUi();
     this.transcriptContainer.scrollTop = this.transcriptContainer.scrollHeight;
   }
 
@@ -883,6 +916,7 @@ export class TranscriptionView extends ItemView {
       this.appendSummaryHeader(card as HTMLElement, entry, isMetaSummary ? "meta-summary" : "summary");
     } else {
       const cardHeader = card.createDiv("card-header");
+      this.prependEntrySelectButton(cardHeader, card as HTMLElement, entry);
       const timeEl = cardHeader.createEl("span", { cls: "card-timestamp" });
       timeEl.setText(this.formatWallTime(entry.wallTime));
 
@@ -955,6 +989,7 @@ export class TranscriptionView extends ItemView {
     const collapseBtn = this.createSummaryActionButton(actions, "chevron-up", t("view.collapseSummary"));
     collapseBtn.addEventListener("click", (event) => {
       event.stopPropagation();
+      const previousTop = titleRow.getBoundingClientRect().top;
       const collapsed = card.hasClass("is-summary-collapsed");
       if (collapsed) {
         card.removeClass("is-summary-collapsed");
@@ -963,6 +998,21 @@ export class TranscriptionView extends ItemView {
         card.addClass("is-summary-collapsed");
         this.setSummaryActionButton(collapseBtn, "chevron-down", t("view.expandSummary"));
       }
+      this.preserveSummaryHeaderPosition(titleRow, previousTop);
+    });
+  }
+
+  private preserveSummaryHeaderPosition(titleRow: HTMLElement, previousTop: number): void {
+    const adjust = () => {
+      const currentTop = titleRow.getBoundingClientRect().top;
+      const delta = currentTop - previousTop;
+      if (Math.abs(delta) < 0.5) return;
+      this.transcriptContainer.scrollTop += delta;
+    };
+    window.requestAnimationFrame(() => {
+      adjust();
+      window.requestAnimationFrame(adjust);
+      window.setTimeout(adjust, 80);
     });
   }
 
@@ -1034,6 +1084,223 @@ export class TranscriptionView extends ItemView {
     const footer = card.createDiv("card-footer");
     this.appendTranslateButton(footer, card, entry);
     this.appendFormalizeButton(footer, card, entry);
+  }
+
+  private prependEntrySelectButton(header: HTMLElement, card: HTMLElement, entry: TranscriptEntry): void {
+    const selectBtn = header.createEl("button", {
+      cls: "entry-select-toggle",
+      attr: { type: "button" },
+    });
+    header.prepend(selectBtn);
+    this.syncEntrySelectButton(selectBtn, entry.id);
+    selectBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.toggleEntrySelection(entry.id, card, selectBtn);
+    });
+    if (!card.hasAttribute("data-batch-select-bound")) {
+      card.setAttr("data-batch-select-bound", "true");
+      card.addEventListener("click", (event) => {
+        if (!this.batchSelectionMode) return;
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("button, a, input, select, textarea, .card-footer")) return;
+        this.toggleEntrySelection(entry.id, card, selectBtn);
+      });
+    }
+  }
+
+  private toggleEntrySelection(entryId: string, card: HTMLElement, button: HTMLElement): void {
+    if (!this.batchSelectionMode) {
+      this.setBatchSelectionMode(true);
+    }
+    if (this.selectedEntryIds.has(entryId)) {
+      this.selectedEntryIds.delete(entryId);
+    } else {
+      this.selectedEntryIds.add(entryId);
+    }
+    card.classList.toggle("is-selected", this.selectedEntryIds.has(entryId));
+    this.syncEntrySelectButton(button, entryId);
+    this.updateBatchSelectionBar();
+  }
+
+  private setBatchSelectionMode(enabled: boolean): void {
+    this.batchSelectionMode = enabled;
+    if (!enabled) {
+      this.selectedEntryIds.clear();
+    }
+    this.updateBatchSelectionUi();
+  }
+
+  private updateBatchSelectionUi(): void {
+    this.transcriptContainer?.classList.toggle("batch-selecting", this.batchSelectionMode);
+    this.updateBatchSelectButton();
+    this.transcriptContainer
+      ?.querySelectorAll<HTMLElement>(".transcript-card[data-entry-id]")
+      .forEach((card) => {
+        const entryId = card.getAttr("data-entry-id");
+        if (!entryId) return;
+        const selected = this.selectedEntryIds.has(entryId);
+        card.classList.toggle("is-selected", selected);
+        const button = card.querySelector(".entry-select-toggle") as HTMLElement | null;
+        if (button) this.syncEntrySelectButton(button, entryId);
+      });
+    this.updateBatchSelectionBar();
+  }
+
+  private updateBatchSelectButton(): void {
+    if (!this.batchSelectBtn) return;
+    const label = this.batchSelectionMode ? t("view.exitBatchSelect") : t("view.batchSelect");
+    this.batchSelectBtn.setAttr("aria-label", label);
+    this.batchSelectBtn.setAttr("title", label);
+    this.batchSelectBtn.classList.toggle("active", this.batchSelectionMode);
+  }
+
+  private updateBatchSelectionBar(): void {
+    if (!this.batchSelectionMode) {
+      this.batchSelectionBar?.remove();
+      this.batchSelectionBar = null;
+      return;
+    }
+
+    if (!this.batchSelectionBar) {
+      this.batchSelectionBar = this.transcriptWrapper.createDiv("batch-selection-bar");
+      this.transcriptWrapper.prepend(this.batchSelectionBar);
+    }
+
+    const selectedCount = this.getSelectedEntryIds().length;
+    this.batchSelectionBar.empty();
+    const selectableCount = this.getSelectableEntryIds().length;
+    const allSelected = selectableCount > 0 && selectedCount === selectableCount;
+    const countEl = this.batchSelectionBar.createDiv({
+      cls: "batch-selection-count",
+    });
+    countEl.createSpan({ text: t("view.batchSelectedPrefix").trim() });
+    countEl.createSpan({ cls: "batch-selection-count-number", text: String(selectedCount) });
+    countEl.createSpan({ text: t("view.batchSelectedSuffix").trim() });
+    this.batchSelectionBar.createDiv("batch-selection-divider");
+    this.createBatchActionButton(
+      this.batchSelectionBar,
+      allSelected ? "square" : "check-square",
+      allSelected ? t("view.batchDeselectAll") : t("view.batchSelectAll"),
+      () => this.toggleBatchSelectAll(!allSelected),
+      selectableCount === 0 || this.batchTaskRunning,
+    );
+    this.createBatchActionButton(
+      this.batchSelectionBar,
+      "wand-2",
+      t("view.batchFormalizeSelected"),
+      () => this.runSelectedBatch(this.onBatchFormalize),
+      selectedCount === 0 || this.batchTaskRunning,
+    );
+    this.createBatchActionButton(
+      this.batchSelectionBar,
+      "languages",
+      t("view.batchTranslateSelected"),
+      () => this.runSelectedBatch(this.onBatchTranslate),
+      selectedCount === 0 || this.batchTaskRunning,
+    );
+    this.createBatchActionButton(
+      this.batchSelectionBar,
+      "claude",
+      t("view.batchSendSelectedToClaudian"),
+      () => this.runSelectedBatch(this.onBatchSendToClaudian),
+      selectedCount === 0 || this.batchTaskRunning,
+    );
+    this.createBatchActionButton(
+      this.batchSelectionBar,
+      this.batchTaskRunning ? "square" : "log-out",
+      this.batchTaskRunning ? t("view.batchStopTask") : t("view.cancelBatchSelection"),
+      () => {
+        if (this.batchTaskRunning) {
+          void this.onCancelBatchTask?.();
+          return;
+        }
+        this.setBatchSelectionMode(false);
+      },
+      false,
+    );
+  }
+
+  private createBatchActionButton(
+    container: HTMLElement,
+    icon: string,
+    label: string,
+    onClick: () => void,
+    disabled: boolean,
+  ): HTMLButtonElement {
+    const button = container.createEl("button", {
+      cls: "batch-selection-action",
+      attr: { type: "button", "aria-label": label, title: label },
+    });
+    button.disabled = disabled;
+    const iconEl = button.createSpan("batch-selection-action-icon");
+    this.setBatchActionIcon(iconEl, icon);
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      onClick();
+    });
+    return button;
+  }
+
+  private setBatchActionIcon(container: HTMLElement, icon: string): void {
+    container.empty();
+    if (icon !== "claude") {
+      setIcon(container, icon);
+      return;
+    }
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("aria-hidden", "true");
+    svg.addClass("claude-symbol-icon");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "m19.6 66.5 19.7-11 .3-1-.3-.5h-1l-3.3-.2-11.2-.3L14 53l-9.5-.5-2.4-.5L0 49l.2-1.5 2-1.3 2.9.2 6.3.5 9.5.6 6.9.4L38 49.1h1.6l.2-.7-.5-.4-.4-.4L29 41l-10.6-7-5.6-4.1-3-2-1.5-2-.6-4.2 2.7-3 3.7.3.9.2 3.7 2.9 8 6.1L37 36l1.5 1.2.6-.4.1-.3-.7-1.1L33 25l-6-10.4-2.7-4.3-.7-2.6c-.3-1-.4-2-.4-3l3-4.2L28 0l4.2.6L33.8 2l2.6 6 4.1 9.3L47 29.9l2 3.8 1 3.4.3 1h.7v-.5l.5-7.2 1-8.7 1-11.2.3-3.2 1.6-3.8 3-2L61 2.6l2 2.9-.3 1.8-1.1 7.7L59 27.1l-1.5 8.2h.9l1-1.1 4.1-5.4 6.9-8.6 3-3.5L77 13l2.3-1.8h4.3l3.1 4.7-1.4 4.9-4.4 5.6-3.7 4.7-5.3 7.1-3.2 5.7.3.4h.7l12-2.6 6.4-1.1 7.6-1.3 3.5 1.6.4 1.6-1.4 3.4-8.2 2-9.6 2-14.3 3.3-.2.1.2.3 6.4.6 2.8.2h6.8l12.6 1 3.3 2 1.9 2.7-.3 2-5.1 2.6-6.8-1.6-16-3.8-5.4-1.3h-.8v.4l4.6 4.5 8.3 7.5L89 80.1l.5 2.4-1.3 2-1.4-.2-9.2-7-3.6-3-8-6.8h-.5v.7l1.8 2.7 9.8 14.7.5 4.5-.7 1.4-2.6 1-2.7-.6-5.8-8-6-9-4.7-8.2-.5.4-2.9 30.2-1.3 1.5-3 1.2-2.5-2-1.4-3 1.4-6.2 1.6-8 1.3-6.4 1.2-7.9.7-2.6v-.2H49L43 72l-9 12.3-7.2 7.6-1.7.7-3-1.5.3-2.8L24 86l10-12.8 6-7.9 4-4.6-.1-.5h-.3L17.2 77.4l-4.7.6-2-2 .2-3 1-1 8-5.5Z");
+    svg.appendChild(path);
+    container.appendChild(svg);
+  }
+
+  private runSelectedBatch(callback: ((entryIds: string[]) => void | Promise<void>) | null): void {
+    const entryIds = this.getSelectedEntryIds();
+    if (entryIds.length === 0) {
+      new Notice(t("view.noSelectedTranscripts"));
+      return;
+    }
+    if (!callback || this.batchTaskRunning) return;
+
+    this.batchTaskRunning = true;
+    this.updateBatchSelectionBar();
+    void Promise.resolve(callback(entryIds)).finally(() => {
+      this.batchTaskRunning = false;
+      this.updateBatchSelectionBar();
+    });
+  }
+
+  private getSelectedEntryIds(): string[] {
+    return this.getSelectableEntryIds().filter((entryId) => this.selectedEntryIds.has(entryId));
+  }
+
+  private getSelectableEntryIds(): string[] {
+    return this.entries
+      .filter((entry) => entry.result.language !== "summary" && entry.result.language !== "meta-summary")
+      .map((entry) => entry.id);
+  }
+
+  private toggleBatchSelectAll(selectAll: boolean): void {
+    this.selectedEntryIds.clear();
+    if (selectAll) {
+      for (const entryId of this.getSelectableEntryIds()) {
+        this.selectedEntryIds.add(entryId);
+      }
+    }
+    this.updateBatchSelectionUi();
+  }
+
+  private syncEntrySelectButton(button: HTMLElement, entryId: string): void {
+    const selected = this.selectedEntryIds.has(entryId);
+    button.empty();
+    button.classList.toggle("active", selected);
+    button.setAttr("aria-label", selected ? t("view.selectedEntry") : t("view.selectEntry"));
+    button.setAttr("title", selected ? t("view.selectedEntry") : t("view.selectEntry"));
+    setIcon(button, selected ? "check-square" : "square");
   }
 
   private appendTranslateButton(footer: HTMLElement, card: HTMLElement, entry: TranscriptEntry): void {

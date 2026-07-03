@@ -1,8 +1,6 @@
 # Realtime Transcription for Obsidian
 
-<p align="center">
-  <a href="https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README.md">中文</a> | <a href="https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README_EN.md">English</a>
-</p>
+[中文](https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README.md) | [English](https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README_EN.md)
 
 <p align="center">
   A local, real-time speech-to-text Obsidian plugin powered by <strong>SenseVoice-Small + Silero VAD + sherpa-onnx</strong>

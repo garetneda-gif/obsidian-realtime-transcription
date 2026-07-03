@@ -9,8 +9,10 @@ test("README language switch links use absolute GitHub URLs for Obsidian plugin 
   const englishReadmeUrl = "https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README_EN.md";
   const chineseReadmeUrl = "https://github.com/garetneda-gif/obsidian-realtime-transcription/blob/main/README.md";
 
-  assert.ok(readmeZh.includes(`href="${englishReadmeUrl}"`));
-  assert.ok(readmeEn.includes(`href="${chineseReadmeUrl}"`));
+  assert.ok(readmeZh.includes(`[English](${englishReadmeUrl})`));
+  assert.ok(readmeEn.includes(`[中文](${chineseReadmeUrl})`));
+  assert.ok(!readmeZh.includes("<a href="));
+  assert.ok(!readmeEn.includes("<a href="));
   assert.ok(!readmeZh.includes('href="README_EN.md"'));
   assert.ok(!readmeEn.includes('href="README.md"'));
 });

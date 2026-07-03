@@ -156,7 +156,9 @@ test("panel settings expose custom AI output language and wrapped select arrow",
   assert.ok(stylesSource.includes("font-size: 13px"));
   assert.ok(stylesSource.includes(".panel-settings-icon-btn:active"));
   assert.ok(stylesSource.includes("transform: scale(0.94)"));
-  assert.ok(stylesSource.includes("background: var(--background-modifier-hover) !important"));
+  assert.ok(stylesSource.includes(".panel-settings-icon-btn:hover"));
+  assert.ok(stylesSource.includes("background: transparent !important"));
+  assert.ok(stylesSource.includes("color: var(--interactive-accent)"));
   assert.ok(viewSource.includes('createDiv("panel-settings-range-wrap")'));
   assert.ok(viewSource.includes("updateFontSizeFromPointer"));
   assert.ok(viewSource.includes('rangeWrap.addEventListener("pointerdown", handleRangePointerDown)'));
@@ -205,9 +207,66 @@ test("panel settings expose custom AI output language and wrapped select arrow",
   assert.ok(stylesSource.includes(".transcript-card.summary-card.is-summary-collapsed .summary-collapsed-hint"));
   assert.ok(stylesSource.includes("border-bottom: 1px solid var(--background-modifier-border)"));
   assert.ok(stylesSource.includes("padding: 14px 20px 14px 18px"));
-  assert.ok(stylesSource.includes("padding-left: 23px"));
+  assert.ok(stylesSource.includes("grid-template-columns: 18px minmax(0, 1fr)"));
+  assert.ok(stylesSource.includes("display: contents"));
   assert.ok(stylesSource.includes("is-summary-collapsed"));
   assert.ok(!stylesSource.includes("linear-gradient(135deg, rgba(124, 58, 237"));
+});
+
+test("batch actions require explicit selected transcript entries", () => {
+  assert.ok(viewSource.includes("private batchSelectionMode = false"));
+  assert.ok(viewSource.includes("private batchTaskRunning = false"));
+  assert.ok(viewSource.includes("private selectedEntryIds = new Set<string>()"));
+  assert.ok(viewSource.includes('setIcon(this.batchSelectBtn, "list-checks")'));
+  assert.ok(viewSource.includes('this.setSummaryModeIcon("list-plus")'));
+  assert.ok(viewSource.includes("this.setBatchSelectionMode(!this.batchSelectionMode)"));
+  assert.ok(viewSource.includes("private getSelectedEntryIds(): string[]"));
+  assert.ok(viewSource.includes("private getSelectableEntryIds(): string[]"));
+  assert.ok(viewSource.includes("private toggleBatchSelectAll(selectAll: boolean): void"));
+  assert.ok(viewSource.includes('entry.result.language !== "summary" && entry.result.language !== "meta-summary"'));
+  assert.ok(viewSource.includes('this.batchSelectionBar.createDiv({'));
+  assert.ok(viewSource.includes('cls: "batch-selection-count"'));
+  assert.ok(viewSource.includes('allSelected ? "square" : "check-square"'));
+  assert.ok(viewSource.includes("this.selectedEntryIds.has(entryId)"));
+  assert.ok(viewSource.includes('card.setAttr("data-batch-select-bound", "true")'));
+  assert.ok(viewSource.includes('target?.closest("button, a, input, select, textarea, .card-footer")'));
+  assert.ok(viewSource.includes('new Notice(t("view.noSelectedTranscripts"))'));
+  assert.ok(viewSource.includes("if (!callback || this.batchTaskRunning) return;"));
+  assert.ok(viewSource.includes("void Promise.resolve(callback(entryIds)).finally"));
+  assert.ok(!viewSource.includes("void callback?.(this.entries.map"));
+  assert.ok(viewSource.includes('this.batchSelectionBar.createDiv("batch-selection-divider")'));
+  assert.ok(viewSource.includes("this.batchTaskRunning ? t(\"view.batchStopTask\") : t(\"view.cancelBatchSelection\")"));
+  assert.ok(viewSource.includes('"claude"'));
+  assert.ok(viewSource.includes("claude-symbol-icon"));
+
+  assert.ok(source.includes("view.onBatchFormalize = (entryIds) => this.batchFormalizeEntries(entryIds)"));
+  assert.ok(source.includes("view.onBatchTranslate = (entryIds) => this.batchTranslateEntries(entryIds)"));
+  assert.ok(source.includes("view.onBatchSendToClaudian = (entryIds) => this.sendToClaudian(entryIds)"));
+  assert.ok(source.includes("view.onCancelBatchTask = () => this.cancelBatchTask()"));
+  assert.ok(source.includes("private getBatchTranscriptEntries(entryIds: string[]): TranscriptEntry[]"));
+  assert.ok(source.includes("selectedIds.has(entry.id) && isFormalizeContextEntry(entry)"));
+  assert.ok(source.includes("private async sendToClaudian(entryIds?: string[]): Promise<void>"));
+  assert.ok(source.includes("private batchTaskCancelRequested = false"));
+  assert.ok(source.includes("private cancelBatchTask(): void"));
+  assert.ok(source.includes("if (this.batchTaskCancelRequested) break"));
+
+  assert.ok(stylesSource.includes(".title-batch-select-btn"));
+  assert.ok(stylesSource.includes(".batch-selection-bar"));
+  assert.ok(stylesSource.includes("grid-template-columns: minmax(48px, 0.58fr) 1px repeat(5, minmax(44px, 1fr))"));
+  assert.ok(stylesSource.includes(".batch-selection-count-number"));
+  assert.ok(!stylesSource.includes(".batch-selection-action-label"));
+  assert.ok(stylesSource.includes(".batch-selection-action:hover"));
+  assert.ok(stylesSource.includes("color: var(--interactive-accent);"));
+  assert.ok(stylesSource.includes("color: currentColor;"));
+  assert.ok(viewSource.includes('"log-out"'));
+  assert.ok(!viewSource.includes("button.createSpan({ cls: \"batch-selection-action-label\""));
+  assert.ok(stylesSource.includes(".transcript-container.batch-selecting .entry-select-toggle"));
+  assert.ok(stylesSource.includes(".transcript-card.is-selected"));
+  assert.ok(i18nSource.includes('"view.batchSelect": "选择段落"'));
+  assert.ok(i18nSource.includes('"view.batchSelectAll": "全选段落"'));
+  assert.ok(i18nSource.includes('"view.batchStopTask": "终止任务"'));
+  assert.ok(i18nSource.includes('"notice.batchFormalizeDone": "批量润色完成"'));
+  assert.ok(i18nSource.includes('"notice.batchCancelled": "批量任务已终止"'));
 });
 
 test("recording toggle ignores concurrent start and stop transitions", () => {
