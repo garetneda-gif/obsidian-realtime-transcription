@@ -25,18 +25,19 @@ export class FormalizeService {
     );
   }
 
-  async formalize(text: string, outputLanguage: string): Promise<string> {
+  async formalize(text: string, outputLanguage: string, contextText = ""): Promise<string> {
     const inputText = text?.trim();
     if (!inputText) {
       throw new Error(t("formalize.emptyText"));
     }
+    const promptText = buildFormalizeUserText(inputText, contextText);
 
     const systemPrompt =
-      `你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为${outputLanguage}的通顺书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。`;
+      `你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为${outputLanguage}的通顺书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。如果提供上下文，仅用于理解指代、承接关系和术语，不要把上下文中不属于待润色文本的信息扩写进结果。只输出待润色文本的改写结果，不要解释。`;
     if (this.agentBackend.isConfigured()) {
       return this.agentBackend.run({
         systemPrompt,
-        userText: inputText,
+        userText: promptText,
         label: "润色",
       });
     }
@@ -66,7 +67,7 @@ export class FormalizeService {
               role: "system",
               content: systemPrompt,
             },
-            { role: "user", content: inputText },
+            { role: "user", content: promptText },
           ],
           temperature: 0.3,
         }),
@@ -100,4 +101,16 @@ function normalizeApiUrl(url: string): string {
     return trimmed.replace(/\/v1\/completions\/?$/i, "/v1/chat/completions");
   }
   return trimmed;
+}
+
+function buildFormalizeUserText(inputText: string, contextText: string): string {
+  const context = contextText?.trim();
+  if (!context) return inputText;
+  return [
+    "上下文（仅供理解，不要改写输出）：",
+    context,
+    "",
+    "待润色文本：",
+    inputText,
+  ].join("\n");
 }

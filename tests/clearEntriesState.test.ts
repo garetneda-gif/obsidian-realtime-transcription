@@ -11,6 +11,10 @@ const backendSource = readFileSync(
   new URL("../src/services/BackendManager.ts", import.meta.url),
   "utf8",
 );
+const formalizeSource = readFileSync(
+  new URL("../src/services/FormalizeService.ts", import.meta.url),
+  "utf8",
+);
 const i18nSource = readFileSync(new URL("../src/i18n.ts", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
@@ -57,20 +61,20 @@ test("summary failures back off instead of immediately looping notices", () => {
 
 test("normalizeLanguage prefers transcript text before recognition mode fallback", () => {
   const body = extractMethodBody("normalizeLanguage");
-  assert.ok(body.includes("const latinWordCount"));
-  assert.ok(body.includes('return "hybrid";'));
+  assert.ok(body.includes("inferTranscriptLanguage(rawLanguage, text"));
+  assert.ok(source.includes('from "./utils/language"'));
+  assert.ok(source.includes('this.settings.recognitionMode ?? "zh-en"'));
   assert.ok(
-    body.indexOf('if (hanCount === 0 && latinCount >= 3) return "en";') <
-      body.indexOf('if (mode === "zh") return "zh";'),
+    source.indexOf("const normalizedLanguage = this.normalizeLanguage(result.language, text)") <
+      source.indexOf("private stabilizePartialText"),
   );
 });
 
 test("transcription view infers display language for badges and manual translation", () => {
   const body = extractMethodBody("inferDisplayLanguage", viewSource);
-  assert.ok(body.includes("const latinWordCount"));
-  assert.ok(body.includes('return "hybrid";'));
+  assert.ok(body.includes("inferTranscriptLanguage(rawLanguage, text)"));
+  assert.ok(viewSource.includes('from "../utils/language"'));
   assert.ok(i18nSource.includes('"lang.hybrid": "混合"'));
-  assert.ok(body.includes('if (hanCount === 0 && latinCount >= 3) return "en";'));
   assert.match(
     viewSource,
     /this\.updateLanguageBadge\(langBadge, entry\.result\.language, entry\.result\.text\);/,
@@ -91,15 +95,37 @@ test("manual translation replaces existing translation with the loading placehol
   assert.ok(body.includes("entry.translation = null"));
 });
 
+test("formalize requests include nearby transcript context without outputting it", () => {
+  const body = extractMethodBody("formalizeEntry");
+  assert.ok(body.includes("const context = this.buildFormalizeContext(entryId)"));
+  assert.ok(body.includes("this.formalizeService.formalize(text, this.outputLanguageName(), context)"));
+  assert.ok(source.includes("private buildFormalizeContext(entryId: string): string"));
+  assert.ok(source.includes("private findFormalizeContextEntry(fromIndex: number, direction: -1 | 1)"));
+  assert.ok(source.includes("isFormalizeContextEntry(entry)"));
+  assert.ok(source.includes("trimFormalizeContextText(previous.result.text)"));
+  assert.ok(source.includes("trimFormalizeContextText(next.result.text)"));
+  assert.ok(source.includes('language === "summary" || language === "meta-summary"'));
+  assert.ok(source.includes("const FORMALIZE_CONTEXT_MAX_CHARS = 180"));
+  assert.ok(formalizeSource.includes("contextText = \"\""));
+  assert.ok(formalizeSource.includes("buildFormalizeUserText(inputText, contextText)"));
+  assert.ok(formalizeSource.includes("上下文（仅供理解，不要改写输出）"));
+  assert.ok(formalizeSource.includes("待润色文本："));
+  assert.ok(formalizeSource.includes("不要把上下文中不属于待润色文本的信息扩写进结果"));
+});
+
 test("panel settings include copy and export content modes", () => {
   const getBody = extractMethodBody("getPanelSettingsValues");
   const saveBody = extractMethodBody("savePanelSettings");
   assert.ok(getBody.includes("copyContentMode"));
   assert.ok(getBody.includes("exportMode"));
+  assert.ok(getBody.includes("exportTextMode"));
   assert.ok(saveBody.includes("this.settings.copyContentMode"));
   assert.ok(saveBody.includes("this.settings.exportMode"));
+  assert.ok(saveBody.includes("this.settings.exportTextMode"));
   assert.ok(viewSource.includes("panelSettings.copyContent.name"));
   assert.ok(viewSource.includes("panelSettings.exportMode.name"));
+  assert.ok(viewSource.includes("panelSettings.exportTextMode.name"));
+  assert.ok(source.includes('useFormalTextAsOriginal: this.settings.exportTextMode === "formalized"'));
   assert.ok(i18nSource.includes('"panelSettings.title": "转写设置"'));
 });
 
@@ -164,12 +190,22 @@ test("panel settings expose custom AI output language and wrapped select arrow",
   assert.ok(stylesSource.includes("padding-inline-start: 22px"));
   assert.ok(stylesSource.includes("padding-inline-end: 2px"));
   assert.ok(viewSource.includes("appendSummaryHeader"));
+  assert.ok(viewSource.includes("summary-title-label"));
+  assert.ok(viewSource.includes("summary-collapsed-hint"));
+  assert.ok(i18nSource.includes('"view.summaryCollapsedHint": "已折叠摘要内容"'));
   assert.ok(viewSource.includes("summary-title-actions"));
   assert.ok(viewSource.includes("onRegenerateSummary"));
   assert.ok(source.includes("summarySourceText: source"));
   assert.ok(source.includes('summarySourceText: texts.join("\\n\\n")'));
   assert.ok(stylesSource.includes("border-left: 2px solid #f6b23a"));
   assert.ok(stylesSource.includes(".summary-action-btn"));
+  assert.ok(stylesSource.includes("font-size: 13px"));
+  assert.ok(stylesSource.includes("width: 15px"));
+  assert.ok(stylesSource.includes("height: 15px"));
+  assert.ok(stylesSource.includes(".transcript-card.summary-card.is-summary-collapsed .summary-collapsed-hint"));
+  assert.ok(stylesSource.includes("border-bottom: 1px solid var(--background-modifier-border)"));
+  assert.ok(stylesSource.includes("padding: 14px 20px 14px 18px"));
+  assert.ok(stylesSource.includes("padding-left: 23px"));
   assert.ok(stylesSource.includes("is-summary-collapsed"));
   assert.ok(!stylesSource.includes("linear-gradient(135deg, rgba(124, 58, 237"));
 });

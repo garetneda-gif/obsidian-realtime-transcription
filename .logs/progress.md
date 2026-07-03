@@ -253,3 +253,15 @@
 - 自绘滑条保留设计图视觉,透明原生 range 接收拖拽,并补 PointerEvent 与 MouseEvent 双通道兜底。
 - 顶部返回/保存按钮增加 hover/active 背景与按压缩放反馈;摘要无序列表右侧和上方间距同步压紧。
 - 验证: `npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`,`node --experimental-strip-types --test tests/*.test.ts`,`git diff --check`,`npm run build` 通过;已同步并重启 Obsidian,实机拖动滑条 15px→24px→15px 成功。
+
+## 2026-07-03 12:07 — AI 双模型配置和语言识别修复
+- AI 设置拆成快速模型与智能模型两套独立配置;翻译/润色走快速模型,摘要/二次摘要/AI 命名走智能模型。
+- 语言标签改为共享推断工具,中文正文夹杂 GDP、数字、百分号不再误判为混合;真正中英正文混杂仍显示混合。
+- 摘要折叠态、摘要标题区、润色上下文和设置页模型档位标题同步按用户反馈收紧。
+- 验证: `npx tsc --noEmit --outDir /tmp/obsidian-realtime-ts-out`,`node --experimental-strip-types --test tests/*.test.ts`,`git diff --check`,`npm run build` 通过;已同步到 Obsidian 并热重载,运行时验证语言返回 `zh`,AI 设置页显示快速/智能两档。
+
+## 2026-07-03 12:34 — 停用默认全选批量并保留导出润色文本
+- 用户指出批量操作必须先选中段落,默认全选会造成不可控 token 消耗;已撤下首页批量按钮、菜单和批量回调。
+- 导出记录保留新增选项:可选择导出原文,或用已有润色文本替换原文。
+- 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`rg batch...` 均通过;已同步并重载 Obsidian。
+- 运行时 DOM 验证:首页 `hasBatchButton=false`、`hasBatchMenu=false`;转写设置页存在 `导出润色文本` 且选项为 `导出原文/导出润色文本`。

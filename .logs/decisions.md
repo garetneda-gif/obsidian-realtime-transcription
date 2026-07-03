@@ -31,3 +31,19 @@
 **备选**:继续保留卡片背景;只改标题不改容器;把操作按钮放在底部。
 **否决理由**:卡片背景与设计图不一致;只改标题无法解决视觉脱节;底部操作会增加阅读后跳动和占位。
 **影响范围**:`src/views/TranscriptionView.ts`,`styles.css`,`src/main.ts`,`src/types.ts`
+
+## 2026-07-03 12:07 — AI 后端拆分为快速模型和智能模型
+
+**背景**:用户要求 AI 配置清晰结构化,快速任务和分析任务可分别选择 API、Claude Code CLI、Codex CLI 或 OpenCode CLI。
+**选择**:`aiBackend` 拆为 `fast` 与 `smart` 两个完整 profile;翻译/润色使用 `fast`,摘要/二次摘要/AI 命名使用 `smart`。
+**备选**:继续使用一个全局 provider;为翻译、润色、摘要各自保留独立后端表单;只增加模型名字段不拆 provider。
+**否决理由**:全局 provider 不能满足互不干扰;per-feature 表单会重复且用户已指出混乱;只拆模型名仍无法分别选择四种调用方式。
+**影响范围**:`src/types.ts`,`src/main.ts`,`src/settings.ts`,`src/services/AgentBackendService.ts`,`tests/aiBackendConnection.test.ts`
+
+## 2026-07-03 12:34 — 批量操作必须基于用户选中段落
+
+**背景**:默认全选批量润色/翻译会把全部转写一次性提交给 AI,长转写场景 token 消耗不可控。
+**选择**:撤下当前默认全选批量入口,等后续实现明确选中段落后再恢复批量操作。
+**备选**:保留默认全选;弹确认框后全选执行;限制最近 N 条自动批量。
+**否决理由**:默认全选和确认框都不能解决 token 规模不可见问题;最近 N 条与用户要求的“选中后执行”不一致。
+**影响范围**:`src/views/TranscriptionView.ts`,`src/main.ts`,`src/i18n.ts`,`styles.css`,`tests/clearEntriesState.test.ts`

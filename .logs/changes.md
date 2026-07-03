@@ -214,3 +214,17 @@
 - `styles.css`: 转写设置顶部图标按钮新增 hover/active 反馈;滑条延长为整列宽度,橙色进度与圆形滑块对齐。
 - `styles.css`: 摘要块无序列表上方、右侧和项目间距进一步收紧。
 - `tests/clearEntriesState.test.ts`: 增加面板滑条结构、拖动事件、按钮反馈和摘要列表间距的静态回归检查。
+
+## 2026-07-03 12:07 — AI 双模型配置与语言识别
+- `src/types.ts`,`src/main.ts`: `aiBackend` 由单全局配置迁移为 `fast`/`smart` 两档,并保留旧配置兼容迁移。
+- `src/services/AgentBackendService.ts`: 单个档位支持 API 或 Claude/Codex/OpenCode CLI,连接测试走同一执行路径。
+- `src/settings.ts`,`src/i18n.ts`,`styles.css`: 设置页改为快速模型/智能模型两套结构化配置,移除重复 per-feature API 表单,档位标题改为紧凑分组头。
+- `src/utils/language.ts`,`src/main.ts`,`src/views/TranscriptionView.ts`: 语言识别逻辑集中到共享工具,收紧 hybrid 阈值并过滤全大写缩写噪声。
+- `src/services/FormalizeService.ts`,`src/main.ts`: 润色请求附带相邻上下文,但系统提示限制只输出待润色文本。
+- `tests/aiBackendConnection.test.ts`,`tests/clearEntriesState.test.ts`,`tests/languageInference.test.ts`: 增加双模型配置、语言误判和润色上下文回归检查。
+
+## 2026-07-03 12:34 — 导出润色文本并停用默认全选批量
+- `src/types.ts`,`src/main.ts`,`src/settings.ts`,`src/views/TranscriptionView.ts`: 新增 `exportTextMode`,右侧转写设置和全局导出设置均可选择导出原文或用润色文本替换原文。
+- `src/utils/transcriptFormatter.ts`: 导出格式支持 `useFormalTextAsOriginal`,开启后不再重复追加润色引用块。
+- `src/views/TranscriptionView.ts`,`src/main.ts`,`src/i18n.ts`,`styles.css`: 撤下刚实现的默认全选批量入口和批量执行回调,避免长转写误触消耗大量 token。
+- `tests/clearEntriesState.test.ts`,`tests/transcriptFormatter.test.ts`: 增加导出润色文本链路检查,并移除默认批量入口断言。

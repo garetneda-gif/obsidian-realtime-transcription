@@ -43,3 +43,28 @@ test("formatTranscriptEntriesAsMarkdown keeps current export record format", () 
     ].join("\n"),
   );
 });
+
+test("formatTranscriptEntriesAsMarkdown can replace originals with formalized text", () => {
+  const entries: TranscriptEntry[] = [
+    {
+      id: "entry-1",
+      result: {
+        type: "final",
+        text: "口语原文",
+        language: "zh",
+        timestamps: { start: 0, duration: 0 },
+      },
+      translation: null,
+      formalText: "书面化文本",
+      wallTime: new Date(2026, 6, 1, 9, 8, 7),
+    },
+  ];
+
+  assert.equal(
+    formatTranscriptEntriesAsMarkdown(entries, "润色", { useFormalTextAsOriginal: true }),
+    [
+      "**[09:08:07]** `ZH`",
+      "书面化文本",
+    ].join("\n"),
+  );
+});

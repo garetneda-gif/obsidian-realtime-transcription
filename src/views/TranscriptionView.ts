@@ -3,6 +3,7 @@ import { VIEW_TYPE_TRANSCRIPTION, LANG_LABELS, PLUGIN_ID } from "../constants";
 import type { TranscriptEntry, TranscriptionResult, SummaryDisplayMode, PanelSettingsValues, AiOutputLanguage } from "../types";
 import { t } from "../i18n";
 import { executeObsidianCommand } from "../utils/obsidianCommands";
+import { inferTranscriptLanguage } from "../utils/language";
 
 const FORMALIZE_UI_TIMEOUT_MS = 35000;
 
@@ -37,6 +38,7 @@ export class TranscriptionView extends ItemView {
     autoFormalize: false,
     copyContentMode: "full",
     exportMode: "full",
+    exportTextMode: "original",
   };
 
   // 外部注入的回调
@@ -281,6 +283,7 @@ export class TranscriptionView extends ItemView {
       autoFormalize: Boolean(values.autoFormalize),
       copyContentMode: values.copyContentMode === "summaryOnly" ? "summaryOnly" : "full",
       exportMode: values.exportMode === "summaryOnly" ? "summaryOnly" : "full",
+      exportTextMode: values.exportTextMode === "formalized" ? "formalized" : "original",
     };
     this.applyTranscriptFontSize(this.panelSettingsValues.transcriptFontSize);
     if (this.settingsPage) {
@@ -510,6 +513,19 @@ export class TranscriptionView extends ItemView {
     exportSelect.value = draft.exportMode;
     exportSelect.addEventListener("change", () => {
       draft.exportMode = exportSelect.value === "summaryOnly" ? "summaryOnly" : "full";
+    });
+
+    const exportTextRow = this.createPanelSettingRow(
+      content,
+      t("panelSettings.exportTextMode.name"),
+      t("panelSettings.exportTextMode.desc"),
+    );
+    const exportTextSelect = this.createPanelSelect(exportTextRow);
+    this.appendPanelOption(exportTextSelect, "original", t("settings.export.textMode.original"));
+    this.appendPanelOption(exportTextSelect, "formalized", t("settings.export.textMode.formalized"));
+    exportTextSelect.value = draft.exportTextMode;
+    exportTextSelect.addEventListener("change", () => {
+      draft.exportTextMode = exportTextSelect.value === "formalized" ? "formalized" : "original";
     });
 
     const feedbackRow = content.createDiv("panel-settings-feedback-row");
@@ -907,11 +923,16 @@ export class TranscriptionView extends ItemView {
   ): void {
     const titleRow = card.createDiv("summary-title-row");
     const titleMain = titleRow.createDiv("summary-title-main");
-    const iconEl = titleMain.createDiv(`summary-title-icon${kind === "meta-summary" ? " meta-summary-title-icon" : ""}`);
+    const titleLabel = titleMain.createDiv("summary-title-label");
+    const iconEl = titleLabel.createDiv(`summary-title-icon${kind === "meta-summary" ? " meta-summary-title-icon" : ""}`);
     setIcon(iconEl, kind === "meta-summary" ? "layers" : "sparkles");
-    titleMain.createEl("span", {
+    titleLabel.createEl("span", {
       cls: `summary-title${kind === "meta-summary" ? " meta-summary-title" : ""}`,
       text: kind === "meta-summary" ? t("view.aiMetaSummary") : t("view.aiSummary"),
+    });
+    titleMain.createDiv({
+      cls: "summary-collapsed-hint",
+      text: t("view.summaryCollapsedHint"),
     });
 
     const actions = titleRow.createDiv("summary-title-actions");
@@ -1095,43 +1116,7 @@ export class TranscriptionView extends ItemView {
   }
 
   private inferDisplayLanguage(rawLanguage: string, text: string): string {
-    const language = (rawLanguage || "auto").toLowerCase();
-    if (language === "summary" || language === "meta-summary") {
-      return language;
-    }
-
-    const hanCount = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
-    const latinCount = (text.match(/[A-Za-z]/g) ?? []).length;
-    const latinWordCount = (text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? []).length;
-    const kanaCount = (text.match(/[\u3040-\u30ff]/g) ?? []).length;
-    const hangulCount = (text.match(/[\uac00-\ud7af]/g) ?? []).length;
-
-    if (kanaCount > 0) return "ja";
-    if (hangulCount > 0) return "ko";
-    if (hanCount >= 2 && latinWordCount >= 2 && latinCount >= 6) {
-      return "hybrid";
-    }
-
-    if (latinWordCount >= 3 && latinCount >= Math.max(8, hanCount * 2)) {
-      return "en";
-    }
-    if (hanCount === 0 && latinCount >= 3) return "en";
-
-    if (hanCount >= 2) {
-      return language === "yue" ? "yue" : "zh";
-    }
-
-    if (hanCount === 1) {
-      if (latinCount >= 8) return "en";
-      return language === "yue" ? "yue" : "zh";
-    }
-
-    if (language === "ja" || language === "ko" || language === "yue" || language === "en") {
-      return language;
-    }
-    if (language === "zh") return "zh";
-
-    return "zh";
+    return inferTranscriptLanguage(rawLanguage, text);
   }
 
   private updateLanguageBadge(badge: HTMLElement, language: string, text: string): string {

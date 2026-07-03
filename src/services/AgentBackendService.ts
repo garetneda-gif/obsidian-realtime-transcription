@@ -1,4 +1,6 @@
-import type { AiBackendProvider, AiBackendSettings } from "../types";
+import { requestUrl } from "obsidian";
+import type { AiBackendProvider, AiBackendProfileSettings } from "../types";
+import { extractTextFromResponse } from "../utils/llmResponse";
 
 const { spawn } = require("child_process") as typeof import("child_process");
 const fs = require("fs") as typeof import("fs");
@@ -20,15 +22,15 @@ interface CommandSpec {
 }
 
 export class AgentBackendService {
-  private settings: AiBackendSettings;
+  private settings: AiBackendProfileSettings;
   private cwd: string;
 
-  constructor(settings: AiBackendSettings, cwd: string) {
+  constructor(settings: AiBackendProfileSettings, cwd: string) {
     this.settings = settings;
     this.cwd = cwd;
   }
 
-  updateSettings(settings: AiBackendSettings, cwd: string): void {
+  updateSettings(settings: AiBackendProfileSettings, cwd: string): void {
     this.settings = settings;
     this.cwd = cwd;
   }
@@ -38,10 +40,78 @@ export class AgentBackendService {
   }
 
   isConfigured(): boolean {
-    return this.isLocalEnabled();
+    if (this.isLocalEnabled()) return true;
+    return Boolean(
+      this.settings.apiUrl?.trim() &&
+      this.settings.apiKey?.trim() &&
+      this.settings.model?.trim(),
+    );
   }
 
   async run(request: AgentRequest): Promise<string> {
+    if (!this.isConfigured()) {
+      throw new Error("AI 后端未配置完整");
+    }
+    if (!this.isLocalEnabled()) {
+      return this.runApi(request);
+    }
+
+    return this.runCli(request);
+  }
+
+  async testConnection(): Promise<string> {
+    const startedAt = Date.now();
+    const result = await this.run({
+      systemPrompt: "你是一个连接测试助手。只回复 OK，不要解释。",
+      userText: "请只回复 OK",
+      label: "测试",
+    });
+    const elapsedMs = Date.now() - startedAt;
+    return `${providerName(this.settings.provider)} ${elapsedMs}ms: ${preview(result)}`;
+  }
+
+  private async runApi(request: AgentRequest): Promise<string> {
+    const apiUrl = normalizeApiUrl(this.settings.apiUrl);
+    const apiKey = this.settings.apiKey?.trim();
+    const model = this.settings.model?.trim();
+
+    if (!apiUrl) throw new Error(`${request.label} API 端点为空`);
+    if (!apiKey) throw new Error(`${request.label} API Key 为空`);
+    if (!model) throw new Error(`${request.label}模型为空`);
+
+    const response = await requestUrl({
+      url: apiUrl,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: request.systemPrompt },
+          { role: "user", content: request.userText },
+        ],
+        temperature: 0.2,
+      }),
+    });
+
+    const data = response.json;
+    if (data?.error) {
+      const message = typeof data.error.message === "string"
+        ? data.error.message
+        : typeof data.error === "string" ? data.error : `${request.label} API 返回错误`;
+      throw new Error(message);
+    }
+
+    const result = extractTextFromResponse(data);
+    if (!result) {
+      throw new Error(`${request.label} API 返回格式不受支持`);
+    }
+    return result;
+  }
+
+  private async runCli(request: AgentRequest): Promise<string> {
     if (!this.isLocalEnabled()) {
       throw new Error("本地 AI 后端未启用");
     }
@@ -60,17 +130,6 @@ export class AgentBackendService {
     }
   }
 
-  async testConnection(): Promise<string> {
-    const startedAt = Date.now();
-    const result = await this.run({
-      systemPrompt: "你是一个连接测试助手。只回复 OK，不要解释。",
-      userText: "请只回复 OK",
-      label: "测试",
-    });
-    const elapsedMs = Date.now() - startedAt;
-    return `${providerName(this.settings.provider)} ${elapsedMs}ms: ${preview(result)}`;
-  }
-
   private timeoutMs(): number {
     const timeoutSec = Number.isFinite(this.settings.timeoutSec)
       ? this.settings.timeoutSec
@@ -79,7 +138,7 @@ export class AgentBackendService {
   }
 }
 
-function buildCommandSpec(settings: AiBackendSettings, prompt: string): CommandSpec {
+function buildCommandSpec(settings: AiBackendProfileSettings, prompt: string): CommandSpec {
   const provider = settings.provider;
   const explicitCommand = isAiBackendCliPathCompatible(settings) ? settings.cliPath.trim() : "";
   const command = resolveAiBackendCliPath(settings) || explicitCommand || defaultCommand(provider);
@@ -132,7 +191,7 @@ function buildCommandSpec(settings: AiBackendSettings, prompt: string): CommandS
   }
 }
 
-export function resolveAiBackendCliPath(settings: AiBackendSettings): string {
+export function resolveAiBackendCliPath(settings: AiBackendProfileSettings): string {
   const explicit = settings.cliPath?.trim();
   if (explicit && isAiBackendCliPathCompatible(settings)) {
     const expanded = expandPath(explicit);
@@ -142,22 +201,31 @@ export function resolveAiBackendCliPath(settings: AiBackendSettings): string {
   return findExecutable(defaultCommand(settings.provider));
 }
 
-export function isAiBackendCliPathCompatible(settings: AiBackendSettings): boolean {
+export function isAiBackendCliPathCompatible(settings: AiBackendProfileSettings): boolean {
   return isCliPathCompatibleWithProvider(settings.cliPath?.trim() ?? "", settings.provider);
 }
 
 export function getDefaultAiBackendModelOptions(provider: AiBackendProvider): string[] {
   switch (provider) {
     case "claude":
-      return ["", "sonnet", "opus", "haiku", "claude-sonnet-4-6", "claude-opus-4-6"];
+      return ["sonnet", "opus", "haiku", "claude-sonnet-4-6", "claude-opus-4-6"];
     case "codex":
-      return ["", "gpt-5.5", "gpt-5.4-mini", "gpt-5.4", "gpt-5.2-codex", "gpt-5.1-codex"];
+      return ["gpt-5.5", "gpt-5.4-mini", "gpt-5.4", "gpt-5.2-codex", "gpt-5.1-codex"];
     case "opencode":
-      return [""];
+      return [];
     case "openai-compatible":
     default:
       return [];
   }
+}
+
+function normalizeApiUrl(url: string): string {
+  const trimmed = (url ?? "").trim();
+  if (!trimmed) return "";
+  if (/\/v1\/completions\/?$/i.test(trimmed)) {
+    return trimmed.replace(/\/v1\/completions\/?$/i, "/v1/chat/completions");
+  }
+  return trimmed;
 }
 
 function readCommandOutput(spec: CommandSpec, stdout: string): string {
@@ -449,7 +517,7 @@ function stripAnsi(text: string): string {
   return text.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "");
 }
 
-function buildExtraArgs(settings: AiBackendSettings): string[] {
+function buildExtraArgs(settings: AiBackendProfileSettings): string[] {
   const args = splitArgs(settings.extraArgs ?? "");
   if (settings.provider !== "codex") return args;
   return stripUnsupportedFlags(args, new Set(["--agent", "--ask-for-approval", "--sandbox"]));

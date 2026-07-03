@@ -1,8 +1,8 @@
 import { App, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
-import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, GpuProvider, AsrProvider, CopyContentMode, CopyRangeMode, AiBackendProvider } from "./types";
-import { DEFAULT_SETTINGS, isHostedCloud } from "./types";
+import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, ExportTextMode, GpuProvider, AsrProvider, CopyContentMode, CopyRangeMode, AiBackendProvider, AiBackendProfileRole, AiBackendProfileSettings } from "./types";
+import { DEFAULT_SETTINGS, isHostedCloud, normalizeAiBackendSettings } from "./types";
 import { t, setLocale } from "./i18n";
 import { CloudAuthService } from "./services/CloudAuthService";
 import { getDefaultAiBackendModelOptions, isAiBackendCliPathCompatible } from "./services/AgentBackendService";
@@ -21,7 +21,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   private cleanupHeaderScroll: (() => void) | null = null;
   private pendingRechargeOrderId: string | null = null;
   private pendingRechargeStatus = "";
-  private aiBackendTestRunning = false;
+  private aiBackendTestRunning: Partial<Record<AiBackendProfileRole, boolean>> = {};
 
   constructor(app: App, plugin: RealtimeTranscriptionPlugin) {
     super(app, plugin);
@@ -35,10 +35,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   display(): void {
     this.cleanupHeaderScroll?.();
     this.cleanupHeaderScroll = null;
-    this.plugin.settings.aiBackend = {
-      ...DEFAULT_SETTINGS.aiBackend,
-      ...this.plugin.settings.aiBackend,
-    };
+    this.plugin.settings.aiBackend = normalizeAiBackendSettings(this.plugin.settings.aiBackend);
 
     const { containerEl } = this;
     containerEl.empty();
@@ -476,120 +473,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     }
 
     containerEl.createEl("h2", { text: t("settings.aiBackend.title") });
-    const usingLocalAiBackend = this.plugin.settings.aiBackend.provider !== "openai-compatible";
-
-    new Setting(containerEl)
-      .setName(t("settings.aiBackend.provider.name"))
-      .setDesc(t("settings.aiBackend.provider.desc"))
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("openai-compatible", t("settings.aiBackend.provider.openai"))
-          .addOption("claude", t("settings.aiBackend.provider.claude"))
-          .addOption("codex", t("settings.aiBackend.provider.codex"))
-          .addOption("opencode", t("settings.aiBackend.provider.opencode"))
-          .setValue(this.plugin.settings.aiBackend.provider)
-          .onChange(async (value: AiBackendProvider) => {
-            this.plugin.settings.aiBackend.provider = value;
-            if (value !== "openai-compatible") {
-              const detected = this.plugin.detectAiBackendCliPath(value);
-              const compatible = isAiBackendCliPathCompatible(this.plugin.settings.aiBackend);
-              if (!compatible && detected) {
-                this.plugin.settings.aiBackend.cliPath = detected;
-              } else if (!this.plugin.settings.aiBackend.cliPath.trim() && detected) {
-                this.plugin.settings.aiBackend.cliPath = detected;
-              } else if (!compatible) {
-                this.plugin.settings.aiBackend.cliPath = "";
-              }
-            }
-            await this.plugin.saveSettings();
-            this.display();
-          });
-      });
-
-    if (usingLocalAiBackend) {
-      new Setting(containerEl)
-        .setName(t("settings.aiBackend.cliPath.name"))
-        .setDesc(t("settings.aiBackend.cliPath.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder(this.defaultAiBackendCommand(this.plugin.settings.aiBackend.provider))
-            .setValue(this.plugin.settings.aiBackend.cliPath)
-            .onChange(async (value) => {
-              this.plugin.settings.aiBackend.cliPath = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        )
-        .addButton((btn) =>
-          btn.setButtonText(t("settings.aiBackend.cliPath.detect")).onClick(async () => {
-            const detected = this.plugin.detectAiBackendCliPath();
-            if (!detected) {
-              new Notice(t("settings.aiBackend.cliPath.notFound"));
-              return;
-            }
-            this.plugin.settings.aiBackend.cliPath = detected;
-            await this.plugin.saveSettings();
-            new Notice(`${t("settings.aiBackend.cliPath.detected")}: ${detected}`);
-            this.display();
-          }),
-        );
-
-      this.renderAiBackendModelSetting(containerEl);
-
-      new Setting(containerEl)
-        .setName(t("settings.aiBackend.timeout.name"))
-        .setDesc(t("settings.aiBackend.timeout.desc"))
-        .addSlider((slider) =>
-          slider
-            .setLimits(10, 300, 5)
-            .setValue(this.plugin.settings.aiBackend.timeoutSec)
-            .setDynamicTooltip()
-            .onChange(async (value) => {
-              this.plugin.settings.aiBackend.timeoutSec = value;
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(containerEl)
-        .setName(t("settings.aiBackend.extraArgs.name"))
-        .setDesc(t("settings.aiBackend.extraArgs.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder(t("settings.aiBackend.extraArgs.placeholder"))
-            .setValue(this.plugin.settings.aiBackend.extraArgs)
-            .onChange(async (value) => {
-              this.plugin.settings.aiBackend.extraArgs = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(containerEl)
-        .setName(t("settings.aiBackend.localMode.name"))
-        .setDesc(t("settings.aiBackend.localMode.desc"));
-    }
-
-    new Setting(containerEl)
-      .setName(t("settings.aiBackend.test.name"))
-      .setDesc(t("settings.aiBackend.test.desc"))
-      .addButton((btn) =>
-        btn
-          .setButtonText(t("settings.aiBackend.test.button"))
-          .onClick(async () => {
-            if (this.aiBackendTestRunning) return;
-            try {
-              this.aiBackendTestRunning = true;
-              btn.setDisabled(true);
-              btn.setButtonText(t("settings.aiBackend.test.testing"));
-              const result = await this.plugin.testAiBackendConnection();
-              new Notice(`${t("settings.aiBackend.test.success")}: ${result}`);
-            } catch (e) {
-              new Notice(`${t("settings.aiBackend.test.failed")}: ${this.errorMessage(e)}`);
-            } finally {
-              this.aiBackendTestRunning = false;
-              btn.setDisabled(false);
-              btn.setButtonText(t("settings.aiBackend.test.button"));
-            }
-          }),
-      );
+    this.renderAiBackendProfileSettings(containerEl, "fast");
+    this.renderAiBackendProfileSettings(containerEl, "smart");
 
     // ── 翻译设置 ──
     containerEl.createEl("h2", { text: t("settings.translation.title") });
@@ -606,91 +491,6 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           }),
       );
 
-    if (!usingLocalAiBackend) {
-      new Setting(containerEl)
-        .setName(t("settings.translation.apiUrl.name"))
-        .setDesc(t("settings.translation.apiUrl.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder("https://api.openai.com/v1/chat/completions")
-            .setValue(this.plugin.settings.translation.apiUrl)
-            .onChange(async (value) => {
-              this.plugin.settings.translation.apiUrl = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(containerEl)
-        .setName(t("settings.translation.apiKey.name"))
-        .setDesc(t("settings.translation.apiKey.desc"))
-        .addText((text) => {
-          text
-            .setPlaceholder("sk-...")
-            .setValue(this.plugin.settings.translation.apiKey)
-            .onChange(async (value) => {
-              this.plugin.settings.translation.apiKey = value;
-              await this.plugin.saveSettings();
-            });
-          text.inputEl.type = "password";
-        });
-
-      new Setting(containerEl)
-        .setName(t("settings.translation.model.name"))
-        .setDesc(t("settings.translation.model.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder("gpt-4o-mini")
-            .setValue(this.plugin.settings.translation.model)
-            .onChange(async (value) => {
-              this.plugin.settings.translation.model = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      // ── 润色设置 ──
-      containerEl.createEl("h2", { text: t("settings.formalize.title") });
-
-      new Setting(containerEl)
-        .setName(t("settings.formalize.apiUrl.name"))
-        .setDesc(t("settings.formalize.apiUrl.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder("https://api.openai.com/v1/chat/completions")
-            .setValue(this.plugin.settings.formalize.apiUrl)
-            .onChange(async (value) => {
-              this.plugin.settings.formalize.apiUrl = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(containerEl)
-        .setName(t("settings.formalize.apiKey.name"))
-        .setDesc(t("settings.formalize.apiKey.desc"))
-        .addText((text) => {
-          text
-            .setPlaceholder("sk-...")
-            .setValue(this.plugin.settings.formalize.apiKey)
-            .onChange(async (value) => {
-              this.plugin.settings.formalize.apiKey = value;
-              await this.plugin.saveSettings();
-            });
-          text.inputEl.type = "password";
-        });
-
-      new Setting(containerEl)
-        .setName(t("settings.formalize.model.name"))
-        .setDesc(t("settings.formalize.model.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder("gpt-4o-mini")
-            .setValue(this.plugin.settings.formalize.model)
-            .onChange(async (value) => {
-              this.plugin.settings.formalize.model = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
-    }
-
     // ── AI 摘要设置 ──
     containerEl.createEl("h2", { text: t("settings.summary.title") });
 
@@ -705,48 +505,6 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
-
-    if (!usingLocalAiBackend) {
-      new Setting(containerEl)
-        .setName(t("settings.summary.apiUrl.name"))
-        .setDesc(t("settings.summary.apiUrl.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder("https://api.openai.com/v1/chat/completions")
-            .setValue(this.plugin.settings.summary.apiUrl)
-            .onChange(async (value) => {
-              this.plugin.settings.summary.apiUrl = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(containerEl)
-        .setName(t("settings.summary.apiKey.name"))
-        .setDesc(t("settings.summary.apiKey.desc"))
-        .addText((text) => {
-          text
-            .setPlaceholder("sk-...")
-            .setValue(this.plugin.settings.summary.apiKey)
-            .onChange(async (value) => {
-              this.plugin.settings.summary.apiKey = value;
-              await this.plugin.saveSettings();
-            });
-          text.inputEl.type = "password";
-        });
-
-      new Setting(containerEl)
-        .setName(t("settings.summary.model.name"))
-        .setDesc(t("settings.summary.model.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder("gpt-4o-mini")
-            .setValue(this.plugin.settings.summary.model)
-            .onChange(async (value) => {
-              this.plugin.settings.summary.model = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
-    }
 
     new Setting(containerEl)
       .setName(t("settings.summary.threshold.name"))
@@ -819,6 +577,20 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.exportTitleMode ?? "timestamp")
           .onChange(async (value: ExportTitleMode) => {
             this.plugin.settings.exportTitleMode = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName(t("settings.export.textMode.name"))
+      .setDesc(t("settings.export.textMode.desc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("original", t("settings.export.textMode.original"))
+          .addOption("formalized", t("settings.export.textMode.formalized"))
+          .setValue(this.plugin.settings.exportTextMode ?? DEFAULT_SETTINGS.exportTextMode)
+          .onChange(async (value: ExportTextMode) => {
+            this.plugin.settings.exportTextMode = value;
             await this.plugin.saveSettings();
           });
       });
@@ -1069,41 +841,213 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     }
   }
 
-  private renderAiBackendModelSetting(containerEl: HTMLElement): void {
-    const provider = this.plugin.settings.aiBackend.provider;
-    const currentModel = this.plugin.settings.aiBackend.model.trim();
-    const options = uniqueStrings([
-      ...getDefaultAiBackendModelOptions(provider),
-      currentModel,
-    ]);
+  private renderAiBackendProfileSettings(containerEl: HTMLElement, role: AiBackendProfileRole): void {
+    const profile = this.plugin.settings.aiBackend[role];
+    const header = containerEl.createDiv("realtime-ai-profile-header");
+    header.createSpan({
+      text: t(`settings.aiBackend.${role}.title`),
+      cls: "realtime-ai-profile-title",
+    });
+    header.createDiv({
+      text: t(`settings.aiBackend.${role}.desc`),
+      cls: "realtime-ai-profile-desc",
+    });
+
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.provider.name"))
+      .setDesc(t("settings.aiBackend.provider.desc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("openai-compatible", t("settings.aiBackend.provider.openai"))
+          .addOption("claude", t("settings.aiBackend.provider.claude"))
+          .addOption("codex", t("settings.aiBackend.provider.codex"))
+          .addOption("opencode", t("settings.aiBackend.provider.opencode"))
+          .setValue(profile.provider)
+          .onChange(async (value: AiBackendProvider) => {
+            profile.provider = value;
+            if (value !== "openai-compatible") {
+              const detected = this.plugin.detectAiBackendCliPath(value, role);
+              const compatible = isAiBackendCliPathCompatible(profile);
+              if (!compatible && detected) {
+                profile.cliPath = detected;
+              } else if (!profile.cliPath.trim() && detected) {
+                profile.cliPath = detected;
+              } else if (!compatible) {
+                profile.cliPath = "";
+              }
+            }
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    if (profile.provider === "openai-compatible") {
+      this.renderAiBackendApiSettings(containerEl, profile);
+    } else {
+      this.renderAiBackendCliSettings(containerEl, role, profile);
+    }
+
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.test.name"))
+      .setDesc(t("settings.aiBackend.test.desc"))
+      .addButton((btn) =>
+        btn
+          .setButtonText(t("settings.aiBackend.test.button"))
+          .onClick(async () => {
+            if (this.aiBackendTestRunning[role]) return;
+            try {
+              this.aiBackendTestRunning[role] = true;
+              btn.setDisabled(true);
+              btn.setButtonText(t("settings.aiBackend.test.testing"));
+              const result = await this.plugin.testAiBackendConnection(role);
+              new Notice(`${t(`settings.aiBackend.${role}.title`)} ${t("settings.aiBackend.test.success")}: ${result}`);
+            } catch (e) {
+              new Notice(`${t(`settings.aiBackend.${role}.title`)} ${t("settings.aiBackend.test.failed")}: ${this.errorMessage(e)}`);
+            } finally {
+              this.aiBackendTestRunning[role] = false;
+              btn.setDisabled(false);
+              btn.setButtonText(t("settings.aiBackend.test.button"));
+            }
+          }),
+      );
+  }
+
+  private renderAiBackendApiSettings(containerEl: HTMLElement, profile: AiBackendProfileSettings): void {
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.apiUrl.name"))
+      .setDesc(t("settings.aiBackend.apiUrl.desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder("https://api.openai.com/v1/chat/completions")
+          .setValue(profile.apiUrl)
+          .onChange(async (value) => {
+            profile.apiUrl = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.apiKey.name"))
+      .setDesc(t("settings.aiBackend.apiKey.desc"))
+      .addText((text) => {
+        text
+          .setPlaceholder("sk-...")
+          .setValue(profile.apiKey)
+          .onChange(async (value) => {
+            profile.apiKey = value;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.type = "password";
+      });
+
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.model.name"))
+      .setDesc(t("settings.aiBackend.model.apiDesc"))
+      .addText((text) =>
+        text
+          .setPlaceholder("gpt-4o-mini")
+          .setValue(profile.model)
+          .onChange(async (value) => {
+            profile.model = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+  }
+
+  private renderAiBackendCliSettings(
+    containerEl: HTMLElement,
+    role: AiBackendProfileRole,
+    profile: AiBackendProfileSettings,
+  ): void {
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.cliPath.name"))
+      .setDesc(t("settings.aiBackend.cliPath.desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder(this.defaultAiBackendCommand(profile.provider))
+          .setValue(profile.cliPath)
+          .onChange(async (value) => {
+            profile.cliPath = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      )
+      .addButton((btn) =>
+        btn.setButtonText(t("settings.aiBackend.cliPath.detect")).onClick(async () => {
+          const detected = this.plugin.detectAiBackendCliPath(profile.provider, role);
+          if (!detected) {
+            new Notice(t("settings.aiBackend.cliPath.notFound"));
+            return;
+          }
+          profile.cliPath = detected;
+          await this.plugin.saveSettings();
+          new Notice(`${t("settings.aiBackend.cliPath.detected")}: ${detected}`);
+          this.display();
+        }),
+      );
+
+    this.renderAiBackendCliModelSetting(containerEl, profile);
+
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.timeout.name"))
+      .setDesc(t("settings.aiBackend.timeout.desc"))
+      .addSlider((slider) =>
+        slider
+          .setLimits(10, 300, 5)
+          .setValue(profile.timeoutSec)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            profile.timeoutSec = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(t("settings.aiBackend.extraArgs.name"))
+      .setDesc(t("settings.aiBackend.extraArgs.desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder(t("settings.aiBackend.extraArgs.placeholder"))
+          .setValue(profile.extraArgs)
+          .onChange(async (value) => {
+            profile.extraArgs = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+  }
+
+  private renderAiBackendCliModelSetting(containerEl: HTMLElement, profile: AiBackendProfileSettings): void {
+    const customValue = "__custom__";
+    const currentModel = profile.model.trim();
+    const options = uniqueStrings(getDefaultAiBackendModelOptions(profile.provider));
+    const isCustomModel = !currentModel || !options.includes(currentModel);
 
     const setting = new Setting(containerEl)
       .setName(t("settings.aiBackend.model.name"))
       .setDesc(t("settings.aiBackend.model.desc"));
 
-    if (options.length > 1) {
-      setting.addDropdown((dropdown) => {
-        dropdown.addOption("", t("settings.aiBackend.model.default"));
-        for (const option of options.filter(Boolean)) {
-          dropdown.addOption(option, option);
-        }
-        dropdown.setValue(currentModel).onChange(async (value) => {
-          this.plugin.settings.aiBackend.model = value.trim();
-          await this.plugin.saveSettings();
-          this.display();
-        });
+    setting.addDropdown((dropdown) => {
+      for (const option of options) {
+        dropdown.addOption(option, option);
+      }
+      dropdown.addOption(customValue, t("settings.aiBackend.model.custom"));
+      dropdown.setValue(isCustomModel ? customValue : currentModel).onChange(async (value) => {
+        profile.model = value === customValue ? "" : value.trim();
+        await this.plugin.saveSettings();
+        this.display();
       });
-    }
+    });
 
-    setting.addText((text) =>
-      text
-        .setPlaceholder(t("settings.aiBackend.model.placeholder"))
-        .setValue(this.plugin.settings.aiBackend.model)
-        .onChange(async (value) => {
-          this.plugin.settings.aiBackend.model = value.trim();
-          await this.plugin.saveSettings();
-        }),
-    );
+    if (isCustomModel) {
+      setting.addText((text) =>
+        text
+          .setPlaceholder(t("settings.aiBackend.model.placeholder"))
+          .setValue(profile.model)
+          .onChange(async (value) => {
+            profile.model = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+    }
   }
 
   private createCloudAuthService(): CloudAuthService {

@@ -100,3 +100,19 @@
 **根因**:视觉层和交互层分离后,只依赖单一事件路径容易在 Electron/macOS 鼠标事件下丢失拖动
 **解决**:`src/views/TranscriptionView.ts` 使用透明原生 range 接收交互,外层同时监听 PointerEvent 和 MouseEvent 兜底,并用 ResizeObserver 保持进度与滑块对齐
 **复现**:打开转写设置页,拖动 `转写字号` 滑条,观察数值和滑块是否随鼠标变化
+
+## 2026-07-03 12:07 — 中文夹 GDP 被误判为混合
+
+**症状**:中文转写正文中包含 `GDP`、年份、百分比时,语言标签显示为 `混合`
+**触发**:中文正文里出现两个以上英文缩写或拉丁片段且字母数超过旧阈值
+**根因**:`src/main.ts` 与 `src/views/TranscriptionView.ts` 各自用 `latinWordCount >= 2 && latinCount >= 6` 判 hybrid,没有区分英文正文和专业缩写
+**解决**:新增 `src/utils/language.ts` 共享推断逻辑,hybrid 需满足英文正文词数、拉丁字母数量和占比,并过滤全大写缩写噪声
+**复现**:`inferTranscriptLanguage("hybrid","中国GDP...2000年...26%")` 旧逻辑返回 `hybrid`,新逻辑返回 `zh`
+
+## 2026-07-03 12:07 — AI 设置档位标题继承默认大标题样式
+
+**症状**:设置页 `智能模型` 标题字号过大、留白过多,与设置项卡片脱节
+**触发**:档位标题使用默认 `h3`,继承 Obsidian/插件设置页标题间距
+**根因**:分组标题没有专用结构和样式,默认标题层级过重
+**解决**:改为 `.realtime-ai-profile-header` 分组头,标题 14px、描述紧凑排列并加左侧强调线
+**复现**:打开 Realtime Transcription 设置页 AI 分区,观察快速模型/智能模型标题

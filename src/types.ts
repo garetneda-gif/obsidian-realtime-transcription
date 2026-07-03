@@ -14,17 +14,65 @@ export interface FormalizeSettings {
 export type SummaryDisplayMode = "summaryOnly" | "both";
 export type ExportMode = "summaryOnly" | "full";
 export type ExportTitleMode = "timestamp" | "ai" | "manual";
+export type ExportTextMode = "original" | "formalized";
 export type CopyContentMode = "summaryOnly" | "full";
 export type CopyRangeMode = "all" | "latest";
 export type AiOutputLanguage = "auto" | "zh" | "en" | "custom";
 export type AiBackendProvider = "openai-compatible" | "claude" | "codex" | "opencode";
+export type AiBackendProfileRole = "fast" | "smart";
 
-export interface AiBackendSettings {
+export interface AiBackendProfileSettings {
   provider: AiBackendProvider;
+  apiUrl: string;
+  apiKey: string;
   cliPath: string;
   model: string;
   timeoutSec: number;
   extraArgs: string;
+}
+
+export interface AiBackendSettings {
+  fast: AiBackendProfileSettings;
+  smart: AiBackendProfileSettings;
+}
+
+export const DEFAULT_AI_BACKEND_PROFILE: AiBackendProfileSettings = {
+  provider: "openai-compatible",
+  apiUrl: "https://api.openai.com/v1/chat/completions",
+  apiKey: "",
+  cliPath: "",
+  model: "",
+  timeoutSec: 90,
+  extraArgs: "",
+};
+
+export function createDefaultAiBackendSettings(): AiBackendSettings {
+  return {
+    fast: { ...DEFAULT_AI_BACKEND_PROFILE },
+    smart: { ...DEFAULT_AI_BACKEND_PROFILE },
+  };
+}
+
+export function normalizeAiBackendSettings(value: unknown): AiBackendSettings {
+  const raw = isRecord(value) ? value : {};
+  const legacyCandidate = hasLegacyAiBackendShape(raw) ? raw : {};
+  return {
+    fast: normalizeAiBackendProfileSettings(raw.fast ?? legacyCandidate),
+    smart: normalizeAiBackendProfileSettings(raw.smart ?? legacyCandidate),
+  };
+}
+
+export function normalizeAiBackendProfileSettings(value: unknown): AiBackendProfileSettings {
+  const raw = isRecord(value) ? value : {};
+  return {
+    provider: normalizeAiBackendProvider(raw.provider),
+    apiUrl: stringValue(raw.apiUrl, DEFAULT_AI_BACKEND_PROFILE.apiUrl),
+    apiKey: stringValue(raw.apiKey, DEFAULT_AI_BACKEND_PROFILE.apiKey),
+    cliPath: stringValue(raw.cliPath, DEFAULT_AI_BACKEND_PROFILE.cliPath),
+    model: stringValue(raw.model, DEFAULT_AI_BACKEND_PROFILE.model),
+    timeoutSec: numberValue(raw.timeoutSec, DEFAULT_AI_BACKEND_PROFILE.timeoutSec),
+    extraArgs: stringValue(raw.extraArgs, DEFAULT_AI_BACKEND_PROFILE.extraArgs),
+  };
 }
 
 export interface SummarySettings {
@@ -107,6 +155,7 @@ export interface PluginSettings {
   exportTitleMode: ExportTitleMode;
   copyContentMode: CopyContentMode;
   copyRangeMode: CopyRangeMode;
+  exportTextMode: ExportTextMode;
   aiOutputLanguage: AiOutputLanguage;
   customAiOutputLanguage: string;
   transcriptFontSize: number;
@@ -124,6 +173,7 @@ export interface PanelSettingsValues {
   autoFormalize: boolean;
   copyContentMode: CopyContentMode;
   exportMode: ExportMode;
+  exportTextMode: ExportTextMode;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -170,11 +220,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     thresholdChars: 500,
   },
   aiBackend: {
-    provider: "openai-compatible",
-    cliPath: "",
-    model: "",
-    timeoutSec: 90,
-    extraArgs: "",
+    fast: { ...DEFAULT_AI_BACKEND_PROFILE },
+    smart: { ...DEFAULT_AI_BACKEND_PROFILE },
   },
   metaSummary: {
     enabled: false,
@@ -184,6 +231,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   exportTitleMode: "timestamp",
   copyContentMode: "full",
   copyRangeMode: "all",
+  exportTextMode: "original",
   aiOutputLanguage: "auto",
   customAiOutputLanguage: "",
   transcriptFontSize: 15,
@@ -199,6 +247,35 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     realtimePreview: true,
   },
 };
+
+function normalizeAiBackendProvider(value: unknown): AiBackendProvider {
+  if (value === "openai-compatible" || value === "claude" || value === "codex" || value === "opencode") {
+    return value;
+  }
+  return DEFAULT_AI_BACKEND_PROFILE.provider;
+}
+
+function stringValue(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function numberValue(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function hasLegacyAiBackendShape(value: Record<string, unknown>): boolean {
+  return (
+    "provider" in value ||
+    "cliPath" in value ||
+    "model" in value ||
+    "timeoutSec" in value ||
+    "extraArgs" in value
+  );
+}
 
 export interface TranscriptionResult {
   type?: "partial" | "final";

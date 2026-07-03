@@ -9,11 +9,10 @@ import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
 import { AgentBackendService, isAiBackendCliPathCompatible, resolveAiBackendCliPath } from "./services/AgentBackendService";
-import { testOpenAiCompatibleConnection, type AiApiConnectionConfig } from "./services/AiConnectionTestService";
 import { TranscriptionSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud } from "./types";
+import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud, normalizeAiBackendSettings } from "./types";
 import type { AiOutputLanguage, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, TranscriptEntry, TranscriptionResult } from "./types";
-import type { AiBackendProvider } from "./types";
+import type { AiBackendProfileRole, AiBackendProfileSettings, AiBackendProvider } from "./types";
 import { CloudAuthService } from "./services/CloudAuthService";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
@@ -24,6 +23,7 @@ import {
   CLAUDIAN_CONTEXT_FOLDER,
 } from "./utils/claudianContext";
 import { executeObsidianCommand } from "./utils/obsidianCommands";
+import { inferTranscriptLanguage } from "./utils/language";
 import {
   comparableLength,
   comparableStartsWith,
@@ -35,6 +35,8 @@ import { TitleInputModal } from "./views/TitleInputModal";
 import { t, setLocale } from "./i18n";
 
 const AI_SUMMARY_FAILURE_RETRY_MS = 60_000;
+const FORMALIZE_CONTEXT_MAX_CHARS = 180;
+const AI_BACKEND_PROFILE_ROLES: AiBackendProfileRole[] = ["fast", "smart"];
 
 interface PendingTranscript {
   id: string;
@@ -54,11 +56,12 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private activeSignRequestId: string | null = null;
   private recordingStartTime: number = 0;
   private audioCapture!: AudioCapture;
-  private agentBackendService!: AgentBackendService;
+  private fastAgentBackendService!: AgentBackendService;
+  private smartAgentBackendService!: AgentBackendService;
   private translationService!: TranslationService;
   private summaryService!: SummaryService;
   private formalizeService!: FormalizeService;
-  private aiBackendTestInFlight: Promise<string> | null = null;
+  private aiBackendTestInFlight: Partial<Record<AiBackendProfileRole, Promise<string>>> = {};
   private recording = false;
   private recordingTransition = false;
   private connectionLossTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,10 +125,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.backendManager = new BackendManager(pluginDir, this.settings);
     this.wsClient = new WebSocketClient();
     this.audioCapture = new AudioCapture();
-    this.agentBackendService = new AgentBackendService(this.settings.aiBackend, getVaultBasePath(this.app));
-    this.translationService = new TranslationService(this.settings.translation, this.agentBackendService);
-    this.summaryService = new SummaryService(this.settings.summary, this.agentBackendService);
-    this.formalizeService = new FormalizeService(this.settings.formalize, this.agentBackendService);
+    this.fastAgentBackendService = new AgentBackendService(this.settings.aiBackend.fast, getVaultBasePath(this.app));
+    this.smartAgentBackendService = new AgentBackendService(this.settings.aiBackend.smart, getVaultBasePath(this.app));
+    this.translationService = new TranslationService(this.settings.translation, this.fastAgentBackendService);
+    this.summaryService = new SummaryService(this.settings.summary, this.smartAgentBackendService);
+    this.formalizeService = new FormalizeService(this.settings.formalize, this.fastAgentBackendService);
     this.cloudAuthService = new CloudAuthService(this.settings.cloudAuth);
     this.cloudAuthService.setOnSettingsChanged((newSettings) => {
       this.settings.cloudAuth = newSettings;
@@ -209,18 +213,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.settings.tencentASR = { ...DEFAULT_SETTINGS.tencentASR, ...this.settings.tencentASR };
     // 深合并 cloudAuth
     this.settings.cloudAuth = { ...DEFAULT_SETTINGS.cloudAuth, ...this.settings.cloudAuth };
-    this.settings.aiBackend = { ...DEFAULT_SETTINGS.aiBackend, ...this.settings.aiBackend };
-    if (!["openai-compatible", "claude", "codex", "opencode"].includes(this.settings.aiBackend.provider)) {
-      this.settings.aiBackend.provider = DEFAULT_SETTINGS.aiBackend.provider;
-    }
-    if (this.settings.aiBackend.provider !== "openai-compatible") {
-      const detectedCliPath = resolveAiBackendCliPath(this.settings.aiBackend);
-      if (!isAiBackendCliPathCompatible(this.settings.aiBackend) && detectedCliPath) {
-        this.settings.aiBackend.cliPath = detectedCliPath;
-      } else if (!this.settings.aiBackend.cliPath.trim() && detectedCliPath) {
-        this.settings.aiBackend.cliPath = detectedCliPath;
-      }
-    }
+    this.settings.aiBackend = normalizeAiBackendSettings((raw as { aiBackend?: unknown } | null)?.aiBackend);
+    this.migrateAiBackendProfilesFromLegacyApi(raw);
+    this.refreshAiBackendCliPaths();
     if (!["auto", "zh", "en", "custom"].includes(this.settings.aiOutputLanguage)) {
       this.settings.aiOutputLanguage = DEFAULT_SETTINGS.aiOutputLanguage;
     }
@@ -238,7 +233,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     await this.saveData(this.settings);
     setLocale(this.settings.locale ?? "zh");
     this.backendManager?.updateSettings(this.settings);
-    this.agentBackendService?.updateSettings(this.settings.aiBackend, getVaultBasePath(this.app));
+    this.fastAgentBackendService?.updateSettings(this.settings.aiBackend.fast, getVaultBasePath(this.app));
+    this.smartAgentBackendService?.updateSettings(this.settings.aiBackend.smart, getVaultBasePath(this.app));
     this.translationService?.updateSettings(this.settings.translation);
     this.summaryService?.updateSettings(this.settings.summary);
     this.formalizeService?.updateSettings(this.settings.formalize);
@@ -252,19 +248,58 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
   }
 
-  async testAiBackendConnection(): Promise<string> {
-    if (this.aiBackendTestInFlight) return this.aiBackendTestInFlight;
+  private migrateAiBackendProfilesFromLegacyApi(raw: unknown): void {
+    const rawRecord = raw && typeof raw === "object" && !Array.isArray(raw)
+      ? raw as Record<string, unknown>
+      : {};
+    const rawAiBackend = rawRecord.aiBackend;
+    const hasProfileShape = Boolean(
+      rawAiBackend &&
+      typeof rawAiBackend === "object" &&
+      !Array.isArray(rawAiBackend) &&
+      ("fast" in rawAiBackend || "smart" in rawAiBackend),
+    );
+    if (hasProfileShape) return;
 
-    this.aiBackendTestInFlight = this.runAiBackendConnectionTest()
-      .finally(() => {
-        this.aiBackendTestInFlight = null;
-      });
-    return this.aiBackendTestInFlight;
+    applyLegacyApiConfig(this.settings.aiBackend.fast, this.settings.translation);
+    applyLegacyApiConfig(this.settings.aiBackend.fast, this.settings.formalize);
+    applyLegacyApiConfig(this.settings.aiBackend.smart, this.settings.summary);
   }
 
-  detectAiBackendCliPath(provider: AiBackendProvider = this.settings.aiBackend.provider): string {
+  private refreshAiBackendCliPaths(): void {
+    for (const role of AI_BACKEND_PROFILE_ROLES) {
+      const profile = this.settings.aiBackend[role];
+      if (profile.provider === "openai-compatible") continue;
+
+      const detectedCliPath = resolveAiBackendCliPath(profile);
+      if (!isAiBackendCliPathCompatible(profile) && detectedCliPath) {
+        profile.cliPath = detectedCliPath;
+      } else if (!profile.cliPath.trim() && detectedCliPath) {
+        profile.cliPath = detectedCliPath;
+      } else if (!isAiBackendCliPathCompatible(profile)) {
+        profile.cliPath = "";
+      }
+    }
+  }
+
+  async testAiBackendConnection(role: AiBackendProfileRole): Promise<string> {
+    const existing = this.aiBackendTestInFlight[role];
+    if (existing) return existing;
+
+    const promise = this.runAiBackendConnectionTest(role)
+      .finally(() => {
+        delete this.aiBackendTestInFlight[role];
+      });
+    this.aiBackendTestInFlight[role] = promise;
+    return promise;
+  }
+
+  detectAiBackendCliPath(
+    provider: AiBackendProvider,
+    role: AiBackendProfileRole,
+  ): string {
     return resolveAiBackendCliPath({
-      ...this.settings.aiBackend,
+      ...this.settings.aiBackend[role],
       provider,
     });
   }
@@ -839,44 +874,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private normalizeLanguage(rawLanguage: string, text: string): string {
-    const mode = this.settings.recognitionMode ?? "zh-en";
-    const language = (rawLanguage || "auto").toLowerCase();
-
-    const hanCount = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
-    const latinCount = (text.match(/[A-Za-z]/g) ?? []).length;
-    const latinWordCount = (text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? []).length;
-    const kanaCount = (text.match(/[\u3040-\u30ff]/g) ?? []).length;
-    const hangulCount = (text.match(/[\uac00-\ud7af]/g) ?? []).length;
-
-    if (kanaCount > 0) return "ja";
-    if (hangulCount > 0) return "ko";
-    if (hanCount >= 2 && latinWordCount >= 2 && latinCount >= 6) {
-      return "hybrid";
-    }
-
-    if (latinWordCount >= 3 && latinCount >= Math.max(8, hanCount * 2)) {
-      return "en";
-    }
-    if (hanCount === 0 && latinCount >= 3) return "en";
-
-    if (hanCount >= 2) {
-      return language === "yue" ? "yue" : "zh";
-    }
-
-    if (hanCount === 1) {
-      if (latinCount >= 8) return "en";
-      return language === "yue" ? "yue" : "zh";
-    }
-
-    if (mode === "zh") return "zh";
-    if (mode === "en") return "en";
-
-    if (language === "ja" || language === "ko" || language === "yue" || language === "en") {
-      return language;
-    }
-    if (language === "zh") return "zh";
-
-    return "zh";
+    return inferTranscriptLanguage(rawLanguage, text, this.settings.recognitionMode ?? "zh-en");
   }
 
   private stabilizePartialText(currentRaw: string): string | null {
@@ -1248,13 +1246,42 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (!this.formalizeService.canFormalize()) {
       throw new Error(t("notice.configureFormalizeApi"));
     }
-    const result = await this.formalizeService.formalize(text, this.outputLanguageName());
+    const context = this.buildFormalizeContext(entryId);
+    const result = await this.formalizeService.formalize(text, this.outputLanguageName(), context);
     const view = this.getView();
     if (view) {
       view.updateFormalText(entryId, result);
     }
     this.updateEntry(entryId, { formalText: result });
     return result;
+  }
+
+  private buildFormalizeContext(entryId: string): string {
+    const entryIndex = this.transcriptEntries.findIndex((entry) => entry.id === entryId);
+    if (entryIndex < 0) return "";
+
+    const previous = this.findFormalizeContextEntry(entryIndex, -1);
+    const next = this.findFormalizeContextEntry(entryIndex, 1);
+    const parts: string[] = [];
+    if (previous) {
+      parts.push(`上一段：${trimFormalizeContextText(previous.result.text)}`);
+    }
+    if (next) {
+      parts.push(`下一段：${trimFormalizeContextText(next.result.text)}`);
+    }
+    return parts.join("\n");
+  }
+
+  private findFormalizeContextEntry(fromIndex: number, direction: -1 | 1): TranscriptEntry | null {
+    for (
+      let index = fromIndex + direction;
+      index >= 0 && index < this.transcriptEntries.length;
+      index += direction
+    ) {
+      const entry = this.transcriptEntries[index];
+      if (isFormalizeContextEntry(entry)) return entry;
+    }
+    return null;
   }
 
   private async translateEntry(entryId: string, text: string, language: string): Promise<string> {
@@ -1290,6 +1317,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       autoFormalize: this.settings.autoFormalize,
       copyContentMode: this.settings.copyContentMode ?? DEFAULT_SETTINGS.copyContentMode,
       exportMode: this.settings.exportMode ?? DEFAULT_SETTINGS.exportMode,
+      exportTextMode: this.settings.exportTextMode ?? DEFAULT_SETTINGS.exportTextMode,
     };
   }
 
@@ -1303,6 +1331,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.settings.autoFormalize = Boolean(values.autoFormalize);
     this.settings.copyContentMode = values.copyContentMode === "summaryOnly" ? "summaryOnly" : "full";
     this.settings.exportMode = values.exportMode === "summaryOnly" ? "summaryOnly" : "full";
+    this.settings.exportTextMode = values.exportTextMode === "formalized" ? "formalized" : "original";
     await this.saveSettings();
   }
 
@@ -1331,28 +1360,15 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     return outputLanguageName(languageCode === "custom" ? this.interfaceLanguageCode() : languageCode);
   }
 
-  private async runAiBackendConnectionTest(): Promise<string> {
+  private async runAiBackendConnectionTest(role: AiBackendProfileRole): Promise<string> {
     await this.saveSettings();
-    if (this.agentBackendService.isLocalEnabled()) {
-      return this.agentBackendService.testConnection();
-    }
-
-    const config = this.getApiConnectionTestConfig();
-    if (!config) {
+    const service = role === "fast"
+      ? this.fastAgentBackendService
+      : this.smartAgentBackendService;
+    if (!service.isConfigured()) {
       throw new Error(t("settings.aiBackend.test.noApiConfig"));
     }
-    return testOpenAiCompatibleConnection(config);
-  }
-
-  private getApiConnectionTestConfig(): AiApiConnectionConfig | null {
-    const candidates: AiApiConnectionConfig[] = [
-      { label: t("settings.translation.title"), ...this.settings.translation },
-      { label: t("settings.formalize.title"), ...this.settings.formalize },
-      { label: t("settings.summary.title"), ...this.settings.summary },
-    ];
-    return candidates.find((item) =>
-      Boolean(item.apiUrl?.trim() && item.apiKey?.trim() && item.model?.trim()),
-    ) ?? null;
+    return service.testConnection();
   }
 
   private async regenerateSummaryEntry(
@@ -1517,7 +1533,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         break;
     }
 
-    const md = `# ${title}\n\n${formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"))}\n`;
+    const md = `# ${title}\n\n${formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"), {
+      useFormalTextAsOriginal: this.settings.exportTextMode === "formalized",
+    })}\n`;
 
     // 创建笔记文件
     const fileName = `${title}.md`;
@@ -1652,6 +1670,22 @@ function clampFontSize(value: unknown): number {
   return Math.min(24, Math.max(12, Math.round(numeric)));
 }
 
+function applyLegacyApiConfig(
+  profile: AiBackendProfileSettings,
+  config: { apiUrl?: string; apiKey?: string; model?: string },
+): void {
+  if (profile.provider !== "openai-compatible") return;
+  if (!profile.apiUrl.trim() && config.apiUrl?.trim()) {
+    profile.apiUrl = config.apiUrl.trim();
+  }
+  if (!profile.apiKey.trim() && config.apiKey?.trim()) {
+    profile.apiKey = config.apiKey;
+  }
+  if (!profile.model.trim() && config.model?.trim()) {
+    profile.model = config.model.trim();
+  }
+}
+
 function isAiOutputLanguage(value: unknown): value is AiOutputLanguage {
   return value === "auto" || value === "zh" || value === "en" || value === "custom";
 }
@@ -1663,6 +1697,18 @@ function outputLanguageName(language: "zh" | "en"): string {
 function sanitizeCustomOutputLanguage(value: unknown): string {
   if (typeof value !== "string") return "";
   return value.trim().slice(0, 40);
+}
+
+function isFormalizeContextEntry(entry: TranscriptEntry): boolean {
+  const language = entry.result.language;
+  if (language === "summary" || language === "meta-summary") return false;
+  return Boolean(entry.result.text?.trim());
+}
+
+function trimFormalizeContextText(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= FORMALIZE_CONTEXT_MAX_CHARS) return normalized;
+  return `${normalized.slice(0, FORMALIZE_CONTEXT_MAX_CHARS).trim()}...`;
 }
 
 function standardLanguageCodeFromName(language: unknown): "zh" | "en" | null {
