@@ -468,6 +468,14 @@ export class TranscriptionSettingTab extends PluginSettingTab {
               }
             }),
           );
+
+        new Setting(containerEl)
+          .setName(t("settings.cloud.recharge.btn"))
+          .setDesc(t("settings.cloud.recharge.requiresLogin"))
+          .addButton((btn) => {
+            btn.setButtonText(t("settings.cloud.recharge.btn"));
+            btn.setDisabled(true);
+          });
       }
 
     }

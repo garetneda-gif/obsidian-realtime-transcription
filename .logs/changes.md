@@ -256,3 +256,9 @@
 - `src/main.ts`,`src/views/TranscriptionView.ts`: 批量任务改为每次独立 `AbortController` + run id,点终止后界面立即恢复,旧请求稍后返回不会覆盖文本或影响新任务。
 - `styles.css`: 批量选择栏改为可压缩网格列和 16px 图标,防止窄侧栏下右侧图标溢出。
 - 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`git diff --check` 通过;已同步并重载 Obsidian,运行时 DOM 确认 `scrollWidth=clientWidth=278`,终止按钮点击后立即恢复为退出选择。
+
+## 2026-07-03 18:15 — 未登录态显示充值入口
+- `src/settings.ts`: 云端托管未登录时也显示 `充值 ¥9.90` 设置项,按钮置灰并提示需先填写服务器地址和登录。
+- `src/i18n.ts`: 补充中英文未登录充值说明文案。
+- `tests/aiBackendConnection.test.ts`: 增加未登录态充值入口静态回归检查。
+- 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`git diff --check` 通过;已同步并重载 Obsidian,运行时 DOM 确认当前为云端未登录且充值按钮 disabled。
