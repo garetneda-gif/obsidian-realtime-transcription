@@ -113,8 +113,11 @@ TENCENT_SECRET_KEY=<Tencent Cloud SecretKey>
 AP_XUNHU_APPID=<Xunhu AppID>
 AP_XUNHU_APPSECRET=<Xunhu AppSecret>
 AP_XUNHU_NOTIFY_URL=https://your-domain.example/api/billing/callback/xunhu
+BS_PUBLIC_SERVER_URL=https://your-domain.example
 BS_CORS_ORIGINS=app://obsidian.md
 ```
+
+The recharge entry is `https://your-domain.example/account`. The Account Center can sign in/register independently and handles recharge, order refresh, and usage inspection; the plugin settings page still keeps cloud account login for ASR API tokens.
 
 Local self-check:
 
@@ -385,6 +388,7 @@ export TENCENT_SECRET_KEY="Tencent Cloud SecretKey"
 export AP_XUNHU_APPID="Xunhu AppID"
 export AP_XUNHU_APPSECRET="Xunhu AppSecret"
 export AP_XUNHU_NOTIFY_URL="https://your-domain/api/billing/callback/xunhu"
+export BS_PUBLIC_SERVER_URL="https://your-domain"
 export BS_PRICE_PER_HOUR_CENTS=200
 
 cd billing-server
@@ -392,7 +396,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-After deployment, set the plugin's Server URL to your HTTPS API domain.
+After deployment, set the plugin's Server URL to your HTTPS API domain. The recharge page is `https://your-domain/account`; payment return links include the order id so the Account Center can keep refreshing that order. In-plugin login remains for cloud transcription authentication.
 
 ### Contributing
 

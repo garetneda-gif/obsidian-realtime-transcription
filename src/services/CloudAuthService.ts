@@ -39,25 +39,10 @@ interface UsageRecord {
   created_at: string;
 }
 
-interface RechargeOrder {
-  url: string;
-  url_qrcode?: string;
-  order_id: string;
-}
-
 interface AccountInfo {
   email?: string;
   balance_cents: number;
   created_at?: string;
-}
-
-interface OrderStatus {
-  order_id?: string;
-  trade_order_id?: string;
-  status: string;
-  amount_cents?: number;
-  balance_cents?: number;
-  paid_at?: string | null;
 }
 
 export class CloudAuthService {
@@ -194,31 +179,8 @@ export class CloudAuthService {
     return resp.json();
   }
 
-  async createRechargeOrder(amountYuan = "9.90"): Promise<RechargeOrder> {
-    const resp = await this.authPost("/api/billing/create-order", {
-      amount: amountYuan,
-      return_url: this.settings.serverUrl,
-    });
-    if (!resp.ok) {
-      throw await this.readError(resp, "Failed to create recharge order");
-    }
-    return resp.json() as Promise<RechargeOrder>;
-  }
-
-  async getOrderStatus(orderId: string): Promise<OrderStatus> {
-    const resp = await this.authGet(`/api/billing/orders/${encodeURIComponent(orderId)}`);
-    if (!resp.ok) throw await this.readError(resp, "Failed to get order status");
-    const data = await resp.json() as OrderStatus;
-    this.updateBalanceFromPayload(data);
-    return data;
-  }
-
-  async refreshOrder(orderId: string): Promise<OrderStatus> {
-    const resp = await this.authPost(`/api/billing/orders/${encodeURIComponent(orderId)}/refresh`);
-    if (!resp.ok) throw await this.readError(resp, "Failed to refresh order");
-    const data = await resp.json() as OrderStatus;
-    this.updateBalanceFromPayload(data);
-    return data;
+  getAccountCenterUrl(): string {
+    return this.buildUrl("/account");
   }
 
   logout(): void {
@@ -244,12 +206,6 @@ export class CloudAuthService {
       ...settings,
       serverUrl: CloudAuthService.normalizeServerUrl(settings.serverUrl),
     };
-  }
-
-  private updateBalanceFromPayload(data: { balance_cents?: number }): void {
-    if (typeof data.balance_cents !== "number") return;
-    this.settings.balanceCents = data.balance_cents;
-    this.onSettingsChanged?.(this.settings);
   }
 
   private async authPost(path: string, body: Record<string, unknown> = {}): Promise<Response> {

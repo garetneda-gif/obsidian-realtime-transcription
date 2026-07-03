@@ -2,6 +2,7 @@
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import bcrypt
 import jwt
@@ -12,6 +13,8 @@ from database import SessionLocal
 from models import User, new_uuid, utcnow
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
+ACCESS_COOKIE = "rt_access"
+REFRESH_COOKIE = "rt_refresh"
 
 # 简易 IP rate limiter（单 worker 内存级，MVP 足够）
 _login_attempts: dict[str, list[float]] = defaultdict(list)
@@ -30,7 +33,7 @@ def _check_rate_limit(ip: str) -> bool:
     return True
 
 
-def _create_tokens(user_id: str) -> dict:
+def _create_tokens(user_id: str) -> dict[str, str]:
     now = datetime.now(timezone.utc)
     access_payload = {
         "sub": user_id,
@@ -53,6 +56,44 @@ def _create_tokens(user_id: str) -> dict:
     }
 
 
+def _cookie_secure() -> bool:
+    return config.is_production() or request.is_secure or request.headers.get("X-Forwarded-Proto", "") == "https"
+
+
+def _json_with_auth_cookies(
+    payload: dict[str, Any],
+    status: int = 200,
+    expose_tokens: bool = True,
+    set_cookies: bool = True,
+):
+    hidden = {"token", "refresh_token", "expires_at"}
+    body = payload if expose_tokens else {k: v for k, v in payload.items() if k not in hidden}
+    resp = jsonify(body)
+    resp.status_code = status
+    secure = _cookie_secure()
+    if not set_cookies:
+        return resp
+    if payload.get("token"):
+        resp.set_cookie(
+            ACCESS_COOKIE,
+            payload["token"],
+            max_age=config.JWT_ACCESS_EXPIRE_DAYS * 86400,
+            httponly=True,
+            secure=secure,
+            samesite="Lax",
+        )
+    if payload.get("refresh_token"):
+        resp.set_cookie(
+            REFRESH_COOKIE,
+            payload["refresh_token"],
+            max_age=config.JWT_REFRESH_EXPIRE_DAYS * 86400,
+            httponly=True,
+            secure=secure,
+            samesite="Lax",
+        )
+    return resp
+
+
 def decode_token(token: str, expected_type: str = "access") -> str | None:
     """解码 JWT，返回 user_id 或 None"""
     try:
@@ -73,6 +114,16 @@ def require_auth():
     user_id = decode_token(token)
     if not user_id:
         return None, (jsonify({"error": "Token expired or invalid"}), 401)
+    return user_id, None
+
+
+def require_cookie_auth():
+    token = request.cookies.get(ACCESS_COOKIE, "")
+    if not token:
+        return None, (jsonify({"error": "Missing account session"}), 401)
+    user_id = decode_token(token)
+    if not user_id:
+        return None, (jsonify({"error": "Account session expired"}), 401)
     return user_id, None
 
 
@@ -104,7 +155,12 @@ def register():
         db.commit()
 
         tokens = _create_tokens(user.id)
-        return jsonify({**tokens, "balance_cents": user.balance_cents}), 201
+        return _json_with_auth_cookies(
+            {**tokens, "balance_cents": user.balance_cents},
+            201,
+            expose_tokens=not data.get("browser_session"),
+            set_cookies=bool(data.get("browser_session")),
+        )
     finally:
         db.close()
 
@@ -129,7 +185,11 @@ def login():
             return jsonify({"error": "Invalid email or password"}), 401
 
         tokens = _create_tokens(user.id)
-        return jsonify({**tokens, "balance_cents": user.balance_cents}), 200
+        return _json_with_auth_cookies(
+            {**tokens, "balance_cents": user.balance_cents},
+            expose_tokens=not data.get("browser_session"),
+            set_cookies=bool(data.get("browser_session")),
+        )
     finally:
         db.close()
 
@@ -137,11 +197,23 @@ def login():
 @auth_bp.route("/refresh", methods=["POST"])
 def refresh():
     data = request.get_json(silent=True) or {}
-    refresh_token = data.get("refresh_token") or ""
+    refresh_token = data.get("refresh_token") or request.cookies.get(REFRESH_COOKIE, "")
 
     user_id = decode_token(refresh_token, expected_type="refresh")
     if not user_id:
         return jsonify({"error": "Invalid or expired refresh token"}), 401
 
     tokens = _create_tokens(user_id)
-    return jsonify(tokens), 200
+    return _json_with_auth_cookies(
+        {**tokens, "ok": True},
+        expose_tokens=bool(data.get("refresh_token")),
+        set_cookies=not bool(data.get("refresh_token")),
+    )
+
+
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    resp = jsonify({"ok": True})
+    resp.delete_cookie(ACCESS_COOKIE)
+    resp.delete_cookie(REFRESH_COOKIE)
+    return resp, 200

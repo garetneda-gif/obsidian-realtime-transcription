@@ -12,6 +12,7 @@ from auth import auth_bp
 from signing import signing_bp
 from billing import billing_bp, settle_expired_requests
 from payment_xunhu import payment_bp
+from account_center import account_bp
 
 
 def create_app() -> Flask:
@@ -22,6 +23,7 @@ def create_app() -> Flask:
     app.register_blueprint(signing_bp)
     app.register_blueprint(billing_bp)
     app.register_blueprint(payment_bp)
+    app.register_blueprint(account_bp)
 
     @app.route("/health")
     @app.route("/healthz")

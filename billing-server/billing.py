@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify
 from sqlalchemy.exc import IntegrityError
 
 import config
-from auth import require_auth
+from auth import require_auth, require_cookie_auth
 from database import SessionLocal
 from models import User, SignRequest, UsageRecord, new_uuid, utcnow
 
@@ -49,6 +49,15 @@ def _serialize_account(user: User) -> dict:
     }
 
 
+def _require_read_auth():
+    user_id, err = require_auth()
+    if not err:
+        return user_id, None
+    if request.cookies.get("rt_access"):
+        return require_cookie_auth()
+    return user_id, err
+
+
 def _settled_usage_response(db, sign_req: SignRequest, user: User):
     usage = _usage_for_sign_request(db, sign_req.id)
     return jsonify({
@@ -62,7 +71,7 @@ def _settled_usage_response(db, sign_req: SignRequest, user: User):
 
 @billing_bp.route("/me", methods=["GET"])
 def get_account():
-    user_id, err = require_auth()
+    user_id, err = _require_read_auth()
     if err:
         return err
 
@@ -94,7 +103,7 @@ def get_balance():
 
 @billing_bp.route("/usage", methods=["GET"])
 def get_usage():
-    user_id, err = require_auth()
+    user_id, err = _require_read_auth()
     if err:
         return err
 

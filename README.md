@@ -114,8 +114,11 @@ TENCENT_SECRET_KEY=<腾讯云 SecretKey>
 AP_XUNHU_APPID=<虎皮椒 AppID>
 AP_XUNHU_APPSECRET=<虎皮椒 AppSecret>
 AP_XUNHU_NOTIFY_URL=https://你的域名/api/billing/callback/xunhu
+BS_PUBLIC_SERVER_URL=https://你的域名
 BS_CORS_ORIGINS=app://obsidian.md
 ```
+
+用户充值入口在 `https://你的域名/account`。账户中心可独立登录/注册并处理充值、订单刷新和用量查看；插件设置页仍保留云端账户登录，用于获取转写 API token。
 
 本地自检：
 
@@ -386,6 +389,7 @@ export TENCENT_SECRET_KEY="腾讯云 SecretKey"
 export AP_XUNHU_APPID="虎皮椒 AppID"
 export AP_XUNHU_APPSECRET="虎皮椒 AppSecret"
 export AP_XUNHU_NOTIFY_URL="https://你的域名/api/billing/callback/xunhu"
+export BS_PUBLIC_SERVER_URL="https://你的域名"
 export BS_PRICE_PER_HOUR_CENTS=200
 
 cd billing-server
@@ -393,7 +397,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-上线后把插件设置里的「服务器地址」填成你的 HTTPS API 域名。
+上线后把插件设置里的「服务器地址」填成你的 HTTPS API 域名。充值页地址为 `https://你的域名/account`，支付回跳会带上订单号并在账户中心里继续刷新订单状态；插件内登录继续用于云端转写鉴权。
 
 ---
 

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Realtime Transcription 账户中心</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f7f4;
+      color: #111;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px 16px;
+    }
+    main {
+      width: min(760px, 100%);
+      background: #fff;
+      border: 1px solid #e4e1dc;
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 18px 55px rgba(0, 0, 0, .08);
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 30px;
+      line-height: 1.2;
+    }
+    p {
+      margin: 0;
+      color: #737373;
+      line-height: 1.7;
+    }
+    section {
+      border-top: 1px solid #e9e7e2;
+      margin-top: 22px;
+      padding-top: 22px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-weight: 700;
+    }
+    input {
+      width: 100%;
+      border: 1px solid #d8d5d0;
+      border-radius: 10px;
+      padding: 11px 12px;
+      font: inherit;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 11px 15px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      background: #f3f3f2;
+      color: #111;
+    }
+    button.primary {
+      background: #f5a414;
+      color: #fff;
+    }
+    button:disabled {
+      opacity: .55;
+      cursor: default;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .stat {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      background: #faf8f3;
+      border: 1px solid #eee7dc;
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .money {
+      font-size: 34px;
+      font-weight: 900;
+      color: #f5a414;
+    }
+    .hidden { display: none; }
+    .status {
+      min-height: 24px;
+      margin-top: 14px;
+      color: #666;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid #eceae5;
+      padding: 10px 6px;
+      color: #555;
+    }
+    th {
+      color: #111;
+      font-size: 13px;
+    }
+    @media (max-width: 620px) {
+      main { padding: 22px; }
+      .grid { grid-template-columns: 1fr; }
+      .stat { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Realtime Transcription 账户中心</h1>
+    <p>登录后可充值云端转写额度、查看余额和最近用量。Obsidian 插件只保存服务 token，支付和订单在这里完成。</p>
+
+    <section id="login-panel">
+      <div class="grid">
+        <label>邮箱
+          <input id="email" type="email" autocomplete="email" placeholder="user@example.com">
+        </label>
+        <label>密码
+          <input id="password" type="password" autocomplete="current-password" placeholder="至少 8 位">
+        </label>
+      </div>
+      <div class="actions">
+        <button class="primary" id="login-btn">登录</button>
+        <button id="register-btn">注册</button>
+      </div>
+    </section>
+
+    <section id="account-panel" class="hidden">
+      <div class="stat">
+        <div>
+          <p id="account-email">未登录</p>
+          <div class="money" id="balance">¥0.00</div>
+        </div>
+        <div class="actions">
+          <button id="refresh-btn">刷新</button>
+          <button id="logout-btn">退出登录</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" data-amount="9.90">充值 ¥9.90</button>
+        <button data-amount="19.90">充值 ¥19.90</button>
+        <button data-amount="49.90">充值 ¥49.90</button>
+      </div>
+    </section>
+
+    <section id="order-panel" class="hidden">
+      <p id="order-text"></p>
+      <div class="actions">
+        <button id="order-open-btn" class="primary">继续支付</button>
+        <button id="order-refresh-btn">刷新订单</button>
+      </div>
+    </section>
+
+    <section id="usage-panel" class="hidden">
+      <p id="usage-summary"></p>
+      <table>
+        <thead>
+          <tr><th>时间</th><th>模型</th><th>时长</th><th>费用</th></tr>
+        </thead>
+        <tbody id="usage-table"></tbody>
+      </table>
+    </section>
+
+    <div class="status" id="status"></div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let currentOrder = null;
+
+    function money(cents) {
+      return `¥${(Number(cents || 0) / 100).toFixed(2)}`;
+    }
+
+    function status(text) {
+      $("status").textContent = text || "";
+    }
+
+    async function api(path, options = {}, retry = true) {
+      const resp = await fetch(path, {
+        ...options,
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        },
+      });
+      if (resp.status === 401 && retry) {
+        const refreshed = await fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        if (refreshed.ok) return api(path, options, false);
+      }
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || data.message || resp.statusText);
+      }
+      return resp.json();
+    }
+
+    function setLoggedIn(loggedIn) {
+      $("login-panel").classList.toggle("hidden", loggedIn);
+      $("account-panel").classList.toggle("hidden", !loggedIn);
+      $("usage-panel").classList.toggle("hidden", !loggedIn);
+    }
+
+    async function loadAccount() {
+      const [account, usage] = await Promise.all([
+        api("/api/billing/me"),
+        api("/api/billing/usage"),
+      ]);
+      setLoggedIn(true);
+      $("account-email").textContent = account.email || "已登录";
+      $("balance").textContent = money(account.balance_cents);
+      $("usage-summary").textContent = `最近 ${usage.records.length} 条用量，共 ${Math.round(usage.total_seconds)} 秒，费用 ${money(usage.total_cost_cents)}`;
+      $("usage-table").replaceChildren(...usage.records.map((record) => {
+        const tr = document.createElement("tr");
+        [
+          new Date(record.created_at).toLocaleString(),
+          record.engine_model || "-",
+          `${record.duration_seconds}s`,
+          money(record.cost_cents),
+        ].forEach((text) => {
+          const td = document.createElement("td");
+          td.textContent = text;
+          tr.appendChild(td);
+        });
+        return tr;
+      }));
+    }
+
+    async function auth(path) {
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      if (!email || !password) throw new Error("请输入邮箱和密码");
+      await api(path, {
+        method: "POST",
+        body: JSON.stringify({ email, password, browser_session: true }),
+      });
+      await loadAccount();
+    }
+
+    async function createOrder(amount) {
+      currentOrder = await api("/api/billing/create-order", {
+        method: "POST",
+        body: JSON.stringify({ amount }),
+      });
+      localStorage.setItem("rtCloudOrderId", currentOrder.order_id);
+      $("order-panel").classList.remove("hidden");
+      $("order-text").textContent = `订单 ${currentOrder.order_id} 已创建，金额 ${money(Number(amount) * 100)}`;
+      $("order-open-btn").onclick = () => window.open(currentOrder.url, "_self");
+      window.open(currentOrder.url, "_self");
+    }
+
+    async function refreshOrder(orderId) {
+      const order = await api(`/api/billing/orders/${encodeURIComponent(orderId)}/refresh`, { method: "POST" });
+      $("order-panel").classList.remove("hidden");
+      $("order-text").textContent = `订单 ${order.order_id || orderId} 状态：${order.status}，当前余额 ${money(order.balance_cents)}`;
+      await loadAccount();
+      if (order.status === "CREDITED") localStorage.removeItem("rtCloudOrderId");
+    }
+
+    $("login-btn").onclick = () => auth("/api/auth/login").catch((e) => status(e.message));
+    $("register-btn").onclick = () => auth("/api/auth/register").catch((e) => status(e.message));
+    $("refresh-btn").onclick = () => loadAccount().catch((e) => status(e.message));
+    $("logout-btn").onclick = async () => {
+      await api("/api/auth/logout", { method: "POST" }).catch(() => null);
+      localStorage.removeItem("rtCloudOrderId");
+      currentOrder = null;
+      setLoggedIn(false);
+      $("order-panel").classList.add("hidden");
+      status("已退出登录");
+    };
+    document.querySelectorAll("[data-amount]").forEach((button) => {
+      button.addEventListener("click", () => createOrder(button.dataset.amount).catch((e) => status(e.message)));
+    });
+    $("order-refresh-btn").onclick = () => {
+      const orderId = currentOrder?.order_id || localStorage.getItem("rtCloudOrderId");
+      if (!orderId) return status("没有待刷新订单");
+      refreshOrder(orderId).catch((e) => status(e.message));
+    };
+
+    const queryOrder = new URLSearchParams(location.search).get("order");
+    if (queryOrder) localStorage.setItem("rtCloudOrderId", queryOrder);
+    loadAccount()
+      .then(() => {
+        const orderId = queryOrder || localStorage.getItem("rtCloudOrderId");
+        if (orderId) refreshOrder(orderId).catch((e) => status(e.message));
+      })
+      .catch(() => setLoggedIn(false));
+  </script>
+</body>
+</html>

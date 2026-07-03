@@ -4,6 +4,7 @@ import hmac
 import os
 import time
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 from flask import Blueprint, request, jsonify
@@ -12,6 +13,7 @@ import config
 from database import SessionLocal
 from money import cents_to_yuan, yuan_to_cents
 from models import User, Order, OrderStatus, new_uuid, utcnow
+from auth import require_auth, require_cookie_auth
 
 payment_bp = Blueprint("payment", __name__, url_prefix="/api/billing")
 
@@ -78,6 +80,31 @@ def _create_xunhu_order(
         return {"error": str(e), "status": 502}
 
 
+def with_order_return_url(return_url: str, trade_order_id: str) -> str:
+    if not return_url:
+        return ""
+    parsed = urlparse(return_url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["order"] = trade_order_id
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def account_center_return_url() -> str:
+    base_url = config.PUBLIC_SERVER_URL.strip().rstrip("/")
+    if not base_url:
+        return ""
+    return f"{base_url}/account"
+
+
+def _require_payment_user():
+    user_id, err = require_auth()
+    if not err:
+        return user_id, None
+    if request.cookies.get("rt_access"):
+        return require_cookie_auth()
+    return user_id, err
+
+
 def query_payment_status(trade_order_id: str) -> dict[str, Any]:
     """查询虎皮椒订单状态，使用本地商户订单号 out_trade_order。"""
     params = {
@@ -124,7 +151,7 @@ def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: s
         trade_order_id=trade_order_id,
         amount_cents=amount_cents,
         title=title,
-        return_url=return_url,
+        return_url=with_order_return_url(return_url, trade_order_id),
     )
     if "error" in provider_result:
         return {"error": provider_result["error"], "status": provider_result.get("status", 502)}
@@ -205,9 +232,7 @@ def xunhu_callback():
 
 @payment_bp.route("/create-order", methods=["POST"])
 def create_order():
-    """创建充值订单（插件调用）"""
-    from auth import require_auth
-    user_id, err = require_auth()
+    user_id, err = _require_payment_user()
     if err:
         return err
     if not user_id:
@@ -215,13 +240,12 @@ def create_order():
 
     data = request.get_json(silent=True) or {}
     amount = data.get("amount", "9.90")
-    return_url = data.get("return_url", "")
 
     result = create_payment_url(
         user_id=user_id,
         amount_yuan=str(amount),
         title="Obsidian 云端转写充值",
-        return_url=return_url,
+        return_url=account_center_return_url(),
     )
 
     if "error" in result:
@@ -233,8 +257,7 @@ def create_order():
 @payment_bp.route("/orders/<trade_order_id>", methods=["GET"])
 def get_order(trade_order_id: str):
     """查询当前用户的充值订单状态"""
-    from auth import require_auth
-    user_id, err = require_auth()
+    user_id, err = _require_payment_user()
     if err:
         return err
 
@@ -260,8 +283,7 @@ def get_order(trade_order_id: str):
 @payment_bp.route("/orders/<trade_order_id>/refresh", methods=["POST"])
 def refresh_order(trade_order_id: str):
     """主动查询支付渠道并同步当前用户的充值订单状态。"""
-    from auth import require_auth
-    user_id, err = require_auth()
+    user_id, err = _require_payment_user()
     if err:
         return err
 

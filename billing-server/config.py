@@ -82,6 +82,10 @@ def _valid_url(value: str, *, allow_app_scheme: bool = False) -> bool:
     return parsed.scheme in schemes and bool(parsed.netloc)
 
 
+def is_production() -> bool:
+    return ENV in {"production", "prod"}
+
+
 def _check_range(errors: list[str], name: str, value: int, minimum: int, maximum: int) -> None:
     if value < minimum or value > maximum:
         errors.append(f"{name} must be between {minimum} and {maximum}")
@@ -93,7 +97,7 @@ def validate_config() -> None:
     Development and test environments stay permissive so local tests can patch
     only the values they need. Production fails fast before the server starts.
     """
-    if ENV not in {"production", "prod"}:
+    if not is_production():
         return
 
     errors = list(_INT_ENV_ERRORS)
@@ -108,6 +112,7 @@ def validate_config() -> None:
         "AP_XUNHU_APPID": XUNHU_APPID,
         "AP_XUNHU_APPSECRET": XUNHU_APPSECRET,
         "AP_XUNHU_NOTIFY_URL": XUNHU_NOTIFY_URL,
+        "BS_PUBLIC_SERVER_URL": PUBLIC_SERVER_URL,
     }
     for name, value in required.items():
         if not value:
@@ -119,6 +124,8 @@ def validate_config() -> None:
         errors.append("AP_XUNHU_QUERY_URL must be a valid http(s) URL")
     if PUBLIC_SERVER_URL and not _valid_url(PUBLIC_SERVER_URL):
         errors.append("BS_PUBLIC_SERVER_URL must be a valid http(s) URL")
+    if PUBLIC_SERVER_URL and urlparse(PUBLIC_SERVER_URL).scheme != "https":
+        errors.append("BS_PUBLIC_SERVER_URL must use https in production")
 
     for origin in CORS_ORIGINS:
         if not _valid_url(origin, allow_app_scheme=True):

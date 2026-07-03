@@ -8,6 +8,7 @@ def _reload_config(monkeypatch, **env):
     for key in [
         "BS_ENV",
         "BS_SECRET_KEY",
+        "BS_PUBLIC_SERVER_URL",
         "BS_PORT",
         "TENCENT_APP_ID",
         "TENCENT_SECRET_ID",
@@ -41,6 +42,7 @@ def test_production_requires_non_default_secret(monkeypatch):
         AP_XUNHU_APPID="xunhu-appid",
         AP_XUNHU_APPSECRET="xunhu-secret",
         AP_XUNHU_NOTIFY_URL="https://billing.example.com/api/billing/callback/xunhu",
+        BS_PUBLIC_SERVER_URL="https://billing.example.com",
     )
 
     with pytest.raises(config.ConfigError) as exc:
@@ -59,6 +61,43 @@ def test_development_config_does_not_fail_fast(monkeypatch):
 
     config.validate_config()
     assert config.PORT == 8900
+
+
+def test_production_requires_public_server_url(monkeypatch):
+    config = _reload_config(
+        monkeypatch,
+        BS_ENV="production",
+        BS_SECRET_KEY="production-secret-with-at-least-32-chars",
+        TENCENT_APP_ID="appid",
+        TENCENT_SECRET_ID="secret-id",
+        TENCENT_SECRET_KEY="secret-key",
+        AP_XUNHU_APPID="xunhu-appid",
+        AP_XUNHU_APPSECRET="xunhu-secret",
+        AP_XUNHU_NOTIFY_URL="https://billing.example.com/api/billing/callback/xunhu",
+    )
+
+    with pytest.raises(config.ConfigError) as exc:
+        config.validate_config()
+    assert "BS_PUBLIC_SERVER_URL" in str(exc.value)
+
+
+def test_production_rejects_http_public_server_url(monkeypatch):
+    config = _reload_config(
+        monkeypatch,
+        BS_ENV="production",
+        BS_SECRET_KEY="production-secret-with-at-least-32-chars",
+        TENCENT_APP_ID="appid",
+        TENCENT_SECRET_ID="secret-id",
+        TENCENT_SECRET_KEY="secret-key",
+        AP_XUNHU_APPID="xunhu-appid",
+        AP_XUNHU_APPSECRET="xunhu-secret",
+        AP_XUNHU_NOTIFY_URL="https://billing.example.com/api/billing/callback/xunhu",
+        BS_PUBLIC_SERVER_URL="http://billing.example.com",
+    )
+
+    with pytest.raises(config.ConfigError) as exc:
+        config.validate_config()
+    assert "BS_PUBLIC_SERVER_URL must use https" in str(exc.value)
 
 
 def test_health_and_readyz_return_ok(client):

@@ -23,6 +23,7 @@ def app(tmp_path, monkeypatch):
         "billing",
         "signing",
         "payment_xunhu",
+        "account_center",
         "app",
     ]:
         sys.modules.pop(name, None)

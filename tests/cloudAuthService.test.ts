@@ -82,32 +82,8 @@ test("getAccount falls back to balance endpoint when /me is not available", asyn
   assert.equal(savedBalance, 1234);
 });
 
-test("createRechargeOrder posts normalized return URL and returns order id", async () => {
-  let requestBody: Record<string, unknown> | null = null;
-  globalThis.fetch = (async (_input, init) => {
-    requestBody = JSON.parse(String(init?.body));
-    return jsonResponse({
-      order_id: "rt_123",
-      url: "https://pay.example.com/order/rt_123",
-    });
-  }) as typeof fetch;
-
+test("getAccountCenterUrl returns normalized account center URL", () => {
   const svc = new CloudAuthService(authSettings({ serverUrl: "pay-api.example.com/" }));
-  const order = await svc.createRechargeOrder("19.90");
 
-  assert.equal(order.order_id, "rt_123");
-  assert.equal(requestBody?.amount, "19.90");
-  assert.equal(requestBody?.return_url, "https://pay-api.example.com");
-});
-
-test("refreshOrder surfaces provider error code and message", async () => {
-  globalThis.fetch = (async () =>
-    jsonResponse({ code: "ORDER_PENDING", error: "Payment still pending" }, 409)) as typeof fetch;
-
-  const svc = new CloudAuthService(authSettings());
-
-  await assert.rejects(
-    () => svc.refreshOrder("rt_pending"),
-    /ORDER_PENDING: Payment still pending/,
-  );
+  assert.equal(svc.getAccountCenterUrl(), "https://pay-api.example.com/account");
 });

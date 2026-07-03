@@ -269,3 +269,9 @@
 ## 2026-07-03 12:43 — 折叠摘要信息栏图标对齐
 - 按截图反馈修正折叠摘要头部,避免提示文案把信息栏图标基线带偏。
 - 验证: `npm run build`,`git diff --check` 通过;同步并重载 Obsidian 后 DOM 检查 `rowDisplay=grid`,`maxCenterDelta=0`。
+
+## 2026-07-03 21:08 — 云端充值迁移到账户中心
+- 新增 Flask `/account` 账户中心,浏览器用 HttpOnly cookie 登录/注册/充值/刷新订单/查看用量;插件设置页改为打开账户中心。
+- 服务端支付回跳固定为 `BS_PUBLIC_SERVER_URL/account?order=...`,生产环境强制 HTTPS 和 Secure cookie。
+- 保留插件 bearer token 登录用于云端 ASR,移除插件内充值/待确认订单/检查订单状态 UI。
+- 验证: `pytest billing-server/tests -q`,`npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`billing-server self_check.py`,真实 HTTP `/account` cookie 会话,Obsidian reload 均通过。

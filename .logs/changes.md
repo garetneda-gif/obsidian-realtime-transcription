@@ -18,6 +18,13 @@
 
 <!-- 在下面追加新变更 -->
 
+## 2026-07-03 21:08 — 账户中心承接云端充值
+
+**新增**:`billing-server/account_center.py`,`billing-server/account_center.html`,`billing-server/tests/test_account_center.py`,`docs/superpowers/plans/2026-07-03-account-center-billing.md`
+**修改**:`billing-server/auth.py`,`billing-server/billing.py`,`billing-server/payment_xunhu.py`,`billing-server/config.py`,`billing-server/app.py`,`src/services/CloudAuthService.ts`,`src/settings.ts`,`src/i18n.ts`,`tests/cloudAuthService.test.ts`,`billing-server/tests/test_payment.py`,`billing-server/tests/test_config.py`,`README.md`,`README_EN.md`(原因:把插件内充值改为浏览器账户中心,用 HttpOnly cookie 承接支付和订单,插件继续使用 bearer token 调用转写 API)
+**删除**:无
+**关联 commit**:待提交
+
 ## 2026-07-01 09:50 — 兼容 Responses API 摘要响应
 
 **新增**:`src/utils/llmResponse.ts`,`tests/llmResponse.test.ts`

@@ -19,8 +19,6 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   plugin: RealtimeTranscriptionPlugin;
   private activeSettingsSection: SettingsSection = "recognition";
   private cleanupHeaderScroll: (() => void) | null = null;
-  private pendingRechargeOrderId: string | null = null;
-  private pendingRechargeStatus = "";
   private aiBackendTestRunning: Partial<Record<AiBackendProfileRole, boolean>> = {};
 
   constructor(app: App, plugin: RealtimeTranscriptionPlugin) {
@@ -336,6 +334,21 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             }),
         );
 
+      new Setting(containerEl)
+        .setName(t("settings.cloud.accountCenter.name"))
+        .setDesc(t("settings.cloud.accountCenter.desc"))
+        .addButton((btn) =>
+          btn.setButtonText(t("settings.cloud.accountCenter.btn")).setCta().onClick(() => {
+            try {
+              this.ensureCloudServerUrl();
+              const svc = this.createCloudAuthService();
+              this.openExternalUrl(svc.getAccountCenterUrl());
+            } catch (e) {
+              new Notice(this.errorMessage(e));
+            }
+          }),
+        );
+
       if (isLoggedIn) {
         const balanceYuan = (cloudAuth.balanceCents / 100).toFixed(2);
         new Setting(containerEl)
@@ -360,60 +373,13 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             }),
           )
           .addButton((btn) =>
-            btn.setButtonText(t("settings.cloud.recharge.btn")).setCta().onClick(async () => {
-              try {
-                btn.setDisabled(true);
-                const svc = this.createCloudAuthService();
-                const order = await svc.createRechargeOrder();
-                this.pendingRechargeOrderId = order.order_id;
-                this.pendingRechargeStatus = t("settings.cloud.orderStatusPending");
-                window.open(order.url);
-                await this.plugin.saveSettings();
-                new Notice(t("settings.cloud.rechargeStarted"));
-                this.display();
-              } catch (e) {
-                new Notice(`${t("settings.cloud.rechargeFailed")}: ${this.errorMessage(e)}`);
-              } finally {
-                btn.setDisabled(false);
-              }
-            }),
-          )
-          .addButton((btn) =>
             btn.setButtonText(t("settings.cloud.logout.btn")).onClick(async () => {
               const svc = this.createCloudAuthService();
               svc.logout();
-              this.pendingRechargeOrderId = null;
-              this.pendingRechargeStatus = "";
               await this.plugin.saveSettings();
               this.display();
             }),
           );
-
-        if (this.pendingRechargeOrderId) {
-          new Setting(containerEl)
-            .setName(t("settings.cloud.pendingOrder.name"))
-            .setDesc(`${this.pendingRechargeOrderId} · ${this.pendingRechargeStatus || t("settings.cloud.orderStatusPending")}`)
-            .addButton((btn) =>
-              btn.setButtonText(t("settings.cloud.checkOrder.btn")).onClick(async () => {
-                try {
-                  btn.setDisabled(true);
-                  btn.setButtonText(t("settings.cloud.checkOrder.loading"));
-                  const svc = this.createCloudAuthService();
-                  const order = await svc.refreshOrder(this.pendingRechargeOrderId!);
-                  this.pendingRechargeStatus = this.describeOrderStatus(order.status);
-                  await svc.getAccount();
-                  await this.plugin.saveSettings();
-                  new Notice(this.pendingRechargeStatus);
-                  this.display();
-                } catch (e) {
-                  new Notice(`${t("settings.cloud.checkOrder.failed")}: ${this.errorMessage(e)}`);
-                } finally {
-                  btn.setDisabled(false);
-                  btn.setButtonText(t("settings.cloud.checkOrder.btn"));
-                }
-              }),
-            );
-        }
       } else {
         let emailValue = "";
         let passwordValue = "";
@@ -1084,15 +1050,6 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
   private errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
-  }
-
-  private describeOrderStatus(status: string): string {
-    const normalized = status.toUpperCase();
-    if (normalized === "PAID" || normalized === "OD") return t("settings.cloud.orderStatusPaid");
-    if (normalized === "CREATED" || normalized === "PENDING" || normalized === "WP") {
-      return t("settings.cloud.orderStatusPending");
-    }
-    return `${t("settings.cloud.orderStatus")}: ${status}`;
   }
 
   private applyRealtimePreset(profile: RealtimeProfile): void {

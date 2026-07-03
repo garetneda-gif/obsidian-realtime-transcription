@@ -47,3 +47,11 @@
 **备选**:保留默认全选;弹确认框后全选执行;限制最近 N 条自动批量。
 **否决理由**:默认全选和确认框都不能解决 token 规模不可见问题;最近 N 条与用户要求的“选中后执行”不一致。
 **影响范围**:`src/views/TranscriptionView.ts`,`src/main.ts`,`src/i18n.ts`,`styles.css`,`tests/clearEntriesState.test.ts`
+
+## 2026-07-03 21:08 — 云端充值改为浏览器账户中心
+
+**背景**:Obsidian 插件没有内置商店/支付通道,插件内嵌充值状态也让设置页复杂且难维护。
+**选择**:服务端新增 `/account` 账户中心;浏览器用 HttpOnly cookie 登录、充值、查订单和看用量;插件继续用 bearer token 调用云端转写 API。
+**备选**:继续在插件设置页内创建充值订单;把插件登录也迁移到账户中心;引入第三方订阅平台 SDK。
+**否决理由**:插件内支付 UI 增加复杂度且不如浏览器支付稳定;插件登录迁移需要 token handoff,本次不是必须;新 SDK 超出当前最小可用范围。
+**影响范围**:`billing-server/auth.py`,`billing-server/payment_xunhu.py`,`billing-server/account_center.html`,`src/settings.ts`,`src/services/CloudAuthService.ts`
