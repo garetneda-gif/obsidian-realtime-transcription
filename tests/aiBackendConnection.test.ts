@@ -29,21 +29,6 @@ test("AI backend settings expose structured fast and smart model profiles", () =
   assert.ok(i18nSource.includes('"settings.feedback.name": "反馈与建议"'));
 });
 
-test("cloud recharge entry remains visible before login", () => {
-  assert.ok(settingsSource.includes('t("settings.cloud.recharge.requiresLogin")'));
-  assert.ok(settingsSource.includes("btn.setDisabled(true);"));
-  assert.ok(
-    i18nSource.includes(
-      '"settings.cloud.recharge.requiresLogin": "请先填写服务器地址并登录云端账户，登录后即可创建充值订单"',
-    ),
-  );
-  assert.ok(
-    i18nSource.includes(
-      '"settings.cloud.recharge.requiresLogin": "Enter the server URL and sign in before creating a recharge order"',
-    ),
-  );
-});
-
 test("AI backend connection test uses the selected fast or smart profile", () => {
   assert.ok(mainSource.includes("private fastAgentBackendService!: AgentBackendService"));
   assert.ok(mainSource.includes("private smartAgentBackendService!: AgentBackendService"));

@@ -258,7 +258,6 @@ const zh: Record<string, string> = {
   "settings.cloud.registerFailed": "注册失败",
   "settings.cloud.rechargeStarted": "已打开支付页面，支付完成后余额会自动到账",
   "settings.cloud.rechargeFailed": "创建充值订单失败",
-  "settings.cloud.recharge.requiresLogin": "请先填写服务器地址并登录云端账户，登录后即可创建充值订单",
   "notice.cloudLoginRequired": "请先在设置中登录云端账户",
   "notice.cloudInsufficientBalance": "余额不足，请充值",
 
@@ -652,7 +651,6 @@ const en: Record<string, string> = {
   "settings.cloud.registerFailed": "Registration failed",
   "settings.cloud.rechargeStarted": "Payment page opened; balance updates automatically after payment",
   "settings.cloud.rechargeFailed": "Failed to create recharge order",
-  "settings.cloud.recharge.requiresLogin": "Enter the server URL and sign in before creating a recharge order",
   "notice.cloudLoginRequired": "Please login to cloud account in settings",
   "notice.cloudInsufficientBalance": "Insufficient balance, please recharge",
 
