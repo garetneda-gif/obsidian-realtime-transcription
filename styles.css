@@ -641,13 +641,16 @@
 
 .batch-selection-bar {
   display: grid;
-  grid-template-columns: minmax(48px, 0.58fr) 1px repeat(5, minmax(44px, 1fr));
+  grid-template-columns: minmax(38px, 0.7fr) 1px repeat(5, minmax(0, 1fr));
+  width: 100%;
+  box-sizing: border-box;
   flex: 0 0 auto;
   align-items: center;
-  gap: 4px;
-  padding: 3px 4px 4px 2px;
+  gap: 2px;
+  padding: 3px 0 4px;
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
+  overflow: hidden;
 }
 
 .batch-selection-count {
@@ -714,22 +717,22 @@
 
 .batch-selection-action-icon {
   display: inline-flex;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   align-items: center;
   justify-content: center;
   color: currentColor;
 }
 
 .batch-selection-action-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2;
 }
 
 .batch-selection-action-icon .claude-symbol-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   fill: currentColor;
   stroke: none;
 }

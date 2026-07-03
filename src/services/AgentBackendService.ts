@@ -13,6 +13,7 @@ export interface AgentRequest {
   systemPrompt: string;
   userText: string;
   label: string;
+  signal?: AbortSignal;
 }
 
 interface CommandSpec {
@@ -52,6 +53,7 @@ export class AgentBackendService {
     if (!this.isConfigured()) {
       throw new Error("AI 后端未配置完整");
     }
+    throwIfAborted(request.signal);
     if (!this.isLocalEnabled()) {
       return this.runApi(request);
     }
@@ -71,6 +73,7 @@ export class AgentBackendService {
   }
 
   private async runApi(request: AgentRequest): Promise<string> {
+    throwIfAborted(request.signal);
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
     const apiKey = this.settings.apiKey?.trim();
     const model = this.settings.model?.trim();
@@ -79,7 +82,7 @@ export class AgentBackendService {
     if (!apiKey) throw new Error(`${request.label} API Key 为空`);
     if (!model) throw new Error(`${request.label}模型为空`);
 
-    const response = await requestUrl({
+    const response = await abortable(requestUrl({
       url: apiUrl,
       method: "POST",
       headers: {
@@ -94,7 +97,8 @@ export class AgentBackendService {
         ],
         temperature: 0.2,
       }),
-    });
+    }), request.signal);
+    throwIfAborted(request.signal);
 
     const data = response.json;
     if (data?.error) {
@@ -112,14 +116,16 @@ export class AgentBackendService {
   }
 
   private async runCli(request: AgentRequest): Promise<string> {
+    throwIfAborted(request.signal);
     if (!this.isLocalEnabled()) {
       throw new Error("本地 AI 后端未启用");
     }
 
     const prompt = buildPrompt(request.systemPrompt, request.userText);
     const spec = buildCommandSpec(this.settings, prompt);
-    const output = await runProcess(spec.command, spec.args, this.cwd, this.timeoutMs());
+    const output = await runProcess(spec.command, spec.args, this.cwd, this.timeoutMs(), request.signal);
     try {
+      throwIfAborted(request.signal);
       const result = stripAnsi(readCommandOutput(spec, output)).trim();
       if (!result) {
         throw new Error(`${request.label}本地 AI 后端未返回内容`);
@@ -452,9 +458,13 @@ function buildPrompt(systemPrompt: string, userText: string): string {
   ].join("\n");
 }
 
-function runProcess(command: string, args: string[], cwd: string, timeoutMs: number): Promise<string> {
+function runProcess(command: string, args: string[], cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false;
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
     const child = spawn(command, args, {
       cwd: cwd || process.cwd(),
       env: process.env,
@@ -470,6 +480,14 @@ function runProcess(command: string, args: string[], cwd: string, timeoutMs: num
       child.kill("SIGTERM");
       reject(new Error(`本地 AI 后端超时（${Math.round(timeoutMs / 1000)} 秒）`));
     }, timeoutMs);
+    const abort = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill("SIGTERM");
+      reject(createAbortError());
+    };
+    signal?.addEventListener("abort", abort, { once: true });
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -483,19 +501,42 @@ function runProcess(command: string, args: string[], cwd: string, timeoutMs: num
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       reject(err);
     });
-    child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+    child.on("close", (code: number | null, processSignal: NodeJS.Signals | null) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       if (code === 0) {
         resolve(stdout);
         return;
       }
-      reject(new Error(formatProcessFailure(code, signal, stderr, stdout)));
+      reject(new Error(formatProcessFailure(code, processSignal, stderr, stdout)));
     });
   });
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw createAbortError();
+}
+
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  throwIfAborted(signal);
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(createAbortError()), { once: true });
+    }),
+  ]);
+}
+
+function createAbortError(): Error {
+  const error = new Error("操作已取消");
+  error.name = "AbortError";
+  return error;
 }
 
 function formatProcessFailure(

@@ -45,6 +45,10 @@ test("AI backend connection test uses the selected fast or smart profile", () =>
   assert.match(agentSource, /const result = await this\.run\(\{\s+systemPrompt:/);
   assert.ok(agentSource.includes("private async runApi(request: AgentRequest): Promise<string>"));
   assert.ok(agentSource.includes("requestUrl({"));
+  assert.ok(agentSource.includes("signal?: AbortSignal"));
+  assert.ok(agentSource.includes("throwIfAborted(request.signal)"));
+  assert.ok(agentSource.includes("runProcess(spec.command, spec.args, this.cwd, this.timeoutMs(), request.signal)"));
+  assert.ok(agentSource.includes('child.kill("SIGTERM")'));
   assert.ok(agentSource.includes("extractTextFromResponse(data)"));
   const codexBlock = agentSource.slice(agentSource.indexOf('case "codex"'), agentSource.indexOf('case "opencode"'));
   assert.ok(!codexBlock.includes("--ask-for-approval"));

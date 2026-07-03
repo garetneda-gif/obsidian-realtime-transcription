@@ -82,7 +82,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private summaryBuffer = "";
   private summaryInFlight = false;
   private summaryRetryAfter = 0;
-  private batchTaskCancelRequested = false;
+  private batchTaskAbortController: AbortController | null = null;
   private metaSummaryTexts: string[] = [];
   private metaSummaryInFlight = false;
   private metaSummaryRetryAfter = 0;
@@ -1258,12 +1258,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
   }
 
-  private async formalizeEntry(entryId: string, text: string): Promise<string> {
+  private async formalizeEntry(entryId: string, text: string, signal?: AbortSignal): Promise<string> {
     if (!this.formalizeService.canFormalize()) {
       throw new Error(t("notice.configureFormalizeApi"));
     }
     const context = this.buildFormalizeContext(entryId);
-    const result = await this.formalizeService.formalize(text, this.outputLanguageName(), context);
+    const result = await this.formalizeService.formalize(text, this.outputLanguageName(), context, signal);
+    throwIfAborted(signal);
     const view = this.getView();
     if (view) {
       view.updateFormalText(entryId, result);
@@ -1300,11 +1301,12 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     return null;
   }
 
-  private async translateEntry(entryId: string, text: string, language: string): Promise<string> {
+  private async translateEntry(entryId: string, text: string, language: string, signal?: AbortSignal): Promise<string> {
     if (!this.translationService.isConfigured()) {
       throw new Error(t("notice.configureTranslationApi"));
     }
-    const result = await this.translationService.translate(text, language, this.outputLanguageName());
+    const result = await this.translationService.translate(text, language, this.outputLanguageName(), signal);
+    throwIfAborted(signal);
     const view = this.getView();
     if (view) {
       view.updateTranslation(entryId, result);
@@ -1329,21 +1331,23 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       return;
     }
 
-    this.batchTaskCancelRequested = false;
+    const controller = this.startBatchTask();
     let completed = 0;
     let failed = 0;
     for (const entry of entries) {
-      if (this.batchTaskCancelRequested) break;
+      if (controller.signal.aborted) break;
       try {
-        await this.formalizeEntry(entry.id, entry.result.text);
+        await this.formalizeEntry(entry.id, entry.result.text, controller.signal);
         completed++;
       } catch (err) {
+        if (isAbortError(err) || controller.signal.aborted) break;
         failed++;
         console.error("[Transcription] 批量润色失败:", err);
       }
     }
-    const prefix = this.batchTaskCancelRequested ? t("notice.batchCancelled") : t("notice.batchFormalizeDone");
+    const prefix = controller.signal.aborted ? t("notice.batchCancelled") : t("notice.batchFormalizeDone");
     new Notice(`${prefix}: ${completed}/${entries.length}${failed > 0 ? `, ${t("notice.batchFailed")}: ${failed}` : ""}`);
+    this.finishBatchTask(controller);
   }
 
   private async batchTranslateEntries(entryIds: string[]): Promise<void> {
@@ -1357,26 +1361,41 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       return;
     }
 
-    this.batchTaskCancelRequested = false;
+    const controller = this.startBatchTask();
     let completed = 0;
     let failed = 0;
     for (const entry of entries) {
-      if (this.batchTaskCancelRequested) break;
+      if (controller.signal.aborted) break;
       try {
         const sourceLanguage = this.normalizeLanguage(entry.result.language, entry.result.text);
-        await this.translateEntry(entry.id, entry.result.text, sourceLanguage);
+        await this.translateEntry(entry.id, entry.result.text, sourceLanguage, controller.signal);
         completed++;
       } catch (err) {
+        if (isAbortError(err) || controller.signal.aborted) break;
         failed++;
         console.error("[Transcription] 批量翻译失败:", err);
       }
     }
-    const prefix = this.batchTaskCancelRequested ? t("notice.batchCancelled") : t("notice.batchTranslateDone");
+    const prefix = controller.signal.aborted ? t("notice.batchCancelled") : t("notice.batchTranslateDone");
     new Notice(`${prefix}: ${completed}/${entries.length}${failed > 0 ? `, ${t("notice.batchFailed")}: ${failed}` : ""}`);
+    this.finishBatchTask(controller);
+  }
+
+  private startBatchTask(): AbortController {
+    this.batchTaskAbortController?.abort();
+    const controller = new AbortController();
+    this.batchTaskAbortController = controller;
+    return controller;
+  }
+
+  private finishBatchTask(controller: AbortController): void {
+    if (this.batchTaskAbortController === controller) {
+      this.batchTaskAbortController = null;
+    }
   }
 
   private cancelBatchTask(): void {
-    this.batchTaskCancelRequested = true;
+    this.batchTaskAbortController?.abort();
     new Notice(t("notice.batchCancelled"));
   }
 
@@ -1804,6 +1823,17 @@ function standardLanguageCodeFromName(language: unknown): "zh" | "en" | null {
   if (/(中文|汉语|漢語|普通话|普通話|简体|簡體|繁体|繁體|chinese|mandarin)/i.test(normalized)) return "zh";
   if (/(英文|英语|英語|english)/i.test(normalized)) return "en";
   return null;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const error = new Error("操作已取消");
+  error.name = "AbortError";
+  throw error;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 async function writeTextToClipboard(text: string): Promise<void> {

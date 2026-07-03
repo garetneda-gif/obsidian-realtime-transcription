@@ -33,16 +33,17 @@ export class TranslationService {
     return normalized !== targetLanguage;
   }
 
-  async formalize(text: string, outputLanguage: string): Promise<string> {
+  async formalize(text: string, outputLanguage: string, signal?: AbortSignal): Promise<string> {
     // 复用 translate 的完整调用链，仅替换 system prompt
     return this.callApi(
       `你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为${outputLanguage}的通顺书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。`,
       text,
       "润色",
+      signal,
     );
   }
 
-  async translate(text: string, fromLang: string, outputLanguage: string): Promise<string> {
+  async translate(text: string, fromLang: string, outputLanguage: string, signal?: AbortSignal): Promise<string> {
     const langName =
       fromLang === "en" ? "英文" :
       fromLang === "ja" ? "日文" :
@@ -52,12 +53,14 @@ export class TranslationService {
       `你是一个专业翻译助手。请将以下${langName}文本翻译为${outputLanguage}。只输出翻译结果，不要解释。`,
       text,
       "翻译",
+      signal,
     );
   }
 
-  private async callApi(systemPrompt: string, userText: string, label: string): Promise<string> {
+  private async callApi(systemPrompt: string, userText: string, label: string, signal?: AbortSignal): Promise<string> {
+    throwIfAborted(signal);
     if (this.agentBackend.isConfigured()) {
-      return this.agentBackend.run({ systemPrompt, userText, label });
+      return this.agentBackend.run({ systemPrompt, userText, label, signal });
     }
 
     if (!this.settings.apiKey) throw new Error(`未配置${label} API Key`);
@@ -71,7 +74,7 @@ export class TranslationService {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await requestUrl({
+      const response = await abortable(requestUrl({
         url: apiUrl,
         method: "POST",
         headers: {
@@ -86,8 +89,9 @@ export class TranslationService {
           ],
           temperature: 0.3,
         }),
-      });
+      }), signal, controller.signal);
       clearTimeout(timer);
+      throwIfAborted(signal);
 
       const data = response.json;
       // 检查 API 级错误（某些代理返回 200 + error body）
@@ -115,6 +119,34 @@ export class TranslationService {
     if (!this.settings.model?.trim()) return false;
     return true;
   }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const error = new Error("操作已取消");
+  error.name = "AbortError";
+  throw error;
+}
+
+function abortable<T>(promise: Promise<T>, ...signals: Array<AbortSignal | undefined>): Promise<T> {
+  const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal));
+  for (const signal of activeSignals) {
+    throwIfAborted(signal);
+  }
+  if (activeSignals.length === 0) return promise;
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      const rejectAbort = () => {
+        const error = new Error("操作已取消");
+        error.name = "AbortError";
+        reject(error);
+      };
+      for (const signal of activeSignals) {
+        signal.addEventListener("abort", rejectAbort, { once: true });
+      }
+    }),
+  ]);
 }
 
 function normalizeApiUrl(url: string): string {

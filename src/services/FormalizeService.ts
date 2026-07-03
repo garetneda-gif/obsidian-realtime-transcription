@@ -25,7 +25,8 @@ export class FormalizeService {
     );
   }
 
-  async formalize(text: string, outputLanguage: string, contextText = ""): Promise<string> {
+  async formalize(text: string, outputLanguage: string, contextText = "", signal?: AbortSignal): Promise<string> {
+    throwIfAborted(signal);
     const inputText = text?.trim();
     if (!inputText) {
       throw new Error(t("formalize.emptyText"));
@@ -39,6 +40,7 @@ export class FormalizeService {
         systemPrompt,
         userText: promptText,
         label: "润色",
+        signal,
       });
     }
 
@@ -53,7 +55,7 @@ export class FormalizeService {
     console.log("[Formalize] 开始请求", { apiUrl, model });
 
     try {
-      const response = await requestUrl({
+      const response = await abortable(requestUrl({
         url: apiUrl,
         method: "POST",
         headers: {
@@ -71,7 +73,8 @@ export class FormalizeService {
           ],
           temperature: 0.3,
         }),
-      });
+      }), signal);
+      throwIfAborted(signal);
 
       console.log("[Formalize] 收到响应", response.status);
 
@@ -92,6 +95,28 @@ export class FormalizeService {
       throw err;
     }
   }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const error = new Error("操作已取消");
+  error.name = "AbortError";
+  throw error;
+}
+
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  throwIfAborted(signal);
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      signal.addEventListener("abort", () => {
+        const error = new Error("操作已取消");
+        error.name = "AbortError";
+        reject(error);
+      }, { once: true });
+    }),
+  ]);
 }
 
 function normalizeApiUrl(url: string): string {

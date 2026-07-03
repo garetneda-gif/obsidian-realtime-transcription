@@ -250,3 +250,9 @@
 - `src/main.ts`: 批量润色/翻译接入取消标记,终止后停止继续处理剩余段落,避免误操作继续消耗请求。
 - `src/i18n.ts`,`README.md`: “识别语言范围”改为“识别模式”,说明该项仍会传给本地识别引擎,语言标签另按文本内容智能判断。
 - 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`git diff --check` 通过;已同步并重载 Obsidian,运行时 DOM 确认批量栏为 5 个图标按钮且运行态显示终止任务。
+
+## 2026-07-03 17:38 — 批量终止立即生效和窄栏防溢出
+- `src/services/AgentBackendService.ts`,`src/services/FormalizeService.ts`,`src/services/TranslationService.ts`: AI 请求链路增加可选 `AbortSignal`;本机 CLI 收到取消后 `SIGTERM`,API 返回后若已取消则丢弃结果。
+- `src/main.ts`,`src/views/TranscriptionView.ts`: 批量任务改为每次独立 `AbortController` + run id,点终止后界面立即恢复,旧请求稍后返回不会覆盖文本或影响新任务。
+- `styles.css`: 批量选择栏改为可压缩网格列和 16px 图标,防止窄侧栏下右侧图标溢出。
+- 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`git diff --check` 通过;已同步并重载 Obsidian,运行时 DOM 确认 `scrollWidth=clientWidth=278`,终止按钮点击后立即恢复为退出选择。

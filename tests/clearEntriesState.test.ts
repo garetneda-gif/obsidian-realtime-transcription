@@ -98,7 +98,8 @@ test("manual translation replaces existing translation with the loading placehol
 test("formalize requests include nearby transcript context without outputting it", () => {
   const body = extractMethodBody("formalizeEntry");
   assert.ok(body.includes("const context = this.buildFormalizeContext(entryId)"));
-  assert.ok(body.includes("this.formalizeService.formalize(text, this.outputLanguageName(), context)"));
+  assert.ok(body.includes("this.formalizeService.formalize(text, this.outputLanguageName(), context, signal)"));
+  assert.ok(body.includes("throwIfAborted(signal)"));
   assert.ok(source.includes("private buildFormalizeContext(entryId: string): string"));
   assert.ok(source.includes("private findFormalizeContextEntry(fromIndex: number, direction: -1 | 1)"));
   assert.ok(source.includes("isFormalizeContextEntry(entry)"));
@@ -216,6 +217,7 @@ test("panel settings expose custom AI output language and wrapped select arrow",
 test("batch actions require explicit selected transcript entries", () => {
   assert.ok(viewSource.includes("private batchSelectionMode = false"));
   assert.ok(viewSource.includes("private batchTaskRunning = false"));
+  assert.ok(viewSource.includes("private batchTaskRunId = 0"));
   assert.ok(viewSource.includes("private selectedEntryIds = new Set<string>()"));
   assert.ok(viewSource.includes('setIcon(this.batchSelectBtn, "list-checks")'));
   assert.ok(viewSource.includes('this.setSummaryModeIcon("list-plus")'));
@@ -233,6 +235,8 @@ test("batch actions require explicit selected transcript entries", () => {
   assert.ok(viewSource.includes('new Notice(t("view.noSelectedTranscripts"))'));
   assert.ok(viewSource.includes("if (!callback || this.batchTaskRunning) return;"));
   assert.ok(viewSource.includes("void Promise.resolve(callback(entryIds)).finally"));
+  assert.ok(viewSource.includes("const runId = ++this.batchTaskRunId"));
+  assert.ok(viewSource.includes("if (runId !== this.batchTaskRunId) return"));
   assert.ok(!viewSource.includes("void callback?.(this.entries.map"));
   assert.ok(viewSource.includes('this.batchSelectionBar.createDiv("batch-selection-divider")'));
   assert.ok(viewSource.includes("this.batchTaskRunning ? t(\"view.batchStopTask\") : t(\"view.cancelBatchSelection\")"));
@@ -246,13 +250,18 @@ test("batch actions require explicit selected transcript entries", () => {
   assert.ok(source.includes("private getBatchTranscriptEntries(entryIds: string[]): TranscriptEntry[]"));
   assert.ok(source.includes("selectedIds.has(entry.id) && isFormalizeContextEntry(entry)"));
   assert.ok(source.includes("private async sendToClaudian(entryIds?: string[]): Promise<void>"));
-  assert.ok(source.includes("private batchTaskCancelRequested = false"));
+  assert.ok(source.includes("private batchTaskAbortController: AbortController | null = null"));
   assert.ok(source.includes("private cancelBatchTask(): void"));
-  assert.ok(source.includes("if (this.batchTaskCancelRequested) break"));
+  assert.ok(source.includes("private startBatchTask(): AbortController"));
+  assert.ok(source.includes("private finishBatchTask(controller: AbortController): void"));
+  assert.ok(source.includes("this.batchTaskAbortController?.abort()"));
+  assert.ok(source.includes("if (controller.signal.aborted) break"));
+  assert.ok(source.includes("isAbortError(err) || controller.signal.aborted"));
 
   assert.ok(stylesSource.includes(".title-batch-select-btn"));
   assert.ok(stylesSource.includes(".batch-selection-bar"));
-  assert.ok(stylesSource.includes("grid-template-columns: minmax(48px, 0.58fr) 1px repeat(5, minmax(44px, 1fr))"));
+  assert.ok(stylesSource.includes("grid-template-columns: minmax(38px, 0.7fr) 1px repeat(5, minmax(0, 1fr))"));
+  assert.ok(stylesSource.includes("overflow: hidden;"));
   assert.ok(stylesSource.includes(".batch-selection-count-number"));
   assert.ok(!stylesSource.includes(".batch-selection-action-label"));
   assert.ok(stylesSource.includes(".batch-selection-action:hover"));

@@ -33,6 +33,7 @@ export class TranscriptionView extends ItemView {
   private panelSettingsCleanup: Array<() => void> = [];
   private batchSelectionMode = false;
   private batchTaskRunning = false;
+  private batchTaskRunId = 0;
   private selectedEntryIds = new Set<string>();
   private pinnedToBottom = true;
   private entries: TranscriptEntry[] = [];
@@ -1211,7 +1212,10 @@ export class TranscriptionView extends ItemView {
       this.batchTaskRunning ? t("view.batchStopTask") : t("view.cancelBatchSelection"),
       () => {
         if (this.batchTaskRunning) {
+          this.batchTaskRunId++;
           void this.onCancelBatchTask?.();
+          this.batchTaskRunning = false;
+          this.updateBatchSelectionBar();
           return;
         }
         this.setBatchSelectionMode(false);
@@ -1267,8 +1271,10 @@ export class TranscriptionView extends ItemView {
     if (!callback || this.batchTaskRunning) return;
 
     this.batchTaskRunning = true;
+    const runId = ++this.batchTaskRunId;
     this.updateBatchSelectionBar();
     void Promise.resolve(callback(entryIds)).finally(() => {
+      if (runId !== this.batchTaskRunId) return;
       this.batchTaskRunning = false;
       this.updateBatchSelectionBar();
     });
