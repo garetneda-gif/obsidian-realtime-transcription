@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 import { CloudAuthService } from "../src/services/CloudAuthService.ts";
+import { normalizeHostedCloudAuthSettings } from "../src/types.ts";
 import type { CloudAuthSettings } from "../src/types.ts";
 
 const originalFetch = globalThis.fetch;
@@ -50,10 +51,66 @@ test("CloudAuthService normalizes server URL for every request", async () => {
   assert.equal(requests[0], "https://api.example.com/api/auth/login");
 });
 
+test("CloudAuthService builds hosted subdomain URLs", async () => {
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    requests.push(String(input));
+    return jsonResponse({
+      token: "token",
+      refresh_token: "refresh",
+      expires_at: new Date(Date.now() + 86400000 * 3).toISOString(),
+      balance_cents: 100,
+    });
+  }) as typeof fetch;
+
+  const svc = new CloudAuthService(authSettings({
+    serverUrl: "rt.songrong.org/",
+    token: "",
+    refreshToken: "",
+  }));
+
+  await svc.login("user@example.com", "password123");
+
+  assert.equal(requests[0], "https://rt.songrong.org/api/auth/login");
+  assert.equal(svc.getAccountCenterUrl(), "https://rt.songrong.org/account");
+});
+
 test("CloudAuthService rejects empty server URL with a clear error", async () => {
   const svc = new CloudAuthService(authSettings({ serverUrl: "" }));
 
   await assert.rejects(() => svc.getBalance(), /Cloud server URL is required/);
+});
+
+test("hosted cloud auth migration clears credentials from old server URL", () => {
+  const migrated = normalizeHostedCloudAuthSettings(authSettings({
+    serverUrl: "https://old.example.com",
+    token: "old-token",
+    refreshToken: "old-refresh",
+    tokenExpiresAt: "2099-01-01T00:00:00.000Z",
+    balanceCents: 999,
+  }));
+
+  assert.equal(migrated.serverUrl, "https://rt.songrong.org");
+  assert.equal(migrated.token, "");
+  assert.equal(migrated.refreshToken, "");
+  assert.equal(migrated.tokenExpiresAt, "");
+  assert.equal(migrated.balanceCents, 0);
+});
+
+test("hosted cloud auth migration keeps credentials for fixed server URL", () => {
+  const migrated = normalizeHostedCloudAuthSettings(authSettings({
+    serverUrl: "rt.songrong.org/",
+    token: "token",
+    refreshToken: "refresh",
+    tokenExpiresAt: "2099-01-01T00:00:00.000Z",
+    balanceCents: 123,
+  }));
+
+  assert.equal(migrated.serverUrl, "https://rt.songrong.org");
+  assert.equal(migrated.token, "token");
+  assert.equal(migrated.refreshToken, "refresh");
+  assert.equal(migrated.tokenExpiresAt, "2099-01-01T00:00:00.000Z");
+  assert.equal(migrated.balanceCents, 123);
 });
 
 test("getAccount falls back to balance endpoint when /me is not available", async () => {

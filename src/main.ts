@@ -10,7 +10,7 @@ import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
 import { AgentBackendService, isAiBackendCliPathCompatible, resolveAiBackendCliPath } from "./services/AgentBackendService";
 import { TranscriptionSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud, normalizeAiBackendSettings } from "./types";
+import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud, normalizeAiBackendSettings, normalizeHostedCloudAuthSettings } from "./types";
 import type { AiOutputLanguage, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, SummarySettings, TranscriptEntry, TranscriptionResult } from "./types";
 import type { AiBackendProfileRole, AiBackendProfileSettings, AiBackendProvider } from "./types";
 import { CloudAuthService } from "./services/CloudAuthService";
@@ -222,8 +222,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     // 深合并 tencentASR（应对部分保存的情况，确保所有字段都有默认值）
     this.settings.tencentASR = { ...DEFAULT_SETTINGS.tencentASR, ...this.settings.tencentASR };
-    // 深合并 cloudAuth
-    this.settings.cloudAuth = { ...DEFAULT_SETTINGS.cloudAuth, ...this.settings.cloudAuth };
+    this.settings.cloudAuth = normalizeHostedCloudAuthSettings(this.settings.cloudAuth);
     this.settings.aiBackend = normalizeAiBackendSettings((raw as { aiBackend?: unknown } | null)?.aiBackend);
     this.migrateAiBackendProfilesFromLegacyApi(raw);
     this.refreshAiBackendCliPaths();

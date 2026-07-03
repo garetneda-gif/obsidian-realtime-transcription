@@ -55,3 +55,10 @@
 **备选**:继续在插件设置页内创建充值订单;把插件登录也迁移到账户中心;引入第三方订阅平台 SDK。
 **否决理由**:插件内支付 UI 增加复杂度且不如浏览器支付稳定;插件登录迁移需要 token handoff,本次不是必须;新 SDK 超出当前最小可用范围。
 **影响范围**:`billing-server/auth.py`,`billing-server/payment_xunhu.py`,`billing-server/account_center.html`,`src/settings.ts`,`src/services/CloudAuthService.ts`
+
+## 2026-07-04 01:33 — 云端账户使用 rt.songrong.org 子域名
+
+**选择**:插件内置 `https://rt.songrong.org` 作为云端账户和计费 API 入口。
+**备选**:使用 `https://songrong.org/rt` 或复用 `https://api.songrong.org`。
+**否决理由**:主站路径会污染现有 Songrong 站点;`api.songrong.org` 已被 SongRong API 使用,不适合承载 Realtime Transcription 计费服务。
+**影响范围**:`src/types.ts`,`src/main.ts`,`src/settings.ts`,`src/i18n.ts`,`tests/cloudAuthService.test.ts`

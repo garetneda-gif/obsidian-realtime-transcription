@@ -263,3 +263,9 @@
 - `src/main.ts`,`src/views/TranscriptionView.ts`: 批量任务改为每次独立 `AbortController` + run id,点终止后界面立即恢复,旧请求稍后返回不会覆盖文本或影响新任务。
 - `styles.css`: 批量选择栏改为可压缩网格列和 16px 图标,防止窄侧栏下右侧图标溢出。
 - 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`git diff --check` 通过;已同步并重载 Obsidian,运行时 DOM 确认 `scrollWidth=clientWidth=278`,终止按钮点击后立即恢复为退出选择。
+
+## 2026-07-04 01:33 — 云端账户改用 rt 子域名
+- `src/types.ts`,`src/main.ts`: 云端账户固定使用 `https://rt.songrong.org`,加载旧设置时重置旧服务器地址下的 token 和余额缓存。
+- `src/settings.ts`,`src/i18n.ts`: 设置页不再显示服务器地址输入或账户状态里的服务器地址,错误文案改为内部配置缺失。
+- `src/types.ts`,`tests/cloudAuthService.test.ts`,`README.md`,`README_EN.md`: 增加子域名 URL 与旧服务器地址迁移回归测试,部署文档改为 `rt.songrong.org`。
+- 验证: `node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`npm run build`,`billing-server/.venv311/bin/python -m pytest billing-server/tests -q` 通过。

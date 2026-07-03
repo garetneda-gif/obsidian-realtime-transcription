@@ -176,6 +176,31 @@ export interface PanelSettingsValues {
   exportTextMode: ExportTextMode;
 }
 
+function normalizeCloudServerUrl(serverUrl: string): string {
+  const trimmed = serverUrl.trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+export function normalizeHostedCloudAuthSettings(
+  value: Partial<CloudAuthSettings> | null | undefined,
+): CloudAuthSettings {
+  const fixedServerUrl = DEFAULT_SETTINGS.cloudAuth.serverUrl;
+  const merged = { ...DEFAULT_SETTINGS.cloudAuth, ...value };
+  if (normalizeCloudServerUrl(merged.serverUrl) === fixedServerUrl) {
+    return { ...merged, serverUrl: fixedServerUrl };
+  }
+  return {
+    ...merged,
+    serverUrl: fixedServerUrl,
+    token: "",
+    refreshToken: "",
+    tokenExpiresAt: "",
+    balanceCents: 0,
+  };
+}
+
 export const DEFAULT_SETTINGS: PluginSettings = {
   locale: "zh",
   asrProvider: "local",
@@ -186,7 +211,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     engineModelType: "16k_zh",
   },
   cloudAuth: {
-    serverUrl: "https://asr-api.realtimetranscription.com",
+    serverUrl: "https://rt.songrong.org",
     token: "",
     refreshToken: "",
     tokenExpiresAt: "",

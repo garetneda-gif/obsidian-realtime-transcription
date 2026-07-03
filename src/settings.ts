@@ -322,19 +322,6 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       const isLoggedIn = Boolean(cloudAuth.token && cloudAuth.serverUrl);
 
       new Setting(containerEl)
-        .setName(t("settings.cloud.serverUrl.name"))
-        .setDesc(t("settings.cloud.serverUrl.desc"))
-        .addText((text) =>
-          text
-            .setPlaceholder("https://asr-api.example.com")
-            .setValue(cloudAuth.serverUrl)
-            .onChange(async (value) => {
-              this.plugin.settings.cloudAuth.serverUrl = CloudAuthService.normalizeServerUrl(value);
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(containerEl)
         .setName(t("settings.cloud.accountCenter.name"))
         .setDesc(t("settings.cloud.accountCenter.desc"))
         .addButton((btn) =>
@@ -353,7 +340,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         const balanceYuan = (cloudAuth.balanceCents / 100).toFixed(2);
         new Setting(containerEl)
           .setName(t("settings.cloud.account.name"))
-          .setDesc(`${t("settings.cloud.serverUrl.name")}: ${cloudAuth.serverUrl} · ${t("settings.cloud.balance")}: ¥${balanceYuan}`)
+          .setDesc(`${t("settings.cloud.balance")}: ¥${balanceYuan}`)
           .addButton((btn) =>
             btn.setButtonText(t("settings.cloud.refreshBalance.btn")).onClick(async () => {
               try {
@@ -1043,7 +1030,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   }
 
   private ensureCloudServerUrl(): void {
-    const serverUrl = CloudAuthService.normalizeServerUrl(this.plugin.settings.cloudAuth.serverUrl);
+    const serverUrl = CloudAuthService.normalizeServerUrl(DEFAULT_SETTINGS.cloudAuth.serverUrl);
     if (!serverUrl) throw new Error(t("settings.cloud.serverRequired"));
     this.plugin.settings.cloudAuth.serverUrl = serverUrl;
   }

@@ -116,3 +116,11 @@
 **根因**:分组标题没有专用结构和样式,默认标题层级过重
 **解决**:改为 `.realtime-ai-profile-header` 分组头,标题 14px、描述紧凑排列并加左侧强调线
 **复现**:打开 Realtime Transcription 设置页 AI 分区,观察快速模型/智能模型标题
+
+## 2026-07-04 01:33 — rt 子域名暂无法公网验证
+
+**症状**:`rt.songrong.org` DNS 未解析,`curl https://rt.songrong.org/healthz` 返回无法解析主机。
+**触发**:按用户要求从主站路径改为独立子域名。
+**根因**:Mac Mini 现有 cloudflared token tunnel 已服务主站,但当前没有可用 Cloudflare origin cert/API 权限来新增 public hostname;计费服务生产密钥也未在 Mac Mini 上找到。
+**解决**:代码先固定为 `https://rt.songrong.org`;上线需要在 Cloudflare 为 `rt.songrong.org` 添加 public hostname/DNS 指向现有 tunnel,并补齐 `BS_*`、腾讯云和虎皮椒环境变量。
+**复现**:`dig +short rt.songrong.org A` 无输出。

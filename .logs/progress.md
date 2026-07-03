@@ -275,3 +275,8 @@
 - 服务端支付回跳固定为 `BS_PUBLIC_SERVER_URL/account?order=...`,生产环境强制 HTTPS 和 Secure cookie。
 - 保留插件 bearer token 登录用于云端 ASR,移除插件内充值/待确认订单/检查订单状态 UI。
 - 验证: `pytest billing-server/tests -q`,`npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`billing-server self_check.py`,真实 HTTP `/account` cookie 会话,Obsidian reload 均通过。
+
+## 2026-07-04 01:33 — 云端账户子域名接入
+- 插件默认云端账户地址改为 `https://rt.songrong.org`,设置页隐藏服务器地址,账户中心按钮将打开 `/account`。
+- Mac Mini 检查结果:`api.songrong.org` 已被 SongRong API 占用;`rt.songrong.org` 当前未解析,不能复用主站路径。
+- 外网部署暂缺 Cloudflare/DNS public hostname 和计费服务生产密钥;本地代码、迁移测试和构建已完成。
