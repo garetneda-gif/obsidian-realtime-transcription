@@ -908,11 +908,21 @@
 }
 
 .transcript-card.summary-card.is-summary-collapsed .summary-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
   margin-bottom: 0;
 }
 
 .transcript-card.summary-card.is-summary-collapsed .summary-title-main {
   gap: 8px;
+}
+
+.transcript-card.summary-card.is-summary-collapsed .summary-title-label,
+.transcript-card.summary-card.is-summary-collapsed .summary-title-actions {
+  min-height: 22px;
+  align-items: center;
 }
 
 .transcript-card.summary-card.is-summary-collapsed .summary-collapsed-hint {
@@ -921,7 +931,12 @@
 }
 
 .transcript-card.summary-card.is-summary-collapsed .summary-title-actions {
-  padding-top: 1px;
+  padding-top: 0;
+}
+
+.transcript-card.summary-card.is-summary-collapsed .summary-action-btn svg,
+.transcript-card.summary-card.is-summary-collapsed .summary-title-icon svg {
+  display: block;
 }
 
 .transcript-card.summary-card.is-summary-collapsed .summary-body {

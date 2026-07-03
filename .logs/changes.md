@@ -228,3 +228,7 @@
 - `src/utils/transcriptFormatter.ts`: 导出格式支持 `useFormalTextAsOriginal`,开启后不再重复追加润色引用块。
 - `src/views/TranscriptionView.ts`,`src/main.ts`,`src/i18n.ts`,`styles.css`: 撤下刚实现的默认全选批量入口和批量执行回调,避免长转写误触消耗大量 token。
 - `tests/clearEntriesState.test.ts`,`tests/transcriptFormatter.test.ts`: 增加导出润色文本链路检查,并移除默认批量入口断言。
+
+## 2026-07-03 12:43 — 折叠摘要信息栏图标对齐
+- `styles.css`: 折叠态摘要头部改为两列 grid,左侧标题/提示和右侧操作按钮分离。
+- `styles.css`: 折叠态标题图标与复制、重新生成、展开按钮统一 22px 行高并移除操作区顶部偏移。

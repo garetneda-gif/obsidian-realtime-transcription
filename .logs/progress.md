@@ -265,3 +265,7 @@
 - 导出记录保留新增选项:可选择导出原文,或用已有润色文本替换原文。
 - 验证: `npm run build`,`node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`rg batch...` 均通过;已同步并重载 Obsidian。
 - 运行时 DOM 验证:首页 `hasBatchButton=false`、`hasBatchMenu=false`;转写设置页存在 `导出润色文本` 且选项为 `导出原文/导出润色文本`。
+
+## 2026-07-03 12:43 — 折叠摘要信息栏图标对齐
+- 按截图反馈修正折叠摘要头部,避免提示文案把信息栏图标基线带偏。
+- 验证: `npm run build`,`git diff --check` 通过;同步并重载 Obsidian 后 DOM 检查 `rowDisplay=grid`,`maxCenterDelta=0`。
