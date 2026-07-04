@@ -95,6 +95,8 @@ export type GpuProvider = "cpu" | "cuda" | "coreml";
 
 export type AsrProvider = "local" | "tencent" | "cloud";
 
+export const HOSTED_CLOUD_ENABLED = false;
+
 /** 判断是否为云端 ASR 提供方（tencent BYOK 或 cloud 付费托管） */
 export function isCloudASR(provider: AsrProvider): boolean {
   return provider !== "local";

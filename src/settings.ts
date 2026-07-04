@@ -2,7 +2,7 @@ import { App, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type RealtimeTranscriptionPlugin from "./main";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, ExportTextMode, GpuProvider, AsrProvider, CopyContentMode, CopyRangeMode, AiBackendProvider, AiBackendProfileRole, AiBackendProfileSettings } from "./types";
-import { DEFAULT_SETTINGS, isHostedCloud, normalizeAiBackendSettings } from "./types";
+import { DEFAULT_SETTINGS, HOSTED_CLOUD_ENABLED, isHostedCloud, normalizeAiBackendSettings } from "./types";
 import { t, setLocale } from "./i18n";
 import { CloudAuthService } from "./services/CloudAuthService";
 import { getDefaultAiBackendModelOptions, isAiBackendCliPathCompatible } from "./services/AgentBackendService";
@@ -78,8 +78,11 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       .addDropdown((dropdown) => {
         dropdown
           .addOption("local", t("settings.asr.provider.local"))
-          .addOption("tencent", t("settings.asr.provider.tencent"))
-          .addOption("cloud", t("settings.asr.provider.cloud"))
+          .addOption("tencent", t("settings.asr.provider.tencent"));
+        if (HOSTED_CLOUD_ENABLED) {
+          dropdown.addOption("cloud", t("settings.asr.provider.cloud"));
+        }
+        dropdown
           .setValue(this.plugin.settings.asrProvider)
           .onChange(async (value: AsrProvider) => {
             this.plugin.settings.asrProvider = value;
@@ -314,7 +317,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         });
     }
 
-    if (isHostedCloud(provider)) {
+    if (HOSTED_CLOUD_ENABLED && isHostedCloud(provider)) {
       // ── 云端付费账户设置 ──
       containerEl.createEl("h2", { text: t("settings.cloud.title") });
 

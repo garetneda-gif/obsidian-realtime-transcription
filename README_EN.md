@@ -99,39 +99,6 @@ npm run build
 >
 > This command recopies plugin files and then forces plugin reload via Obsidian CLI (`plugin:reload`).
 
-#### Cloud Billing Server (operators)
-
-`billing-server/` provides the cloud-hosted transcription account, recharge, and signing API. Production startup validates required settings. At minimum, set:
-
-```bash
-BS_ENV=production
-BS_SECRET_KEY=<random string with at least 32 characters>
-BS_DATABASE_URL=sqlite:////data/billing.db
-TENCENT_APP_ID=<Tencent Cloud AppID>
-TENCENT_SECRET_ID=<Tencent Cloud SecretId>
-TENCENT_SECRET_KEY=<Tencent Cloud SecretKey>
-AP_XUNHU_APPID=<Xunhu AppID>
-AP_XUNHU_APPSECRET=<Xunhu AppSecret>
-AP_XUNHU_NOTIFY_URL=https://rt.songrong.org/api/billing/callback/xunhu
-BS_PUBLIC_SERVER_URL=https://rt.songrong.org
-BS_CORS_ORIGINS=app://obsidian.md
-```
-
-The recharge entry is `https://rt.songrong.org/account`. The Account Center can sign in/register independently and handles recharge, order refresh, and usage inspection; the plugin settings page still keeps cloud account login for ASR API tokens.
-
-Local self-check:
-
-```bash
-cd billing-server
-python -m pip install -r requirements.txt
-python self_check.py
-python app.py
-```
-
-Health probe: `/healthz`; readiness probe: `/readyz`. Set `BS_DISABLE_SETTLEMENT_LOOP=1` for tests or one-off maintenance tasks that should not start the background settlement loop.
-
----
-
 ### Step 2: Install Python
 
 > Skip this step if you already have Python 3.10–3.12.
@@ -373,30 +340,6 @@ macOS may block unnotarized Python scripts with an "unidentified developer" aler
 
 - Do **not** commit `data.json` (which contains API keys) to Git or share it with others
 - On a new machine, re-enter API keys manually in plugin settings
-
-### Cloud Billing Server
-
-Hosted cloud mode uses `billing-server/`: the server keeps Tencent Cloud ASR credentials, the plugin logs in and requests a signed ASR URL, the server pre-charges balance, then settles by recording duration.
-
-Minimal startup config:
-
-```bash
-export BS_SECRET_KEY="at least 32 random characters"
-export TENCENT_APP_ID="Tencent Cloud AppID"
-export TENCENT_SECRET_ID="Tencent Cloud SecretID"
-export TENCENT_SECRET_KEY="Tencent Cloud SecretKey"
-export AP_XUNHU_APPID="Xunhu AppID"
-export AP_XUNHU_APPSECRET="Xunhu AppSecret"
-export AP_XUNHU_NOTIFY_URL="https://rt.songrong.org/api/billing/callback/xunhu"
-export BS_PUBLIC_SERVER_URL="https://rt.songrong.org"
-export BS_PRICE_PER_HOUR_CENTS=200
-
-cd billing-server
-pip install -r requirements.txt
-python app.py
-```
-
-After deployment, the plugin uses the built-in `https://rt.songrong.org` endpoint. The recharge page is `https://rt.songrong.org/account`; payment return links include the order id so the Account Center can keep refreshing that order. In-plugin login remains for cloud transcription authentication.
 
 ### Contributing
 

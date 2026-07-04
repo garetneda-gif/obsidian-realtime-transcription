@@ -10,7 +10,7 @@ import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
 import { AgentBackendService, isAiBackendCliPathCompatible, resolveAiBackendCliPath } from "./services/AgentBackendService";
 import { TranscriptionSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, isCloudASR, isHostedCloud, normalizeAiBackendSettings, normalizeHostedCloudAuthSettings } from "./types";
+import { DEFAULT_SETTINGS, HOSTED_CLOUD_ENABLED, isCloudASR, isHostedCloud, normalizeAiBackendSettings, normalizeHostedCloudAuthSettings } from "./types";
 import type { AiOutputLanguage, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, SummarySettings, TranscriptEntry, TranscriptionResult } from "./types";
 import type { AiBackendProfileRole, AiBackendProfileSettings, AiBackendProvider } from "./types";
 import { CloudAuthService } from "./services/CloudAuthService";
@@ -218,6 +218,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     // 兼容旧配置：asrProvider / tencentASR 不存在时使用默认值
     if (!this.settings.asrProvider) {
+      this.settings.asrProvider = "local";
+    }
+    if (!HOSTED_CLOUD_ENABLED && this.settings.asrProvider === "cloud") {
       this.settings.asrProvider = "local";
     }
     // 深合并 tencentASR（应对部分保存的情况，确保所有字段都有默认值）

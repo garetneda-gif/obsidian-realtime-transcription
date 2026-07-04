@@ -280,3 +280,9 @@
 - 插件默认云端账户地址改为 `https://rt.songrong.org`,设置页隐藏服务器地址,账户中心按钮将打开 `/account`。
 - Mac Mini 检查结果:`api.songrong.org` 已被 SongRong API 占用;`rt.songrong.org` 当前未解析,不能复用主站路径。
 - 外网部署暂缺 Cloudflare/DNS public hostname 和计费服务生产密钥;本地代码、迁移测试和构建已完成。
+
+## 2026-07-04 13:37 — 市场版先隐藏云端账户
+- 用户要求先更新插件市场,云端账户和付费入口暂不出现。
+- 已改为市场版默认关闭托管云端:设置页不展示“云端托管”选项,也不会出现云端账户配置块。
+- 公开 README 已移除云端计费、充值和账户中心说明;保留代码实现等待付费功能完成后再开。
+- 验证: `node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`npm run build`,`billing-server/.venv311/bin/python -m pytest billing-server/tests -q`,`git diff --check` 通过;已同步并重载 Obsidian。

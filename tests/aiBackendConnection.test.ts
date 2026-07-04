@@ -85,3 +85,11 @@ test("AI profile settings replace duplicate per-feature backend forms", () => {
   assert.ok(mainSource.includes("applyLegacyApiConfig(this.settings.aiBackend.fast, this.settings.translation)"));
   assert.ok(mainSource.includes("applyLegacyApiConfig(this.settings.aiBackend.smart, this.settings.summary)"));
 });
+
+test("market build hides hosted cloud account entry points", () => {
+  assert.ok(mainSource.includes("HOSTED_CLOUD_ENABLED"));
+  assert.ok(mainSource.includes('!HOSTED_CLOUD_ENABLED && this.settings.asrProvider === "cloud"'));
+  assert.ok(settingsSource.includes("if (HOSTED_CLOUD_ENABLED)"));
+  assert.ok(settingsSource.includes('dropdown.addOption("cloud", t("settings.asr.provider.cloud"))'));
+  assert.ok(settingsSource.includes("if (HOSTED_CLOUD_ENABLED && isHostedCloud(provider))"));
+});

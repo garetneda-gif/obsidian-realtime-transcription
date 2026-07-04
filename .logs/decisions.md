@@ -62,3 +62,10 @@
 **备选**:使用 `https://songrong.org/rt` 或复用 `https://api.songrong.org`。
 **否决理由**:主站路径会污染现有 Songrong 站点;`api.songrong.org` 已被 SongRong API 使用,不适合承载 Realtime Transcription 计费服务。
 **影响范围**:`src/types.ts`,`src/main.ts`,`src/settings.ts`,`src/i18n.ts`,`tests/cloudAuthService.test.ts`
+
+## 2026-07-04 13:37 — 市场版暂不开启云端付费入口
+
+**选择**:保留云端代码,用 `HOSTED_CLOUD_ENABLED=false` 隐藏设置页入口和下拉选项,旧 `cloud` 配置自动回落本地模式。
+**备选**:删除云端代码;继续公开云端托管选项但禁用账户中心;只删 README。
+**否决理由**:删除代码会增加后续恢复成本;公开禁用入口仍会误导市场用户;只删 README 不能满足设置页不出现配置项。
+**影响范围**:`src/types.ts`,`src/main.ts`,`src/settings.ts`,`README.md`,`README_EN.md`

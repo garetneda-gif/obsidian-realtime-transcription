@@ -269,3 +269,9 @@
 - `src/settings.ts`,`src/i18n.ts`: 设置页不再显示服务器地址输入或账户状态里的服务器地址,错误文案改为内部配置缺失。
 - `src/types.ts`,`tests/cloudAuthService.test.ts`,`README.md`,`README_EN.md`: 增加子域名 URL 与旧服务器地址迁移回归测试,部署文档改为 `rt.songrong.org`。
 - 验证: `node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`npm run build`,`billing-server/.venv311/bin/python -m pytest billing-server/tests -q` 通过。
+
+## 2026-07-04 13:37 — 市场版隐藏云端账户入口
+- `src/types.ts`,`src/main.ts`: 新增 `HOSTED_CLOUD_ENABLED=false`,旧配置若为 `cloud` 会回落到本地识别。
+- `src/settings.ts`: ASR 下拉菜单不再显示“云端托管”,云端账户配置块仅在开关启用后渲染。
+- `README.md`,`README_EN.md`: 删除公开 README 中的云端计费、账户中心和充值说明。
+- `manifest.json`,`package.json`,`package-lock.json`,`versions.json`: 版本推进到 `1.4.8`,用于插件市场发布。
