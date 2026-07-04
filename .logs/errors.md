@@ -124,3 +124,11 @@
 **根因**:Mac Mini 现有 cloudflared token tunnel 已服务主站,但当前没有可用 Cloudflare origin cert/API 权限来新增 public hostname;计费服务生产密钥也未在 Mac Mini 上找到。
 **解决**:代码先固定为 `https://rt.songrong.org`;上线需要在 Cloudflare 为 `rt.songrong.org` 添加 public hostname/DNS 指向现有 tunnel,并补齐 `BS_*`、腾讯云和虎皮椒环境变量。
 **复现**:`dig +short rt.songrong.org A` 无输出。
+
+## 2026-07-04 15:35 — Cloudflare 子域名绑定仍需控制台权限
+
+**症状**:`rt.songrong.org` 本地 nginx vhost 验证正常,但公网 DNS 仍为空,外网无法访问。
+**触发**:准备把 Mac Mini 本地计费服务暴露到 `https://rt.songrong.org`。
+**根因**:当前机器没有 Cloudflare origin cert/API token;Chrome 也暂不能打开 Cloudflare 控制台完成 public hostname 配置。
+**解决**:在 Cloudflare Zero Trust 现有 tunnel 中新增 public hostname:`rt.songrong.org` -> `http://127.0.0.1:8080`;保存后再验证 `/healthz`、`/readyz`、`/account`。
+**复现**:`dig +short rt.songrong.org A` 无输出,`curl https://rt.songrong.org/healthz` 无法解析。

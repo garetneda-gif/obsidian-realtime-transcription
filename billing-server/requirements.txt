@@ -5,3 +5,4 @@ bcrypt>=4.0
 pyjwt>=2.8
 requests>=2.31
 pytest>=8.0
+gunicorn>=22.0

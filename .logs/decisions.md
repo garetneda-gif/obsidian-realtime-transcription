@@ -69,3 +69,10 @@
 **备选**:删除云端代码;继续公开云端托管选项但禁用账户中心;只删 README。
 **否决理由**:删除代码会增加后续恢复成本;公开禁用入口仍会误导市场用户;只删 README 不能满足设置页不出现配置项。
 **影响范围**:`src/types.ts`,`src/main.ts`,`src/settings.ts`,`README.md`,`README_EN.md`
+
+## 2026-07-04 15:40 — 计费服务生产先固定单 worker
+
+**选择**:Mac Mini launchd 以 gunicorn 单 worker 运行 `wsgi:app`,结算循环随该 worker 启动。
+**备选**:现在就拆出独立 scheduler 进程;允许多 worker 同时启动结算循环。
+**否决理由**:独立 scheduler 会扩大当前部署面;多 worker 会重复扫描待结算订单并增加日志噪声。
+**影响范围**:`billing-server/wsgi.py`,Mac Mini `org.realtime-transcription.billing` launchd 配置

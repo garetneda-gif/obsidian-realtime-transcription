@@ -275,3 +275,9 @@
 - `src/settings.ts`: ASR 下拉菜单不再显示“云端托管”,云端账户配置块仅在开关启用后渲染。
 - `README.md`,`README_EN.md`: 删除公开 README 中的云端计费、账户中心和充值说明。
 - `manifest.json`,`package.json`,`package-lock.json`,`versions.json`: 版本推进到 `1.4.8`,用于插件市场发布。
+
+## 2026-07-04 15:35 — 计费服务生产部署入口
+- `billing-server/wsgi.py`: 新增 gunicorn 可加载的 WSGI 入口,启动时校验配置、初始化数据库并启动结算循环。
+- `billing-server/requirements.txt`: 增加 `gunicorn` 运行时依赖。
+- `.logs/progress.md`,`.logs/errors.md`: 记录 Mac Mini 本地部署状态和 Cloudflare 子域名阻塞点。
+- 原因:外部部署需要脱离 Flask dev server,由 launchd + gunicorn + nginx 托管生产服务。

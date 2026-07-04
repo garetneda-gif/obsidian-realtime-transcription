@@ -286,3 +286,9 @@
 - 已改为市场版默认关闭托管云端:设置页不展示“云端托管”选项,也不会出现云端账户配置块。
 - 公开 README 已移除云端计费、充值和账户中心说明;保留代码实现等待付费功能完成后再开。
 - 验证: `node --test tests/*.test.ts`,`npx tsc --noEmit --outDir /tmp/rt-tsc-check`,`npm run build`,`billing-server/.venv311/bin/python -m pytest billing-server/tests -q`,`git diff --check` 通过;已同步并重载 Obsidian。
+
+## 2026-07-04 15:35 — Mac Mini 计费服务本地部署就绪
+- 当前会话在 MacBook Air,实际服务部署到 Mac Mini `/Users/jikunren/services/realtime-transcription-billing/`。
+- launchd `org.realtime-transcription.billing` 已改用 gunicorn 运行 `wsgi:app`,监听 `127.0.0.1:8900`。
+- nginx vhost `rt.songrong.org` 已代理到本地计费服务;本机 `--resolve` 验证 `/healthz`、`/readyz`、`/account` 均正常。
+- 公网仍待 Cloudflare public hostname/DNS 绑定;市场版插件继续隐藏云端账户入口。
