@@ -1,8 +1,9 @@
 """Billing Server 主应用"""
 import threading
 import time
+from pathlib import Path
 
-from flask import Flask
+from flask import Flask, abort, send_from_directory
 from flask_cors import CORS
 
 import config
@@ -11,6 +12,18 @@ from auth import auth_bp
 from signing import signing_bp
 from billing import billing_bp, settle_expired_requests
 from payment_xunhu import payment_bp
+
+STATIC_DIR = Path(__file__).with_name("static")
+STATIC_FILES = {
+    "actual-ui-cloud.webp",
+    "actual-ui-live.webp",
+    "actual-ui-summary.webp",
+    "favicon.ico",
+    "paid-site-icon.svg",
+    "paid-site-mark.svg",
+    "site.css",
+    "site.js",
+}
 
 
 def create_app() -> Flask:
@@ -25,6 +38,18 @@ def create_app() -> Flask:
     @app.route("/health")
     def health():
         return {"status": "ok"}, 200
+
+    @app.route("/")
+    @app.route("/en")
+    @app.route("/pricing")
+    def landing_page():
+        return send_from_directory(STATIC_DIR, "index.html")
+
+    @app.route("/<path:filename>")
+    def landing_asset(filename: str):
+        if filename not in STATIC_FILES:
+            abort(404)
+        return send_from_directory(STATIC_DIR, filename)
 
     return app
 

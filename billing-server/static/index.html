@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Obsidian Realtime Transcription - 云端实时转写</title>
+    <meta name="description" content="Obsidian 实时语音转写插件：本地免费，云端付费零配置，支持会议、课堂、访谈和长音频笔记。">
+    <link rel="icon" href="favicon.ico">
+    <link rel="stylesheet" href="site.css">
+  </head>
+  <body>
+    <div class="site-shell">
+      <div class="grid-layer" aria-hidden="true"></div>
+      <div class="grain-layer" aria-hidden="true"></div>
+
+      <header class="site-header">
+        <a class="brand" href="#top" aria-label="Obsidian Realtime Transcription">
+          <img src="paid-site-mark.svg" alt="" class="brand-mark">
+          <span>Realtime Transcription</span>
+          <span class="version">Cloud · preview</span>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="#features">功能</a>
+          <a href="#pricing">价格</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <div class="header-actions">
+          <button class="language-toggle" type="button" aria-label="Switch language" data-language-toggle>EN</button>
+          <a class="ghost-link" href="#pricing">开始充值</a>
+        </div>
+      </header>
+
+      <main id="top">
+        <section class="hero-section">
+          <div class="hero-badges">
+            <span>Obsidian 原生插件</span>
+            <span>本地 + 云端双引擎</span>
+            <span>中英日韩粤</span>
+          </div>
+          <img src="paid-site-mark.svg" alt="" class="hero-mark">
+          <h1>把每一次对话变成可检索的 Obsidian 笔记</h1>
+          <p class="hero-copy">本地模型免费跑，云端模式零配置。会议、课堂、访谈和灵感记录，边说边进库。</p>
+          <div class="hero-actions">
+            <a class="primary-button" href="#pricing">查看云端方案</a>
+            <a class="secondary-button" href="#install">继续使用本地免费版 →</a>
+          </div>
+        </section>
+
+        <section class="feature-tabs" id="features" aria-labelledby="features-title">
+          <div class="section-kicker">Daily capture system</div>
+          <h2 id="features-title">录音、识别、整理，一条链路完成</h2>
+          <div class="tabs-layout">
+            <div class="tab-list" role="tablist" aria-label="Feature tabs">
+              <button class="tab-button is-active" type="button" role="tab" aria-selected="true" data-tab="capture">
+                <span>实时转写</span>
+                <small>边说边显示，自动分段</small>
+              </button>
+              <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="cloud">
+                <span>云端零配置</span>
+                <small>登录后直接使用腾讯云 ASR</small>
+              </button>
+              <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="notes">
+                <span>笔记工作流</span>
+                <small>摘要、润色、导出到 vault</small>
+              </button>
+            </div>
+            <div class="tab-stage">
+              <article class="tab-panel is-active" data-panel="capture">
+                <img src="actual-ui-live.webp" alt="Obsidian 转写界面预览">
+                <div>
+                  <h3>实时字幕不是终点，结构化笔记才是</h3>
+                  <p>16kHz 单声道采集、partial 稳定过滤、final 聚合输出，减少重复和回滚，让长时间录音保持可读。</p>
+                </div>
+              </article>
+              <article class="tab-panel" data-panel="cloud">
+                <img src="actual-ui-cloud.webp" alt="云端识别配置预览">
+                <div>
+                  <h3>不想装 Python，也能马上开始</h3>
+                  <p>云端付费模式免模型、免密钥、免后端进程管理。按实际使用时长结算，余额不足时自动提示充值。</p>
+                </div>
+              </article>
+              <article class="tab-panel" data-panel="notes">
+                <img src="actual-ui-summary.webp" alt="摘要和笔记导出预览">
+                <div>
+                  <h3>从原始语音到可复习资料</h3>
+                  <p>自动翻译、AI 摘要、二次摘要和手动/AI 命名导出，适合课堂、访谈、会议纪要和资料整理。</p>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="pillars-section">
+          <div class="section-kicker">File over app, but for audio</div>
+          <h2>语音数据留在你的工作流里</h2>
+          <div class="pillar-grid">
+            <article>
+              <span>01</span>
+              <h3>本地优先</h3>
+              <p>SenseVoice-Small + sherpa-onnx 可离线运行。敏感会议、私密笔记和低延迟场景继续走本机。</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>按量云端</h3>
+              <p>不需要长期订阅，云端 ASR 按小时计费。注册送体验额度，之后按余额扣费。</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>OpenAI 兼容后处理</h3>
+              <p>翻译、润色、摘要都使用 OpenAI 兼容接口，DeepSeek、通义等模型可以直接接入。</p>
+            </article>
+            <article>
+              <span>04</span>
+              <h3>Obsidian 原生</h3>
+              <p>历史记录、转写卡片、导出文件和设置面板都在 Obsidian 内完成，不额外维护另一个知识库。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="testimonials-section">
+          <h2>为真实知识工作场景准备</h2>
+          <p>课堂、采访、会议、播客草稿、个人复盘，一套插件覆盖从录音到整理的日常链路。</p>
+          <div class="quote-row" aria-label="Use cases">
+            <article><b>课堂复习</b><span>录完即得分段文本，导出后直接进入课程笔记。</span></article>
+            <article><b>会议纪要</b><span>长会议用云端稳定跑，结束后生成摘要和行动项。</span></article>
+            <article><b>访谈整理</b><span>中英混杂识别，后续润色成更适合发布的材料。</span></article>
+          </div>
+        </section>
+
+        <section class="pricing-section" id="pricing">
+          <div class="pricing-copy">
+            <div class="section-kicker">The stack you choose</div>
+            <h2>免费本地版继续保留，云端按需付费</h2>
+            <p>你可以一直使用本地模型。付费只用于零配置云端 ASR 和托管识别成本。</p>
+          </div>
+          <div class="pricing-grid">
+            <article class="price-card">
+              <span>Local</span>
+              <h3>¥0</h3>
+              <p>本地模型、BYOK 翻译/摘要、完整 Obsidian 工作流。</p>
+              <a href="#install">使用本地版</a>
+            </article>
+            <article class="price-card featured">
+              <span>Cloud ASR</span>
+              <h3>¥2 / 小时</h3>
+              <p>云端实时识别，注册送 ¥1 体验额度，余额按实际识别时长扣减。</p>
+              <a href="#install">在插件设置中充值</a>
+            </article>
+            <article class="price-card">
+              <span>LLM</span>
+              <h3>BYOK</h3>
+              <p>摘要、翻译和润色继续使用你自己的 OpenAI 兼容 API Key。</p>
+              <a href="#faq">查看说明</a>
+            </article>
+          </div>
+        </section>
+
+        <section class="install-section" id="install">
+          <h2>从 Obsidian 设置页开始</h2>
+          <p>安装插件后打开设置，选择“云端付费（零配置）”，注册或登录账户，再点击充值。支付完成后余额会在插件中显示。</p>
+          <div class="hero-actions">
+            <a class="primary-button" href="#faq">常见问题</a>
+            <a class="secondary-button" href="health">服务状态 →</a>
+          </div>
+        </section>
+
+        <section class="faq-section" id="faq">
+          <h2>Frequently Asked Questions</h2>
+          <div class="faq-list">
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>本地模式还免费吗？</span>
+              <p>免费。本地 SenseVoice-Small 模式、导出和基础文本处理继续保留，不依赖付费账户。</p>
+            </button>
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>为什么云端模式要收费？</span>
+              <p>云端模式使用托管 ASR 服务，费用覆盖实时识别、签名服务和结算成本，按实际使用时长扣费。</p>
+            </button>
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>录音内容会被保存到服务器吗？</span>
+              <p>计费服务保存账户、订单和用量记录；转写历史保存在你的 Obsidian vault。云端 ASR 的传输取决于所选提供方。</p>
+            </button>
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>余额不足会怎样？</span>
+              <p>插件会提示余额不足并停止新的云端签名请求。充值后即可继续使用。</p>
+            </button>
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>可以继续使用自己的腾讯云密钥吗？</span>
+              <p>可以。ASR 提供方里仍有腾讯云 BYOK 模式，适合已有腾讯云账号和密钥的用户。</p>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <span>Copyright © 2026 Realtime Transcription.</span>
+        <nav aria-label="Footer">
+          <a href="#features">功能</a>
+          <a href="#pricing">价格</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+      </footer>
+    </div>
+    <script src="site.js"></script>
+  </body>
+</html>
