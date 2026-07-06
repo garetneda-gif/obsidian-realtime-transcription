@@ -301,7 +301,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .addButton((btn) =>
             btn.setButtonText(t("settings.cloud.recharge.btn")).onClick(() => {
               // 打开浏览器充值页面
-              window.open(`${cloudAuth.serverUrl}/recharge`);
+              window.open(`${cloudAuth.serverUrl}/account`);
             }),
           )
           .addButton((btn) =>
@@ -378,6 +378,9 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       }
 
     }
+
+    // ── 以下设置仅在非 cloud 模式显示（cloud 模式零配置，LLM 功能待 Phase 2 托管化） ──
+    if (!isHostedCloud(provider)) {
 
     // ── 翻译设置 ──
     containerEl.createEl("h2", { text: t("settings.translation.title") });
@@ -575,6 +578,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           }),
       );
 
+    } // end if (!isHostedCloud) — 翻译/润色/摘要/二次摘要
+
     // ── 导出设置 ──
     containerEl.createEl("h2", { text: t("settings.export.title") });
 
@@ -607,6 +612,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           });
       });
 
+    if (!isHostedCloud(provider)) {
     // ── 高级设置 ──
     containerEl.createEl("h2", { text: t("settings.advanced.title") });
 
@@ -681,6 +687,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+    } // end if (!isHostedCloud) — 高级设置
   }
 
   private applyRealtimePreset(profile: RealtimeProfile): void {

@@ -106,7 +106,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     engineModelType: "16k_zh",
   },
   cloudAuth: {
-    serverUrl: "https://asr-api.realtimetranscription.com",
+    serverUrl: "https://rt.songrong.org",
     token: "",
     refreshToken: "",
     tokenExpiresAt: "",

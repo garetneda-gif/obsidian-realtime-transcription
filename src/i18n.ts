@@ -139,7 +139,7 @@ const zh: Record<string, string> = {
   "settings.cloud.loggedInAs": "已登录：",
   "settings.cloud.notLoggedIn": "未登录",
   "settings.cloud.loginSuccess": "登录成功",
-  "settings.cloud.registerSuccess": "注册成功，已赠送免费体验额度",
+  "settings.cloud.registerSuccess": "注册成功",
   "settings.cloud.loginFailed": "登录失败",
   "settings.cloud.registerFailed": "注册失败",
   "notice.cloudLoginRequired": "请先在设置中登录云端账户",
@@ -216,6 +216,7 @@ const zh: Record<string, string> = {
 
   // ── BackendManager.ts ──
   "backend.envFail": "Python 环境检测失败，请确认已安装 sherpa-onnx:",
+  "backend.noValidPython": "未检测到可用的 Python 路径，已尝试回退但仍失败",
   "backend.noModelDir": "请在插件设置中配置模型目录路径",
   "backend.modelFileMissing": "模型文件缺失",
   "backend.modelFileMissingHint": "请先下载模型或检查路径",
@@ -377,7 +378,7 @@ const en: Record<string, string> = {
   "settings.cloud.loggedInAs": "Logged in: ",
   "settings.cloud.notLoggedIn": "Not logged in",
   "settings.cloud.loginSuccess": "Login successful",
-  "settings.cloud.registerSuccess": "Registration successful, free trial credit added",
+  "settings.cloud.registerSuccess": "Registration successful",
   "settings.cloud.loginFailed": "Login failed",
   "settings.cloud.registerFailed": "Registration failed",
   "notice.cloudLoginRequired": "Please login to cloud account in settings",
@@ -454,6 +455,7 @@ const en: Record<string, string> = {
 
   // ── BackendManager.ts ──
   "backend.envFail": "Python environment check failed. Please install sherpa-onnx:",
+  "backend.noValidPython": "No valid Python executable found. Automatic fallback failed.",
   "backend.noModelDir": "Please configure the model directory path in plugin settings",
   "backend.modelFileMissing": "Model file missing",
   "backend.modelFileMissingHint": "Please download the model first or check the path",

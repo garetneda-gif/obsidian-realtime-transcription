@@ -183,6 +183,12 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.settings.tencentASR = { ...DEFAULT_SETTINGS.tencentASR, ...this.settings.tencentASR };
     // 深合并 cloudAuth
     this.settings.cloudAuth = { ...DEFAULT_SETTINGS.cloudAuth, ...this.settings.cloudAuth };
+
+    const fixedPythonPath = await BackendManager.resolvePythonPath(this.settings.pythonPath);
+    if (fixedPythonPath && fixedPythonPath !== this.settings.pythonPath) {
+      this.settings.pythonPath = fixedPythonPath;
+      await this.saveData(this.settings);
+    }
   }
 
   async saveSettings(): Promise<void> {
