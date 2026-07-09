@@ -5,9 +5,13 @@ from sqlalchemy.orm import sessionmaker
 import config
 from models import Base
 
+database_url = config.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
 engine = create_engine(
-    config.DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in config.DATABASE_URL else {},
+    database_url,
+    connect_args={"check_same_thread": False} if "sqlite" in database_url else {},
     echo=False,
 )
 
