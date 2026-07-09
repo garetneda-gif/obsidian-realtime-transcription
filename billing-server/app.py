@@ -51,9 +51,11 @@ def create_app() -> Flask:
 
     @app.route("/")
     @app.route("/en")
-    @app.route("/pricing")
     def landing_page():
-        # Use the same account-center page for the public entry so users don't hit the legacy marketing layout.
+        return send_from_directory(STATIC_DIR, "index.html")
+
+    @app.route("/pricing")
+    def pricing_page():
         return account_center()
 
     @app.route("/static/<path:filename>")
