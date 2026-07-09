@@ -1301,7 +1301,6 @@
           <h1 class="pricing-clone-title">选择套餐</h1>
           <p class="status account-status" id="account-status"></p>
 
-          <div class="actions provider-tabs" id="provider-tabs" aria-label="套餐类型"></div>
           <div class="plans" id="plans"></div>
 
           <div class="account-strip">
@@ -1576,16 +1575,6 @@
     }
 
     function renderPlans() {
-      const personal = document.createElement("button");
-      personal.type = "button";
-      personal.textContent = "个人";
-      personal.className = "btn selected";
-      const business = document.createElement("button");
-      business.type = "button";
-      business.textContent = "Business";
-      business.className = "btn";
-      business.disabled = true;
-      $("provider-tabs").replaceChildren(personal, business);
       $("plans").replaceChildren(...plans.map((plan, index) => {
         const card = document.createElement("article");
         const copy = [
