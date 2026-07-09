@@ -11,6 +11,7 @@ import requests
 from flask import Blueprint, request, jsonify
 
 import config
+from billing import plan_by_id
 from database import SessionLocal
 from models import User, Order, OrderStatus, new_uuid
 
@@ -150,13 +151,15 @@ def create_order():
     assert user_id is not None
 
     data = request.get_json(silent=True) or {}
-    amount = data.get("amount", "9.90")
+    plan = plan_by_id(data.get("plan_id")) or plan_by_id("standard")
+    assert plan is not None
+    amount = plan["amount_yuan"]
     return_url = data.get("return_url", "")
 
     result = create_payment_url(
         user_id=user_id,
         amount_yuan=str(amount),
-        title="Obsidian 云端转写充值",
+        title=f"Obsidian 云端转写充值 - {plan['name']}",
         return_url=return_url,
     )
 
@@ -164,3 +167,25 @@ def create_order():
         return jsonify({"error": result["error"]}), 500
 
     return jsonify(result), 200
+
+
+@payment_bp.route("/orders/<trade_order_id>/refresh", methods=["POST"])
+def refresh_order(trade_order_id: str):
+    from auth import require_auth
+    user_id, err = require_auth()
+    if err:
+        return err
+
+    db = SessionLocal()
+    try:
+        order = db.query(Order).filter(Order.trade_order_id == trade_order_id, Order.user_id == user_id).first()
+        if not order:
+            return jsonify({"error": "Order not found"}), 404
+        user = db.query(User).filter(User.id == user_id).first()
+        return jsonify({
+            "order_id": order.trade_order_id,
+            "status": order.status,
+            "balance_cents": user.balance_cents if user else 0,
+        }), 200
+    finally:
+        db.close()
