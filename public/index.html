@@ -1360,6 +1360,8 @@
     let captchaImage = "";
     let codeCooldown = 0;
     let codeTimer = null;
+    const sessionKey = "ort.billing.browserSession.v2";
+    localStorage.removeItem("ort.billing.loggedIn");
     const svgData = (svg) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     const captchaFallback = svgData(`<svg xmlns="http://www.w3.org/2000/svg" width="104" height="38" viewBox="0 0 104 38">
       <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#eef5ff"/><stop offset="1" stop-color="#d7e8ff"/></linearGradient></defs>
@@ -1659,6 +1661,7 @@
           browser_session: true,
         }),
       });
+      localStorage.setItem(sessionKey, "1");
       await Promise.all([loadAccount(), loadPlans()]);
       status("");
     }
@@ -1722,6 +1725,7 @@
     $("refresh-btn").onclick = () => loadAccount().catch((e) => status(e.message));
     $("logout-btn").onclick = async () => {
       await api("/api/auth/logout", { method: "POST" }).catch(() => null);
+      localStorage.removeItem(sessionKey);
       localStorage.removeItem("rtCloudOrderId");
       currentOrder = null;
       setLoggedIn(false);
@@ -1748,12 +1752,19 @@
     });
     loadCaptcha().catch(() => null);
     loadPlans().catch((e) => status(e.message));
-    loadAccount()
-      .then(() => {
-        const orderId = queryOrder || localStorage.getItem("rtCloudOrderId");
-        if (orderId) refreshOrder(orderId).catch((e) => status(e.message));
-      })
-      .catch(() => setLoggedIn(false));
+    if (localStorage.getItem(sessionKey)) {
+      loadAccount()
+        .then(() => {
+          const orderId = queryOrder || localStorage.getItem("rtCloudOrderId");
+          if (orderId) refreshOrder(orderId).catch((e) => status(e.message));
+        })
+        .catch(() => {
+          localStorage.removeItem(sessionKey);
+          setLoggedIn(false);
+        });
+    } else {
+      setLoggedIn(false);
+    }
   </script>
 </body>
 </html>
