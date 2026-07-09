@@ -9,9 +9,11 @@ import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
 import { TranscriptionSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult, SerializedTranscriptEntry } from "./types";
+import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult, SerializedTranscriptEntry, isCloudASR, isHostedCloud } from "./types";
+import { CloudAuthService } from "./services/CloudAuthService";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
+import { formatTranscriptEntriesAsMarkdown } from "./utils/transcriptFormatter";
 import {
   comparableLength,
   comparableStartsWith,
@@ -38,6 +40,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private backendManager!: BackendManager;
   private wsClient!: WebSocketClient;
   private tencentClient: TencentASRClient | null = null;
+  private cloudAuthService: CloudAuthService | null = null;
+  private activeSignRequestId: string | null = null;
+  private recordingStartTime: number = 0;
   private audioCapture!: AudioCapture;
   private translationService!: TranslationService;
   private summaryService!: SummaryService;
@@ -64,6 +69,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private cloudCommittedLength = 0;
   private transcriptEntries: TranscriptEntry[] = [];
   private saveEntriesTimer: ReturnType<typeof setTimeout> | null = null;
+  private transcriptSessionVersion = 0;
   private readonly ENTRIES_FILE = "transcript-entries.json";
 
   async onload(): Promise<void> {
@@ -105,6 +111,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.translationService = new TranslationService(this.settings.translation);
     this.summaryService = new SummaryService(this.settings.summary);
     this.formalizeService = new FormalizeService(this.settings.formalize);
+    this.cloudAuthService = new CloudAuthService(this.settings.cloudAuth);
+    this.cloudAuthService.setOnSettingsChanged((newSettings) => {
+      this.settings.cloudAuth = newSettings;
+      void this.saveData(this.settings).catch((error) => {
+        console.error("[Transcription] Failed to persist settings after cloud auth change:", error);
+      });
+    });
 
     // WebSocket 结果回调
     this.wsClient.setOnResult((result) => this.handleTranscriptionResult(result));
@@ -174,6 +187,14 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     // 深合并 tencentASR（应对部分保存的情况，确保所有字段都有默认值）
     this.settings.tencentASR = { ...DEFAULT_SETTINGS.tencentASR, ...this.settings.tencentASR };
+    // 深合并 cloudAuth
+    this.settings.cloudAuth = { ...DEFAULT_SETTINGS.cloudAuth, ...this.settings.cloudAuth };
+
+    const fixedPythonPath = await BackendManager.resolvePythonPath(this.settings.pythonPath);
+    if (fixedPythonPath && fixedPythonPath !== this.settings.pythonPath) {
+      this.settings.pythonPath = fixedPythonPath;
+      await this.saveData(this.settings);
+    }
   }
 
   async saveSettings(): Promise<void> {
@@ -184,6 +205,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.summaryService?.updateSettings(this.settings.summary);
     this.formalizeService?.updateSettings(this.settings.formalize);
     this.tencentClient?.updateSettings(this.settings.tencentASR);
+    this.cloudAuthService?.updateSettings(this.settings.cloudAuth);
     const view = this.getView();
     if (view) {
       view.setDisplayMode(this.settings.summary.displayMode);
@@ -277,43 +299,56 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.cloudCommittedLength = 0;
     currentView.clearStreamingTranscript();
 
-    const isCloud = this.settings.asrProvider === "tencent";
+    const provider = this.settings.asrProvider;
 
-    if (isCloud) {
-      // [CLOUD] 腾讯云模式：无需启动本地后端
-      console.log("[Transcription] 云端模式（腾讯云 ASR），跳过本地后端");
+    if (isHostedCloud(provider)) {
+      // [CLOUD 付费] 签名委托模式：服务端签名，客户端直连腾讯云
+      console.log("[Transcription] 云端付费模式（签名委托）");
       currentView.setConnectionStatus(false, t("status.connecting"));
 
-      // 创建/复用 TencentASRClient
-      if (!this.tencentClient) {
-        this.tencentClient = new TencentASRClient(this.settings.tencentASR);
-        this.tencentClient.setOnResult((result) => this.handleTranscriptionResult(result));
-        this.tencentClient.setOnStatusChange((connected) => {
-          const v = this.getView();
-          if (v) {
-            if (connected && this.recording) {
-              v.setListeningStatus(true);
-            } else {
-              v.setConnectionStatus(connected);
-            }
-          }
-        });
-        this.tencentClient.setOnReconnecting((attempt) => {
-          const v = this.getView();
-          if (v) {
-            v.setConnectionStatus(false, `${t("status.reconnecting")} (${attempt})`);
-          }
-        });
-      } else {
-        this.tencentClient.updateSettings(this.settings.tencentASR);
+      if (!this.cloudAuthService || !this.cloudAuthService.isLoggedIn) {
+        new Notice(t("notice.cloudLoginRequired"));
+        currentView.setConnectionStatus(false);
+        return;
       }
 
-      if (this.tencentClient.isConnected) {
-        this.tencentClient.disconnect();
+      this.ensureTencentClient();
+      if (this.tencentClient!.isConnected) {
+        this.tencentClient!.disconnect();
       }
 
       try {
-        await this.tencentClient.connect();
+        const engineModel = this.settings.tencentASR.engineModelType || "16k_zh";
+        const signResult = await this.cloudAuthService.getSignedUrl(engineModel);
+        this.activeSignRequestId = signResult.sign_request_id;
+        this.recordingStartTime = Date.now();
+        await this.tencentClient!.connectWithSignedUrl(signResult.signed_url);
+      } catch (err) {
+        console.error("[Transcription] 云端付费连接失败:", err);
+        this.tencentClient?.disconnect();
+        if (this.activeSignRequestId && this.cloudAuthService) {
+          void this.cloudAuthService.reportUsage(this.activeSignRequestId, 0);
+        }
+        this.activeSignRequestId = null;
+        this.recordingStartTime = 0;
+        new Notice(`${t("notice.cannotConnectCloudAsr")}: ${err instanceof Error ? err.message : String(err)}`);
+        currentView.setConnectionStatus(false, t("status.cloudConnectFailed"));
+        return;
+      }
+    } else if (isCloudASR(provider)) {
+      // [TENCENT BYOK] 腾讯云自带密钥模式
+      console.log("[Transcription] 云端 BYOK 模式（腾讯云 ASR）");
+      currentView.setConnectionStatus(false, t("status.connecting"));
+
+      this.ensureTencentClient();
+      this.tencentClient!.updateSettings(this.settings.tencentASR);
+
+      if (this.tencentClient!.isConnected) {
+        this.tencentClient!.disconnect();
+      }
+
+      try {
+        await this.tencentClient!.connect();
       } catch (err) {
         console.error("[Transcription] 腾讯云 ASR 连接失败:", err);
         this.tencentClient?.disconnect();
@@ -386,7 +421,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     await this.flushPendingTranscript();
     this.clearFlushTimer();
-    if (this.settings.asrProvider === "tencent" && this.tencentClient) {
+    if (isCloudASR(this.settings.asrProvider) && this.tencentClient) {
+      // cloud 付费模式：报告使用时长
+      if (isHostedCloud(this.settings.asrProvider) && this.activeSignRequestId && this.cloudAuthService) {
+        const durationSec = (Date.now() - this.recordingStartTime) / 1000;
+        this.cloudAuthService.reportUsage(this.activeSignRequestId, durationSec);
+        this.activeSignRequestId = null;
+      }
       this.tencentClient.disconnect();
     } else {
       this.wsClient.disconnect();
@@ -429,8 +470,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     // 前端文本去重：将同一 VAD 段内所有已 flush 的 partial 拼接，与新文本做重叠匹配
     // 云端模式跳过：云端 ASR 每个 partial 都是累积式完整句子文本，前缀去重会截成碎片
-    const isCloudProvider = this.settings.asrProvider !== "local";
-    if (!isCloudProvider && this.committedPartialTexts.length > 0) {
+    const cloudProvider = isCloudASR(this.settings.asrProvider);
+    if (!cloudProvider && this.committedPartialTexts.length > 0) {
       const dedupResult = trimCommittedPrefix(this.committedPartialTexts, text);
       if (dedupResult.hasOverlap) {
         if (dedupResult.isDuplicate) {
@@ -460,7 +501,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     if (resultType === "partial") {
       const showStreaming = this.settings.aggregation.realtimePreview;
-      const isCloud = this.settings.asrProvider !== "local";
+      const cloudMode = isCloudASR(this.settings.asrProvider);
 
       // 云端累积式 partial：记录原始长度，然后剥离已提交的前缀
       let cloudOriginalLength = 0;
@@ -480,7 +521,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const now = new Date();
       // 云端模式跳过 stabilize：云端 ASR 已自行管理文本稳定性，
       // 且插入标点会导致 stabilize 误判为回滚而拒绝更新
-      const stabilizedText = isCloud ? text : this.stabilizePartialText(text);
+      const stabilizedText = cloudMode ? text : this.stabilizePartialText(text);
       this.lastPartialText = text;
       this.lastPartialLanguage = normalizedLanguage;
       this.lastPartialWallTime = now;
@@ -930,10 +971,35 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
    * 两者共享相同的方法签名：sendAudio / sendCommand / disconnect / setOnResult 等
    */
   private getActiveASRClient(): WebSocketClient | TencentASRClient {
-    if (this.settings.asrProvider === "tencent" && this.tencentClient) {
+    if (isCloudASR(this.settings.asrProvider) && this.tencentClient) {
       return this.tencentClient;
     }
     return this.wsClient;
+  }
+
+  /**
+   * 创建/复用 TencentASRClient 实例（tencent BYOK 和 cloud 付费共用）
+   */
+  private ensureTencentClient(): void {
+    if (this.tencentClient) return;
+    this.tencentClient = new TencentASRClient(this.settings.tencentASR);
+    this.tencentClient.setOnResult((result) => this.handleTranscriptionResult(result));
+    this.tencentClient.setOnStatusChange((connected) => {
+      const v = this.getView();
+      if (v) {
+        if (connected && this.recording) {
+          v.setListeningStatus(true);
+        } else {
+          v.setConnectionStatus(connected);
+        }
+      }
+    });
+    this.tencentClient.setOnReconnecting((attempt) => {
+      const v = this.getView();
+      if (v) {
+        v.setConnectionStatus(false, `${t("status.reconnecting")} (${attempt})`);
+      }
+    });
   }
 
   private async connectBackendWithRetry(port: number): Promise<void> {
@@ -961,6 +1027,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.onToggleRecording = () => this.toggleRecording();
     view.onToggleDisplayMode = () => this.toggleDisplayMode();
     view.onExport = () => this.exportToNote();
+    view.onCopyTranscripts = () => this.copyTranscriptsToClipboard();
     view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
     view.onClearTranscripts = () => this.clearEntries();
   }
@@ -1011,11 +1078,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (this.summaryBuffer.trim().length < threshold) return;
 
     const source = this.summaryBuffer.trim();
+    const sessionVersion = this.transcriptSessionVersion;
     this.summaryBuffer = "";
     this.summaryInFlight = true;
 
     try {
       const summaryText = await this.summaryService.summarize(source);
+      if (sessionVersion !== this.transcriptSessionVersion) return;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -1040,6 +1109,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       // 二次摘要：累积摘要文本
       this.enqueueMetaSummary(summaryText, wallTime);
     } catch (err) {
+      if (sessionVersion !== this.transcriptSessionVersion) return;
       console.error("AI 摘要失败:", err);
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`${t("notice.summaryFailed")}: ${detail}`);
@@ -1047,10 +1117,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       return;
     } finally {
       this.summaryInFlight = false;
-    }
-
-    if (this.summaryBuffer.trim().length >= threshold) {
-      void this.maybeRunSummary(new Date());
+      if (this.summaryBuffer.trim().length >= threshold) {
+        void this.maybeRunSummary(new Date());
+      }
     }
   }
 
@@ -1070,11 +1139,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (this.metaSummaryTexts.length < 2) return;
 
     const texts = [...this.metaSummaryTexts];
+    const sessionVersion = this.transcriptSessionVersion;
     this.metaSummaryTexts = [];
     this.metaSummaryInFlight = true;
 
     try {
       const metaText = await this.summaryService.metaSummarize(texts);
+      if (sessionVersion !== this.transcriptSessionVersion) return;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -1096,12 +1167,17 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       view.addTranscript(entry);
       this.addEntry(entry);
     } catch (err) {
+      if (sessionVersion !== this.transcriptSessionVersion) return;
       console.error("二次摘要失败:", err);
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`${t("notice.metaSummaryFailed")}: ${detail}`);
       this.metaSummaryTexts.push(...texts);
     } finally {
       this.metaSummaryInFlight = false;
+      const triggerCount = Math.max(2, this.settings.metaSummary.triggerCount);
+      if (this.metaSummaryTexts.length >= triggerCount) {
+        void this.maybeRunMetaSummary(new Date());
+      }
     }
   }
 
@@ -1116,6 +1192,26 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     this.updateEntry(entryId, { formalText: result });
     return result;
+  }
+
+  private async copyTranscriptsToClipboard(): Promise<void> {
+    const view = this.getView();
+    if (!view) return;
+
+    const entries = view.getEntries();
+    if (entries.length === 0) {
+      new Notice(t("notice.noTranscriptToCopy"));
+      return;
+    }
+
+    try {
+      const text = formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"));
+      await writeTextToClipboard(text);
+      new Notice(t("notice.copiedTranscripts"));
+    } catch (err) {
+      console.error("[Transcription] 复制记录失败:", err);
+      new Notice(t("notice.copyFailed"));
+    }
   }
 
   private async exportToNote(): Promise<void> {
@@ -1180,22 +1276,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         break;
     }
 
-    // 生成 Markdown 内容
-    let md = `# ${title}\n\n`;
-
-    for (const entry of entries) {
-      const time = this.formatTime(entry.wallTime);
-      const lang = entry.result.language.toUpperCase();
-      md += `**[${time}]** \`${lang}\`\n`;
-      md += `${entry.result.text}\n`;
-      if (entry.formalText) {
-        md += `> **${t("export.formalLabel")}**: ${entry.formalText}\n`;
-      }
-      if (entry.translation) {
-        md += `> ${entry.translation}\n`;
-      }
-      md += `\n`;
-    }
+    const md = `# ${title}\n\n${formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"))}\n`;
 
     // 创建笔记文件
     const fileName = `${title}.md`;
@@ -1289,6 +1370,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private async clearEntries(): Promise<void> {
+    this.resetTransientTranscriptState();
     this.transcriptEntries = [];
     const path = this.getEntriesFilePath();
     try {
@@ -1301,10 +1383,44 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
   }
 
-  private formatTime(date: Date): string {
-    const h = String(date.getHours()).padStart(2, "0");
-    const m = String(date.getMinutes()).padStart(2, "0");
-    const s = String(date.getSeconds()).padStart(2, "0");
-    return `${h}:${m}:${s}`;
+  private resetTransientTranscriptState(): void {
+    this.transcriptSessionVersion++;
+    this.pendingTranscript = null;
+    this.clearFlushTimer();
+    this.committedPartialTexts = [];
+    this.summaryBuffer = "";
+    this.metaSummaryTexts = [];
+    this.lastPartialText = "";
+    this.lastStablePartialText = "";
+    this.renderedPartialText = "";
+    this.resetRollbackCandidate();
+    this.lastPartialLanguage = "zh";
+    this.lastPartialWallTime = null;
+    if (this.recording) {
+      this.getActiveASRClient().sendCommand({ type: "reset" });
+    }
   }
+
+}
+
+async function writeTextToClipboard(text: string): Promise<void> {
+  const browserClipboard = globalThis.navigator?.clipboard;
+  if (browserClipboard?.writeText) {
+    try {
+      await browserClipboard.writeText(text);
+      return;
+    } catch (err) {
+      console.warn("[Transcription] navigator.clipboard 写入失败，尝试 Electron clipboard:", err);
+    }
+  }
+
+  const electronClipboard = (require("electron") as {
+    clipboard?: { writeText?: (value: string) => void };
+  }).clipboard;
+  if (typeof electronClipboard?.writeText === "function") {
+    electronClipboard.writeText(text);
+    return;
+  }
+
+  throw new Error("Clipboard API unavailable");
 }

@@ -12,6 +12,7 @@ export class BackendManager {
   private pluginDir: string;
   private settings: PluginSettings;
   private lastLaunchSignature: string | null = null;
+  private resolvedPythonPath: string | null = null;
   /** 实际使用的端口（可能因端口占用而与 settings.backendPort 不同） */
   activePort: number = 0;
   private readonly pidFile: string;
@@ -24,6 +25,7 @@ export class BackendManager {
 
   updateSettings(settings: PluginSettings): void {
     this.settings = settings;
+    this.resolvedPythonPath = null;
   }
 
   async start(): Promise<boolean> {
@@ -110,6 +112,11 @@ export class BackendManager {
       return false;
     }
 
+    const pythonPath = await this.getUsablePythonPath();
+    if (!pythonPath) {
+      new Notice(`${t("backend.envFail")}: ${t("backend.noValidPython")}`);
+      return false;
+    }
     const args = [
       serverScript,
       "--model-dir", modelDir,
@@ -128,7 +135,7 @@ export class BackendManager {
 
     return new Promise<boolean>((resolve) => {
       let lastStderr = "";
-      this.process = spawn(this.settings.pythonPath, args, {
+      this.process = spawn(pythonPath, args, {
         stdio: ["pipe", "pipe", "pipe"],
         cwd: this.pluginDir,
       });
@@ -237,9 +244,12 @@ export class BackendManager {
   }
 
   async checkEnvironment(): Promise<boolean> {
+    const pythonPath = await this.getUsablePythonPath();
+    if (!pythonPath) return false;
+
     return new Promise<boolean>((resolve) => {
       execFile(
-        this.settings.pythonPath,
+        pythonPath,
         ["-c", "import sherpa_onnx; import websockets; print('ok')"],
         { timeout: 10000 },
         (error: Error | null, stdout: string) => {
@@ -257,9 +267,14 @@ export class BackendManager {
       return false;
     }
 
+    const pythonPath = await this.getUsablePythonPath();
+    if (!pythonPath) {
+      new Notice(`${t("backend.envFail")}: ${t("backend.noValidPython")}`);
+      return false;
+    }
     return new Promise<boolean>((resolve) => {
       // -u：强制 Python 无缓冲输出，进度可实时传到 Node.js
-      const proc = spawn(this.settings.pythonPath, ["-u", downloadScript, "--output-dir", outputDir], {
+      const proc = spawn(pythonPath, ["-u", downloadScript, "--output-dir", outputDir], {
         stdio: ["pipe", "pipe", "pipe"],
       });
 
@@ -278,9 +293,98 @@ export class BackendManager {
         resolve(code === 0);
       });
       proc.on("error", (err: Error) => {
-        new Notice(`${t("backend.cannotStartPython")} (${this.settings.pythonPath}): ${err.message}`);
+        new Notice(`${t("backend.cannotStartPython")} (${pythonPath}): ${err.message}`);
         resolve(false);
       });
+    });
+  }
+
+  private async getUsablePythonPath(): Promise<string | null> {
+    if (this.resolvedPythonPath) {
+      return this.resolvedPythonPath;
+    }
+
+    const resolved = await BackendManager.resolvePythonPath(this.settings.pythonPath);
+    if (!resolved) return null;
+
+    if (resolved !== this.settings.pythonPath) {
+      console.log(`[Transcription Backend] 自动修复 Python 路径: ${this.settings.pythonPath} -> ${resolved}`);
+      this.settings.pythonPath = resolved;
+    }
+    this.resolvedPythonPath = resolved;
+    return resolved;
+  }
+
+  static async resolvePythonPath(rawPath: string | undefined): Promise<string | null> {
+    const candidates = BackendManager.resolvePythonCandidates(rawPath);
+    for (const candidate of candidates) {
+      const ok = await BackendManager.isUsablePythonPath(candidate);
+      if (ok) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  private static resolvePythonCandidates(rawPath: string | undefined): string[] {
+    const result: string[] = [];
+    const add = (value: string) => {
+      const v = value.trim();
+      if (v && !result.includes(v)) {
+        result.push(v);
+      }
+    };
+
+    if (BackendManager.isPythonLikeCommand(rawPath || "")) {
+      add(rawPath || "");
+    }
+
+    if (process.platform === "win32") {
+      add("python");
+      add("py");
+      add("python3");
+    } else {
+      add("python3");
+      add("/usr/bin/python3");
+      add("/usr/local/bin/python3");
+      add("/opt/homebrew/bin/python3");
+      add("/usr/bin/python");
+    }
+
+    return result;
+  }
+
+  private static isPythonLikeCommand(candidate: string): boolean {
+    const base = path.basename(candidate).toLowerCase();
+    if (!base) return false;
+
+    if (base === "python" || base === "py" || base === "python.exe" || base === "py.exe") {
+      return true;
+    }
+
+    if (/^python\d+(?:\.\d+)?(?:\.\d+)?(?:-32|-64)?(?:\.exe)?$/.test(base)) {
+      return true;
+    }
+
+    // 排除非常见非 Python 包装器（比如 codex）
+    return base.includes("python") || base === "python3.11" || base === "python3.10" || base === "python3.9";
+  }
+
+  private static isUsablePythonPath(pythonPath: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      execFile(
+        pythonPath,
+        ["-c", "import sys; print(sys.version)"],
+        { timeout: 5000 },
+        (error: Error | null, stdout: string) => {
+          if (error) {
+            resolve(false);
+            return;
+          }
+          const trimmed = stdout.trim();
+          resolve(/^\d+\.\d+(?:\.\d+)?/.test(trimmed) || /^Python\s+\d+\.\d+/.test(trimmed));
+        },
+      );
     });
   }
 

@@ -48,7 +48,16 @@ export class TencentASRClient {
   }
 
   /**
-   * 构建签名并连接到腾讯云 ASR WebSocket
+   * 使用服务端提供的签名 URL 连接（cloud 付费模式）
+   * 跳过本地签名逻辑，直接用已签名的 URL 建立 WebSocket
+   */
+  async connectWithSignedUrl(signedUrl: string): Promise<void> {
+    this.shouldReconnect = false; // cloud 模式不自动重连，由上层管理续签
+    return this.connectToUrl(signedUrl);
+  }
+
+  /**
+   * 构建签名并连接到腾讯云 ASR WebSocket（BYOK 模式）
    */
   async connect(): Promise<void> {
     this.shouldReconnect = true;
@@ -59,6 +68,13 @@ export class TencentASRClient {
       throw new Error("腾讯云 ASR 配置不完整（AppID / SecretID / SecretKey）");
     }
 
+    return this.connectToUrl(url);
+  }
+
+  /**
+   * 内部：用指定 URL 建立 WebSocket 连接
+   */
+  private connectToUrl(url: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
 
       try {

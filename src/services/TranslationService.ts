@@ -1,5 +1,6 @@
 import { requestUrl } from "obsidian";
 import { TranslationSettings } from "../types";
+import { extractTextFromResponse } from "../utils/llmResponse";
 
 export class TranslationService {
   private settings: TranslationSettings;
@@ -109,30 +110,4 @@ function normalizeApiUrl(url: string): string {
     return trimmed.replace(/\/v1\/completions\/?$/i, "/v1/chat/completions");
   }
   return trimmed;
-}
-
-function extractTextFromResponse(data: any): string {
-  const choice = data?.choices?.[0];
-  if (!choice) return "";
-
-  // Chat Completions 兼容格式
-  const chatContent = choice?.message?.content;
-  if (typeof chatContent === "string" && chatContent.trim()) {
-    return chatContent.trim();
-  }
-  if (Array.isArray(chatContent)) {
-    const joined = chatContent
-      .map((part) => (typeof part?.text === "string" ? part.text : ""))
-      .join("")
-      .trim();
-    if (joined) return joined;
-  }
-
-  // Legacy Completions 兼容格式
-  const text = choice?.text;
-  if (typeof text === "string" && text.trim()) {
-    return text.trim();
-  }
-
-  return "";
 }

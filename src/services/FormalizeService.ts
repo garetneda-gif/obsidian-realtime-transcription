@@ -1,6 +1,7 @@
 import { requestUrl } from "obsidian";
 import { FormalizeSettings } from "../types";
 import { t } from "../i18n";
+import { extractTextFromResponse } from "../utils/llmResponse";
 
 export class FormalizeService {
   private settings: FormalizeSettings;
@@ -88,29 +89,4 @@ function normalizeApiUrl(url: string): string {
     return trimmed.replace(/\/v1\/completions\/?$/i, "/v1/chat/completions");
   }
   return trimmed;
-}
-
-function extractTextFromResponse(data: Record<string, unknown>): string {
-  const choices = data?.choices as Array<Record<string, unknown>> | undefined;
-  const choice = choices?.[0];
-  if (!choice) return "";
-
-  const message = choice?.message as Record<string, unknown> | undefined;
-  const chatContent = message?.content;
-  if (typeof chatContent === "string" && chatContent.trim()) {
-    return chatContent.trim();
-  }
-  if (Array.isArray(chatContent)) {
-    const joined = chatContent
-      .map((part: Record<string, unknown>) => (typeof part?.text === "string" ? part.text : ""))
-      .join("")
-      .trim();
-    if (joined) return joined;
-  }
-
-  const text = choice?.text;
-  if (typeof text === "string" && text.trim()) {
-    return text.trim();
-  }
-  return "";
 }

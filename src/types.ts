@@ -33,7 +33,25 @@ export type RealtimeProfile = "stable" | "fast";
 export type RecognitionMode = "zh-en" | "zh" | "en";
 export type GpuProvider = "cpu" | "cuda" | "coreml";
 
-export type AsrProvider = "local" | "tencent";
+export type AsrProvider = "local" | "tencent" | "cloud";
+
+/** 判断是否为云端 ASR 提供方（tencent BYOK 或 cloud 付费托管） */
+export function isCloudASR(provider: AsrProvider): boolean {
+  return provider !== "local";
+}
+
+/** 判断是否为付费托管模式 */
+export function isHostedCloud(provider: AsrProvider): boolean {
+  return provider === "cloud";
+}
+
+export interface CloudAuthSettings {
+  serverUrl: string;
+  token: string;
+  refreshToken: string;
+  tokenExpiresAt: string;
+  balanceCents: number;
+}
 
 export interface TencentASRSettings {
   appId: string;
@@ -59,6 +77,7 @@ export interface PluginSettings {
   locale: "zh" | "en";
   asrProvider: AsrProvider;
   tencentASR: TencentASRSettings;
+  cloudAuth: CloudAuthSettings;
   pythonPath: string;
   backendPort: number;
   modelDir: string;
@@ -85,6 +104,13 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     secretId: "",
     secretKey: "",
     engineModelType: "16k_zh",
+  },
+  cloudAuth: {
+    serverUrl: "https://rt.songrong.org",
+    token: "",
+    refreshToken: "",
+    tokenExpiresAt: "",
+    balanceCents: 0,
   },
   pythonPath: process.platform === "win32" ? "python" : "python3",
   backendPort: 18888,
