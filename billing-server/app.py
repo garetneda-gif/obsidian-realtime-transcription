@@ -1,4 +1,5 @@
 """Billing Server 主应用"""
+# pyright: reportImplicitRelativeImport=false, reportMissingImports=false, reportMissingModuleSource=false
 import threading
 import time
 from pathlib import Path
@@ -11,7 +12,10 @@ from database import init_db
 from auth import auth_bp
 from signing import signing_bp
 from billing import billing_bp, settle_expired_requests
+from oauth import oauth_bp
 from payment_xunhu import payment_bp
+from payment_creem import creem_bp
+from account_center import account_bp
 
 STATIC_DIR = Path(__file__).with_name("static")
 STATIC_FILES = {
@@ -24,16 +28,26 @@ STATIC_FILES = {
     "site.css",
     "site.js",
 }
+ASSET_ROOTS = {
+    "bat.bing.com",
+    "idatalogconf.iflysec.com",
+    "logconf.iflytek.com",
+    "static.iflyrec.com",
+    "xfkfapi.iflytek.com",
+}
 
 
 def create_app() -> Flask:
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder=None)
     CORS(app, origins=["app://obsidian.md"])  # Obsidian 桌面端的 origin
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(signing_bp)
     app.register_blueprint(billing_bp)
+    app.register_blueprint(oauth_bp)
     app.register_blueprint(payment_bp)
+    app.register_blueprint(creem_bp)
+    app.register_blueprint(account_bp)
 
     @app.route("/health")
     def health():
@@ -43,13 +57,28 @@ def create_app() -> Flask:
     @app.route("/en")
     @app.route("/pricing")
     def landing_page():
-        return send_from_directory(STATIC_DIR, "index.html")
+        # Use the same account-center page for the public entry so users don't hit the legacy marketing layout.
+        return account_center()
+
+    @app.route("/static/<path:filename>")
+    def cloned_static_asset(filename: str):
+        return send_from_directory(STATIC_DIR / "static", filename)
 
     @app.route("/<path:filename>")
     def landing_asset(filename: str):
         if filename not in STATIC_FILES:
             abort(404)
         return send_from_directory(STATIC_DIR, filename)
+
+    @app.route("/iflyrec/<path:filename>")
+    def iflyrec_asset(filename: str):
+        return send_from_directory(STATIC_DIR / "iflyrec", filename)
+
+    @app.route("/<asset_root>/<path:filename>")
+    def cloned_remote_asset(asset_root: str, filename: str):
+        if asset_root not in ASSET_ROOTS:
+            abort(404)
+        return send_from_directory(STATIC_DIR / asset_root, filename)
 
     return app
 

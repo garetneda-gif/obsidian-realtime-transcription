@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "buildCommand": "echo skip plugin build",
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "billing-server/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.py"
+    }
+  ]
+}
