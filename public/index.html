@@ -1,1759 +1,205 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Obsidian RealTime Transcriber 账户中心</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --blue: #1768ff;
-      --ink: #0f172a;
-      --muted: #64748b;
-      --line: #e5edf7;
-      --panel: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
-      background: #f7fbff;
-      color: var(--ink);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      padding: 56px 18px 72px;
-      background: #f4f4f2;
-      overflow-x: hidden;
-    }
-    body::before { display: none; }
-    button, input { font: inherit; }
-    button {
-      border: 0;
-      cursor: pointer;
-      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
-    }
-    button:disabled {
-      opacity: .55;
-      cursor: default;
-      transform: none;
-    }
-    button:not(:disabled):active { transform: translateY(1px); }
-    .shell {
-      position: relative;
-      width: min(1180px, 100%);
-      margin: 0 auto;
-    }
-    .brand {
-      display: none;
-      align-items: center;
-      gap: 12px;
-      margin: 0 0 28px;
-      color: #0f172a;
-      font-weight: 750;
-      letter-spacing: 0;
-    }
-    .brand img {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      box-shadow: 0 10px 26px rgba(23, 104, 255, .14);
-    }
-    main {
-      position: relative;
-      overflow: visible;
-      width: 100%;
-      min-height: 0;
-      padding: 0;
-      background: transparent;
-      border: 0;
-      border-radius: 0;
-      box-shadow: none;
-      backdrop-filter: none;
-    }
-    main::after { display: none; }
-    .content {
-      position: relative;
-      z-index: 1;
-    }
-    .hero {
-      display: flex;
-      justify-content: center;
-      padding: 8px 0 26px;
-      border-bottom: 0;
-    }
-    .hero-lockup {
-      display: block;
-      max-width: 760px;
-      text-align: center;
-    }
-    .hero-icon { display: none; }
-    h1 {
-      margin: 0 0 10px;
-      max-width: none;
-      font: 760 34px/1.15 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
-      letter-spacing: 0;
-      color: #0c1426;
-    }
-    p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.75;
-    }
-    .hero p { display: none; }
-    .status {
-      min-height: 24px;
-      margin-top: 16px;
-      color: #315784;
-      font-weight: 650;
-    }
-    .panel {
-      margin-top: 24px;
-      padding: 22px;
-      background: linear-gradient(135deg, rgba(248, 251, 255, .98), rgba(255, 255, 255, .98));
-      border: 1px solid var(--line);
-      border-radius: 20px;
-    }
-    .pricing-top { display: none; }
-    .pricing-kicker { display: none; }
-    .pricing-top h2 { margin: 0; }
-    .account-strip {
-      display: flex;
-      justify-content: center;
-      margin-top: 22px;
-    }
-    .account-chip {
-      min-width: 270px;
-      padding: 16px;
-      border: 1px solid #dedede;
-      border-radius: 16px;
-      background: var(--panel);
-    }
-    .account-email {
-      margin-bottom: 6px;
-      color: var(--muted);
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
-    .money {
-      color: var(--ink);
-      font-size: 30px;
-      font-weight: 850;
-      line-height: 1;
-      letter-spacing: 0;
-    }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-    .btn {
-      min-height: 44px;
-      padding: 12px 18px;
-      border-radius: 14px;
-      background: #fff;
-      border: 1px solid #dce7f5;
-      color: var(--ink);
-      font-weight: 780;
-      box-shadow: 0 8px 22px rgba(15, 23, 42, .04);
-    }
-    .btn:hover {
-      border-color: #9ec5ff;
-      color: var(--blue);
-      transform: translateY(-1px);
-    }
-    .btn.primary {
-      background: linear-gradient(135deg, #1768ff, #2d86ff);
-      border-color: transparent;
-      color: #fff;
-      box-shadow: 0 14px 30px rgba(23, 104, 255, .22);
-    }
-    .btn.primary:hover {
-      color: #fff;
-      box-shadow: 0 18px 36px rgba(23, 104, 255, .28);
-    }
-    .provider-tabs {
-      justify-content: center;
-      margin: -8px 0 24px;
-      padding: 4px;
-      border-radius: 999px;
-      background: #ececea;
-      width: fit-content;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .provider-tabs .btn {
-      min-width: 136px;
-      min-height: 38px;
-      padding: 8px 18px;
-      border-radius: 999px;
-      background: transparent;
-      color: #5d5d5d;
-      border-color: transparent;
-      box-shadow: none;
-    }
-    .provider-tabs .btn.selected {
-      background: #fff;
-      color: #171717;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
-    }
-    .plans {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 18px;
-      margin-top: 0;
-    }
-    .plan {
-      display: flex;
-      flex-direction: column;
-      min-height: 520px;
-      padding: 24px;
-      text-align: left;
-      background: #fff;
-      border: 1px solid #dedede;
-      border-radius: 9px;
-      box-shadow: none;
-    }
-    .plan:hover {
-      border-color: #bdbdbd;
-    }
-    .plan.featured {
-      border-color: #171717;
-      box-shadow: 0 0 0 1px #171717 inset;
-    }
-    .plan strong {
-      color: var(--ink);
-      font-size: 22px;
-    }
-    .plan p {
-      font-size: 14px;
-      line-height: 1.55;
-    }
-    .plan .price {
-      margin: 18px 0 12px;
-      color: var(--ink);
-      font-size: 38px;
-      font-weight: 850;
-      line-height: 1;
-    }
-    .plan .price small {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-    }
-    .plan-features {
-      display: grid;
-      gap: 12px;
-      margin: 22px 0 24px;
-      padding: 0;
-      list-style: none;
-    }
-    .plan-features li {
-      display: flex;
-      gap: 10px;
-      color: #273244;
-      font-size: 14px;
-      line-height: 1.35;
-    }
-    .plan-features li::before {
-      content: "✓";
-      color: var(--ink);
-      font-weight: 850;
-    }
-    .plan .btn {
-      width: 100%;
-      margin-top: auto;
-      border-radius: 999px;
-    }
-    .usage-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: end;
-      margin-bottom: 12px;
-    }
-    .usage-head h2 {
-      margin: 0 0 6px;
-      font-size: 20px;
-      letter-spacing: 0;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      overflow: hidden;
-      border-radius: 14px;
-    }
-    th, td {
-      text-align: left;
-      border-bottom: 1px solid #edf2f8;
-      padding: 13px 8px;
-      color: #516071;
-      font-size: 14px;
-    }
-    th {
-      color: var(--ink);
-      font-size: 13px;
-      font-weight: 820;
-    }
-    tbody tr:last-child td { border-bottom: 0; }
-    .empty {
-      margin-top: 12px;
-      padding: 18px;
-      border: 1px dashed #cfdced;
-      border-radius: 14px;
-      color: var(--muted);
-      background: rgba(255, 255, 255, .72);
-    }
-    body.is-auth {
-      display: grid;
-      place-items: center;
-      padding: 32px 18px;
-      background:
-        linear-gradient(rgba(15, 23, 42, .46), rgba(15, 23, 42, .46)),
-        radial-gradient(circle at 20% 18%, rgba(76, 200, 255, .18), transparent 30%),
-        radial-gradient(circle at 82% 22%, rgba(23, 104, 255, .16), transparent 30%),
-        linear-gradient(180deg, #f8fbff 0%, #ffffff 58%, #f8fbff 100%);
-    }
-    body.is-auth .shell {
-      width: min(1024px, 100%);
-    }
-    body.is-auth .brand,
-    body.is-auth .hero {
-      display: none;
-    }
-    body.is-auth main {
-      min-height: 0;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      box-shadow: none;
-      backdrop-filter: none;
-    }
-    body.is-auth main::after {
-      display: none;
-    }
-    .login-card {
-      position: relative;
-      max-width: 1024px;
-      margin: 0 auto;
-      padding: 48px 52px;
-      background: rgba(255, 255, 255, .94);
-      border: 1px solid rgba(220, 231, 245, .9);
-      border-radius: 30px;
-      box-shadow: 0 32px 90px rgba(15, 23, 42, .16);
-    }
-    .login-card h2 {
-      margin: 0 0 24px;
-      font: 760 38px/1.12 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
-      letter-spacing: 0;
-    }
-    .auth-close {
-      position: absolute;
-      right: 40px;
-      top: 40px;
-      width: 62px;
-      height: 62px;
-      border-radius: 999px;
-      background: #f2f4f8;
-      color: #1f2937;
-      font-size: 42px;
-      font-weight: 300;
-      line-height: 1;
-    }
-    .auth-tabs {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 4px;
-      margin-bottom: 24px;
-      padding: 6px;
-      border-radius: 18px;
-      background: #f2f5fb;
-    }
-    body.is-auth .grid {
-      grid-template-columns: 1fr;
-      gap: 18px;
-    }
-    body.is-auth input {
-      height: 64px;
-      border-radius: 14px;
-      font-size: 17px;
-    }
-    body.is-auth .btn.primary {
-      min-height: 72px;
-      border-radius: 18px;
-      font-size: 20px;
-    }
-    body.is-auth .captcha-row img,
-    body.is-auth .code-row .btn {
-      height: 64px;
-    }
-    .auth-tabs button {
-      min-height: 54px;
-      border-radius: 14px;
-      background: transparent;
-      color: #536173;
-      font-size: 16px;
-      font-weight: 780;
-    }
-    .auth-tabs button.selected {
-      background: #fff;
-      color: var(--blue);
-      box-shadow: 0 10px 26px rgba(23, 104, 255, .12);
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 16px;
-    }
-    label {
-      display: grid;
-      gap: 8px;
-      color: #455468;
-      font-weight: 760;
-    }
-    input {
-      width: 100%;
-      height: 50px;
-      border: 1px solid #d8e2ef;
-      border-radius: 14px;
-      padding: 0 14px;
-      color: var(--ink);
-      background: #fff;
-      outline: 0;
-    }
-    input:focus {
-      border-color: #8dbdff;
-      box-shadow: 0 0 0 4px rgba(23, 104, 255, .1);
-    }
-    .login-actions, .oauth-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 18px;
-    }
-    .login-actions {
-      grid-template-columns: 1fr;
-    }
-    .code-row, .captcha-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: end;
-    }
-    .code-row .btn {
-      height: 50px;
-      white-space: nowrap;
-    }
-    .captcha-row img {
-      width: 118px;
-      height: 50px;
-      object-fit: cover;
-      border: 1px solid #d8e2ef;
-      border-radius: 14px;
-      background: #fff;
-      cursor: pointer;
-    }
-    .captcha-row img:not([src]), .captcha-row img[src=""] {
-      display: none;
-    }
-    .mode-link {
-      border: 0;
-      background: transparent;
-      color: var(--blue);
-      font-weight: 760;
-      margin-top: 12px;
-      padding: 0;
-    }
-    .divider {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 22px 0 14px;
-      color: #8792a2;
-      font-size: 13px;
-      font-weight: 650;
-    }
-    .divider::before, .divider::after {
-      content: "";
-      height: 1px;
-      flex: 1;
-      background: #e7edf6;
-    }
-    .oauth-actions:empty { display: none; }
-    .order-panel {
-      border-color: #bcd8ff;
-      background: linear-gradient(135deg, #f4f9ff, #fff);
-    }
-    .hidden { display: none !important; }
-    @media (max-width: 760px) {
-      body { padding: 22px 12px; }
-      main { padding: 0; border-radius: 0; }
-      .hero, .pricing-top, .grid, .plans, .login-actions, .oauth-actions, .code-row, .captcha-row {
-        grid-template-columns: 1fr;
-      }
-      .pricing-top { align-items: stretch; }
-      .account-chip { min-width: 0; }
-      .plan { min-height: 0; }
-      .hero-lockup { flex-direction: column; }
-      h1 { font-size: 32px; }
-      .money { font-size: 38px; }
-      .usage-head { align-items: flex-start; flex-direction: column; }
-      table { min-width: 560px; }
-      .table-scroll { overflow-x: auto; }
-    }
-    body.is-auth {
-      padding: 32px 20px;
-      background:
-        linear-gradient(rgba(255, 255, 255, .08), rgba(238, 246, 255, .18)),
-        url("static/imgs/zhuanwenzi2026/login-bg-light-gptimage2.png") center / cover no-repeat,
-        #f7fbff;
-      backdrop-filter: none;
-    }
-    body.is-auth::before {
-      opacity: .16;
-      background-image: radial-gradient(rgba(23,104,255,.18) 1px, transparent 1px);
-      mask-image: none;
-    }
-    body.is-auth .shell {
-      width: min(520px, 100%);
-    }
-    .cnu-auth-wrap {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: calc(100vh - 64px);
-    }
-    .cnu-auth-stack {
-      width: 100%;
-      max-width: 480px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 18px;
-    }
-    .cnu-auth-copy {
-      text-align: center;
-      color: #0c1426;
-      text-shadow: none;
-    }
-    .cnu-auth-title {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
-    .cnu-auth-mark {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      height: 44px;
-    }
-    .cnu-auth-mark img {
-      width: 34px;
-      height: 34px;
-      filter: drop-shadow(0 8px 14px rgba(23,104,255,.12));
-    }
-    .cnu-auth-wave {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      height: 30px;
-    }
-    .cnu-auth-wave i {
-      width: 4px;
-      height: 14px;
-      border-radius: 999px;
-      background: linear-gradient(180deg, #71c7ff, #1768ff);
-      animation: micWave 1.15s ease-in-out infinite;
-      opacity: .82;
-    }
-    .cnu-auth-wave i:nth-child(2) { height: 24px; animation-delay: .14s; }
-    .cnu-auth-wave i:nth-child(3) { height: 16px; animation-delay: .28s; }
-    .cnu-auth-wave.is-left { transform: scaleX(-1); }
-    @keyframes micWave {
-      0%, 100% { transform: scaleY(.58); opacity: .42; }
-      50% { transform: scaleY(1); opacity: .92; }
-    }
-    .cnu-auth-copy h1 {
-      margin: 0;
-      color: inherit;
-      font: 400 clamp(32px, 4vw, 42px)/1.08 Georgia, "Times New Roman", "Songti SC", serif;
-    }
-    .cnu-auth-copy p {
-      max-width: 420px;
-      margin: 0 auto;
-      color: rgba(255, 250, 243, .72);
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .cnu-auth-card {
-      position: relative;
-      isolation: isolate;
-      overflow: visible;
-      width: 100%;
-      max-width: 420px;
-      margin: 0;
-      padding: 44px 40px;
-      background: linear-gradient(160deg, rgba(247,251,255,.96) 0%, rgba(225,237,255,.90) 55%, rgba(197,218,255,.84) 100%);
-      backdrop-filter: blur(32px) saturate(1.7);
-      border: 1px solid rgba(255,255,255,.58);
-      border-radius: 22px;
-      box-shadow:
-        inset 0 1.5px 0 rgba(255,255,255,.92),
-        inset 0 -1px 0 rgba(23,104,255,.18),
-        0 3px 10px rgba(0,0,0,.06),
-        0 24px 72px rgba(16,51,120,.24);
-    }
-    .cnu-auth-card::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      border-radius: inherit;
-      z-index: 0;
-      background:
-        radial-gradient(130% 60% at 0 0, rgba(255,255,255,.55), transparent 48%),
-        radial-gradient(120% 55% at 100% 100%, rgba(76,200,255,.28), transparent 50%);
-      mix-blend-mode: overlay;
-      opacity: .92;
-    }
-    .cnu-auth-card > * {
-      position: relative;
-      z-index: 1;
-    }
-    .cnu-auth-tabs {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 16px;
-      border-radius: 999px;
-      padding: 5px;
-      background: linear-gradient(145deg, rgba(238,245,255,.96), rgba(218,232,255,.9));
-      border: 1px solid rgba(255,255,255,.62);
-      box-shadow: inset 0 1px 2px rgba(15,30,70,.08), 0 8px 22px rgba(16,51,120,.10);
-    }
-    .cnu-auth-tabs button {
-      flex: 1;
-      min-height: 0;
-      padding: 9px 14px;
-      border: 0;
-      border-radius: 999px;
-      background: transparent;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 650;
-    }
-    .cnu-auth-tabs button.selected {
-      background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(255,255,255,.62));
-      color: var(--ink);
-      box-shadow: inset 0 1.2px 0 rgba(255,255,255,.9), 0 8px 18px rgba(23,104,255,.10);
-    }
-    .cnu-auth-field {
-      display: block;
-      margin-bottom: 14px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 560;
-      letter-spacing: .3px;
-    }
-    .cnu-auth-label {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    .cnu-auth-input,
-    .cnu-auth-field input {
-      width: 100%;
-      height: auto;
-      padding: 14px 16px;
-      border: 1px solid transparent;
-      border-radius: 12px;
-      background: #f5f5f7;
-      color: var(--ink);
-      font-size: 16px;
-      outline: none;
-    }
-    .cnu-auth-input:focus,
-    .cnu-auth-field input:focus {
-      background: #fff;
-      border-color: var(--blue);
-      box-shadow: 0 0 0 4px rgba(23,104,255,.12);
-    }
-    .cnu-code-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    .cnu-code-digit {
-      flex: 1;
-      min-width: 0;
-      height: 46px !important;
-      padding: 0 !important;
-      text-align: center;
-      font: 650 20px ui-monospace, SFMono-Regular, Menlo, monospace !important;
-      background: #fff !important;
-      border: 1.5px solid #d8e2ef !important;
-      border-radius: 8px !important;
-    }
-    .cnu-code-sep {
-      width: 10px;
-      height: 2px;
-      background: #d8e2ef;
-      border-radius: 1px;
-      flex-shrink: 0;
-    }
-    .cnu-auth-send-code {
-      border: 0;
-      background: transparent;
-      padding: 0;
-      color: var(--blue);
-      font-size: 12px;
-      font-weight: 650;
-    }
-    .cnu-auth-captcha {
-      margin-bottom: 14px;
-    }
-    .cnu-auth-captcha-head {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    .cnu-auth-captcha-copy {
-      display: flex;
-      gap: 8px;
-      align-items: baseline;
-      flex: 1;
-      color: var(--muted);
-    }
-    .cnu-auth-captcha-title {
-      font-size: 12px;
-      font-weight: 560;
-    }
-    .cnu-auth-captcha-status {
-      font-size: 11px;
-      opacity: .72;
-    }
-    .cnu-auth-captcha-action {
-      border: 1px solid rgba(23,104,255,.18);
-      border-radius: 999px;
-      background: #fff;
-      color: var(--ink);
-      padding: 5px 14px;
-      font-size: 11.5px;
-      font-weight: 650;
-    }
-    .cnu-auth-captcha-body {
-      display: flex;
-      align-items: stretch;
-      gap: 8px;
-      padding: 4px;
-      background: #f5f5f7;
-      border-radius: 12px;
-    }
-    .cnu-auth-captcha-body img {
-      width: 104px;
-      height: 38px;
-      object-fit: cover;
-      border: 0;
-      border-radius: 8px;
-      background: #fff;
-      cursor: pointer;
-    }
-    .cnu-auth-captcha-body .cnu-auth-input {
-      height: 38px;
-      padding: 0 12px;
-      border: 0;
-      background: transparent;
-      font: 560 14px ui-monospace, SFMono-Regular, Menlo, monospace;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-    .cnu-auth-primary {
-      width: 100%;
-      min-height: 0;
-      padding: 14px 40px;
-      border: 0;
-      border-radius: 999px;
-      background: var(--blue);
-      color: #fff;
-      font-size: 17px;
-      font-weight: 560;
-      box-shadow: none;
-    }
-    .cnu-auth-modelink {
-      display: block;
-      margin: 12px auto 0;
-      border: 0;
-      background: transparent;
-      color: var(--muted);
-      padding: 0;
-      font-size: 12px;
-      font-weight: 560;
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-    .cnu-auth-feedback {
-      margin: 0 0 10px;
-      padding: 0;
-      border-radius: 0;
-      background: transparent;
-      color: #c53030;
-      border: 0;
-      font-size: 12.5px;
-      line-height: 1.5;
-    }
-    .cnu-auth-feedback:empty {
-      display: none;
-    }
-    .cnu-auth-divider {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 16px 0 12px;
-      color: #86868b;
-      font-size: 12px;
-    }
-    .cnu-auth-divider::before,
-    .cnu-auth-divider::after {
-      content: "";
-      flex: 1;
-      height: 1px;
-      background: rgba(0,0,0,.08);
-    }
-    .cnu-auth-oauth {
-      display: flex;
-      gap: 10px;
-      margin: 0;
-    }
-    .cnu-auth-oauth .btn {
-      flex: 1;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-height: 0;
-      border-radius: 999px;
-      padding: 11px 14px;
-      background: rgba(255,255,255,.58);
-      border-color: rgba(255,255,255,.55);
-      font-size: 12.5px;
-      white-space: nowrap;
-      box-shadow: 0 8px 20px rgba(23,104,255,.07);
-    }
-    .cnu-auth-oauth svg {
-      width: 18px;
-      height: 18px;
-      flex: 0 0 auto;
-    }
-    .cnu-auth-close {
-      position: fixed;
-      top: 28px;
-      right: 28px;
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border: 1px solid rgba(23,104,255,.14);
-      border-radius: 999px;
-      background: rgba(255,255,255,.82);
-      color: #0c1426;
-      font-size: 0;
-      box-shadow: 0 10px 24px rgba(30, 80, 140, .12);
-    }
-    .cnu-auth-close::before,
-    .cnu-auth-close::after {
-      content: "";
-      position: absolute;
-      width: 18px;
-      height: 2px;
-      border-radius: 2px;
-      background: currentColor;
-    }
-    .cnu-auth-close::before { transform: rotate(45deg); }
-    .cnu-auth-close::after { transform: rotate(-45deg); }
-    @media (max-width: 760px) {
-      body.is-auth { padding: 18px 12px; }
-      .cnu-auth-card { padding: 26px 22px; }
-      .cnu-auth-copy h1 { font-size: 28px; }
-      .cnu-auth-copy p { display: none; }
-      .cnu-auth-oauth { flex-direction: column; }
-    }
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Obsidian Realtime Transcription - 云端实时转写</title>
+    <meta name="description" content="Obsidian 实时语音转写插件：本地免费，云端付费零配置，支持会议、课堂、访谈和长音频笔记。">
+    <link rel="icon" href="favicon.ico">
+    <link rel="stylesheet" href="site.css">
+  </head>
+  <body>
+    <div class="site-shell">
+      <div class="grid-layer" aria-hidden="true"></div>
+      <div class="grain-layer" aria-hidden="true"></div>
 
-    body:not(.is-auth) {
-      padding: 66px 24px 54px;
-      background: #f4f4f4;
-      color: #171717;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    }
-    body:not(.is-auth) .shell {
-      width: min(1010px, 100%);
-    }
-    body:not(.is-auth) .content,
-    body:not(.is-auth) main {
-      width: 100%;
-    }
-    body:not(.is-auth) .hero {
-      display: none;
-    }
-    .account-page-close {
-      position: fixed;
-      top: 26px;
-      right: 30px;
-      z-index: 20;
-      width: 34px;
-      height: 34px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      background: transparent;
-      color: #676767;
-      font-size: 30px;
-      font-weight: 250;
-      line-height: 1;
-      box-shadow: none;
-    }
-    .account-page-close:hover {
-      background: #ececec;
-      color: #171717;
-      transform: none;
-    }
-    .pricing-clone {
-      min-height: calc(100vh - 120px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .pricing-clone-title {
-      margin: 0 0 24px;
-      color: #171717;
-      font-size: 21px;
-      font-weight: 650;
-      line-height: 1.25;
-      text-align: center;
-    }
-    .pricing-clone .provider-tabs {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 0;
-      width: 280px;
-      height: 36px;
-      margin: 0 auto 22px;
-      padding: 3px;
-      border: 0;
-      border-radius: 999px;
-      background: #ececec;
-      box-shadow: none;
-    }
-    .pricing-clone .provider-tabs .btn {
-      flex: 1;
-      min-width: 0;
-      min-height: 30px;
-      height: 30px;
-      padding: 0 14px;
-      border: 0;
-      border-radius: 999px;
-      background: transparent;
-      color: #777;
-      font-size: 12px;
-      font-weight: 600;
-      box-shadow: none;
-    }
-    .pricing-clone .provider-tabs .btn.selected {
-      background: #fff;
-      color: #171717;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, .14);
-    }
-    .pricing-clone .plans {
-      width: 100%;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 18px;
-      margin: 0 auto;
-    }
-    .pricing-clone .plan {
-      min-height: 578px;
-      display: flex;
-      flex-direction: column;
-      padding: 24px 24px 20px;
-      border: 1px solid #dedede;
-      border-radius: 8px;
-      background: #fff;
-      color: #171717;
-      box-shadow: none;
-    }
-    .pricing-clone .plan:hover {
-      border-color: #c9c9c9;
-      transform: none;
-    }
-    .pricing-clone .plan.featured {
-      border-color: #dedede;
-      box-shadow: none;
-    }
-    .plan-title-row {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      min-height: 30px;
-    }
-    .plan-title-row strong {
-      color: #171717;
-      font-size: 22px;
-      font-weight: 650;
-      line-height: 1.2;
-      letter-spacing: 0;
-    }
-    .plan-badge {
-      flex: 0 0 auto;
-      margin-top: -2px;
-      padding: 4px 9px;
-      border-radius: 999px;
-      background: #f0f0f0;
-      color: #5f5f5f;
-      font-size: 12px;
-      font-weight: 650;
-    }
-    .pricing-clone .price {
-      display: flex;
-      align-items: flex-end;
-      gap: 5px;
-      margin: 20px 0 12px;
-      color: #111;
-      font-size: 40px;
-      font-weight: 650;
-      line-height: .95;
-      letter-spacing: 0;
-    }
-    .pricing-clone .price .currency {
-      align-self: flex-start;
-      margin-top: 4px;
-      color: #777;
-      font-size: 17px;
-      font-weight: 500;
-      line-height: 1;
-    }
-    .pricing-clone .price small {
-      margin-bottom: 4px;
-      color: #696969;
-      font-size: 10px;
-      font-weight: 600;
-      line-height: 1;
-      white-space: nowrap;
-    }
-    .plan-outcome {
-      min-height: 38px;
-      margin: 0 0 26px;
-      color: #171717;
-      font-size: 14px;
-      font-weight: 650;
-      line-height: 1.45;
-    }
-    .pricing-clone .plan .btn {
-      width: 100%;
-      min-height: 36px;
-      margin: 0 0 22px;
-      padding: 8px 16px;
-      border: 1px solid #dedede;
-      border-radius: 999px;
-      background: #fff;
-      color: #171717;
-      font-size: 13px;
-      font-weight: 650;
-      box-shadow: none;
-    }
-    .pricing-clone .plan .btn.primary {
-      border-color: #171717;
-      background: #171717;
-      color: #fff;
-      box-shadow: none;
-    }
-    .pricing-clone .plan .btn:hover {
-      border-color: #171717;
-      background: #f7f7f7;
-      color: #171717;
-      transform: none;
-    }
-    .pricing-clone .plan .btn.primary:hover {
-      background: #000;
-      color: #fff;
-    }
-    .plan-includes {
-      margin: 0 0 13px;
-      color: #171717;
-      font-size: 13px;
-      font-weight: 650;
-      line-height: 1.4;
-    }
-    .pricing-clone .plan-features {
-      display: grid;
-      gap: 15px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .pricing-clone .plan-features li {
-      display: grid;
-      grid-template-columns: 18px 1fr;
-      align-items: start;
-      gap: 10px;
-      color: #242424;
-      font-size: 13px;
-      line-height: 1.35;
-    }
-    .pricing-clone .plan-features li::before {
-      content: "";
-      display: none;
-    }
-    .feature-icon {
-      width: 16px;
-      height: 16px;
-      display: inline-grid;
-      place-items: center;
-      color: #171717;
-      font-size: 14px;
-      line-height: 1;
-    }
-    .account-strip {
-      width: 100%;
-      justify-content: center;
-      margin-top: 28px;
-    }
-    body:not(.is-logged-in) .account-strip {
-      display: none;
-    }
-    .account-chip {
-      width: min(420px, 100%);
-      min-width: 0;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 14px 18px;
-      align-items: center;
-      padding: 16px 18px;
-      border: 1px solid #dedede;
-      border-radius: 8px;
-      background: #fff;
-    }
-    .account-email {
-      margin: 0;
-      color: #6f6f6f;
-      font-size: 13px;
-      font-weight: 600;
-      line-height: 1.3;
-    }
-    .money {
-      color: #171717;
-      font-size: 23px;
-      font-weight: 650;
-      line-height: 1;
-    }
-    .account-actions {
-      grid-column: 1 / -1;
-      display: flex;
-      gap: 10px;
-      margin: 0;
-    }
-    .account-actions .btn {
-      min-height: 34px;
-      padding: 7px 15px;
-      border: 1px solid #dedede;
-      border-radius: 999px;
-      background: #fff;
-      color: #171717;
-      font-size: 13px;
-      font-weight: 650;
-      box-shadow: none;
-    }
-    .account-status {
-      min-height: 18px;
-      margin: 0 0 12px;
-      color: #6f6f6f;
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 1.4;
-      text-align: center;
-    }
-    body:not(.is-auth) .panel {
-      width: min(680px, 100%);
-      margin: 24px auto 0;
-      padding: 18px;
-      border: 1px solid #dedede;
-      border-radius: 8px;
-      background: #fff;
-      box-shadow: none;
-    }
-    body:not(.is-auth) .usage-head h2 {
-      font-size: 15px;
-      font-weight: 650;
-    }
-    body:not(.is-auth) th,
-    body:not(.is-auth) td {
-      border-bottom-color: #e8e8e8;
-      color: #535353;
-      font-size: 12px;
-    }
-    @media (max-width: 900px) {
-      body:not(.is-auth) {
-        padding: 54px 16px 38px;
-      }
-      .pricing-clone .plans {
-        grid-template-columns: 1fr;
-        max-width: 430px;
-      }
-      .pricing-clone .plan {
-        min-height: auto;
-      }
-      .account-page-close {
-        top: 16px;
-        right: 18px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="shell">
-    <div class="brand">
-      <img src="static/imgs/zhuanwenzi2026/brand-recording-icon.png" alt="">
-      <span>Obsidian RealTime Transcriber</span>
-    </div>
-
-    <main>
-      <div class="content">
-        <div class="hero">
-          <div class="hero-lockup">
-            <img class="hero-icon" src="static/imgs/zhuanwenzi2026/brand-recording-icon.png" alt="">
-            <div>
-              <h1>选择套餐</h1>
-              <p>充值后在 Obsidian 插件里直接使用云端 ASR。余额按实际转写时长扣除，不用订阅。</p>
-            </div>
-          </div>
+      <header class="site-header">
+        <a class="brand" href="#top" aria-label="Obsidian Realtime Transcription">
+          <img src="paid-site-mark.svg" alt="" class="brand-mark">
+          <span>Realtime Transcription</span>
+          <span class="version">Cloud · preview</span>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="#features">功能</a>
+          <a href="#pricing">价格</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <div class="header-actions">
+          <button class="language-toggle" type="button" aria-label="Switch language" data-language-toggle>EN</button>
+          <a class="ghost-link" href="#pricing">开始充值</a>
         </div>
+      </header>
 
-        <section id="login-panel" class="login-scene cnu-auth-wrap hidden">
-          <button class="cnu-auth-close" type="button" onclick="location.href='/'" aria-label="关闭登录"></button>
-          <div class="login-stack cnu-auth-stack">
-            <section class="login-copy cnu-auth-copy" aria-label="产品介绍">
-              <div class="cnu-auth-title">
-                <span class="cnu-auth-mark">
-                  <span class="cnu-auth-wave is-left" aria-hidden="true"><i></i><i></i><i></i></span>
-                  <img src="static/imgs/zhuanwenzi2026/lucide-mic.svg" alt="">
-                  <span class="cnu-auth-wave" aria-hidden="true"><i></i><i></i><i></i></span>
-                </span>
-                <h1>Obsidian RealTime<br>Transcriber</h1>
-              </div>
-            </section>
-            <form class="login-card cnu-auth-card" onsubmit="event.preventDefault();">
-              <h2 id="auth-title" class="hidden">登录账号</h2>
-              <div class="auth-tabs cnu-auth-tabs" role="tablist">
-                <button id="login-tab" class="selected" type="button" data-auth-mode="login" role="tab" aria-selected="true">登录</button>
-                <button id="register-tab" type="button" data-auth-mode="register" role="tab" aria-selected="false">注册</button>
-              </div>
-              <p class="status cnu-auth-feedback" id="status"></p>
-              <label class="cnu-auth-field">邮箱
-                <input id="email" class="cnu-auth-input" type="email" autocomplete="email" placeholder="name@example.com">
-              </label>
-              <label id="password-field" class="cnu-auth-field">密码
-                <input id="password" class="cnu-auth-input" type="password" autocomplete="current-password" placeholder="输入密码">
-              </label>
-              <label id="confirm-field" class="cnu-auth-field hidden">确认密码
-                <input id="confirm-password" class="cnu-auth-input" type="password" autocomplete="new-password" placeholder="再次输入密码">
-              </label>
-              <div id="code-field" class="cnu-auth-field hidden">
-                <div class="cnu-auth-label">
-                  <span>邮箱验证码</span>
-                  <button class="cnu-auth-send-code" id="send-code-btn" type="button">获取验证码</button>
-                </div>
-                <input id="email-code" type="hidden" autocomplete="one-time-code">
-                <div class="cnu-code-row" aria-label="输入 6 位邮箱验证码">
-                  <input class="cnu-code-digit" data-code-digit type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code">
-                  <input class="cnu-code-digit" data-code-digit type="text" inputmode="numeric" maxlength="1">
-                  <input class="cnu-code-digit" data-code-digit type="text" inputmode="numeric" maxlength="1">
-                  <span class="cnu-code-sep" aria-hidden="true"></span>
-                  <input class="cnu-code-digit" data-code-digit type="text" inputmode="numeric" maxlength="1">
-                  <input class="cnu-code-digit" data-code-digit type="text" inputmode="numeric" maxlength="1">
-                  <input class="cnu-code-digit" data-code-digit type="text" inputmode="numeric" maxlength="1">
-                </div>
-              </div>
-              <div id="captcha-field" class="cnu-auth-captcha">
-                <div class="cnu-auth-captcha-head">
-                  <div class="cnu-auth-captcha-copy">
-                    <span class="cnu-auth-captcha-title">安全验证</span>
-                    <span class="cnu-auth-captcha-status">识别下方图形中的字符</span>
-                  </div>
-                  <button id="captcha-refresh-btn" class="cnu-auth-captcha-action" type="button">换一张</button>
-                </div>
-                <div class="cnu-auth-captcha-body">
-                  <img id="captcha-image" alt="图形验证码" title="点击刷新">
-                  <input id="captcha-answer" class="cnu-auth-input is-mono" autocomplete="off" maxlength="8" placeholder="输入验证码">
-                </div>
-              </div>
-              <button class="btn primary cnu-auth-primary" id="auth-submit-btn" type="button">登录</button>
-              <button id="auth-method-btn" class="mode-link cnu-auth-modelink" type="button">换用邮箱验证码登录</button>
-              <div class="divider cnu-auth-divider">或</div>
-              <div class="oauth-actions cnu-auth-oauth" id="oauth-actions"></div>
-            </form>
+      <main id="top">
+        <section class="hero-section">
+          <div class="hero-badges">
+            <span>Obsidian 原生插件</span>
+            <span>本地 + 云端双引擎</span>
+            <span>中英日韩粤</span>
+          </div>
+          <img src="paid-site-mark.svg" alt="" class="hero-mark">
+          <h1>把每一次对话变成可检索的 Obsidian 笔记</h1>
+          <p class="hero-copy">本地模型免费跑，云端模式零配置。会议、课堂、访谈和灵感记录，边说边进库。</p>
+          <div class="hero-actions">
+            <a class="primary-button" href="#pricing">查看云端方案</a>
+            <a class="secondary-button" href="#install">继续使用本地免费版 →</a>
           </div>
         </section>
 
-        <section id="account-panel" class="pricing-clone">
-          <button class="account-page-close" type="button" onclick="location.href='/'" aria-label="关闭">×</button>
-          <h1 class="pricing-clone-title">选择套餐</h1>
-          <p class="status account-status" id="account-status"></p>
-
-          <div class="plans" id="plans"></div>
-
-          <div class="account-strip">
-            <div class="account-chip">
-              <p class="account-email" id="account-email">未登录</p>
-              <div class="money" id="balance">¥0.00</div>
-              <div class="account-actions">
-                <button class="btn" id="refresh-btn" type="button">刷新</button>
-                <button class="btn" id="logout-btn" type="button">退出登录</button>
-              </div>
+        <section class="feature-tabs" id="features" aria-labelledby="features-title">
+          <div class="section-kicker">Daily capture system</div>
+          <h2 id="features-title">录音、识别、整理，一条链路完成</h2>
+          <div class="tabs-layout">
+            <div class="tab-list" role="tablist" aria-label="Feature tabs">
+              <button class="tab-button is-active" type="button" role="tab" aria-selected="true" data-tab="capture">
+                <span>实时转写</span>
+                <small>边说边显示，自动分段</small>
+              </button>
+              <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="cloud">
+                <span>云端零配置</span>
+                <small>登录后直接使用腾讯云 ASR</small>
+              </button>
+              <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="notes">
+                <span>笔记工作流</span>
+                <small>摘要、润色、导出到 vault</small>
+              </button>
+            </div>
+            <div class="tab-stage">
+              <article class="tab-panel is-active" data-panel="capture">
+                <img src="actual-ui-live.webp" alt="Obsidian 转写界面预览">
+                <div>
+                  <h3>实时字幕不是终点，结构化笔记才是</h3>
+                  <p>16kHz 单声道采集、partial 稳定过滤、final 聚合输出，减少重复和回滚，让长时间录音保持可读。</p>
+                </div>
+              </article>
+              <article class="tab-panel" data-panel="cloud">
+                <img src="actual-ui-cloud.webp" alt="云端识别配置预览">
+                <div>
+                  <h3>不想装 Python，也能马上开始</h3>
+                  <p>云端付费模式免模型、免密钥、免后端进程管理。按实际使用时长结算，余额不足时自动提示充值。</p>
+                </div>
+              </article>
+              <article class="tab-panel" data-panel="notes">
+                <img src="actual-ui-summary.webp" alt="摘要和笔记导出预览">
+                <div>
+                  <h3>从原始语音到可复习资料</h3>
+                  <p>自动翻译、AI 摘要、二次摘要和手动/AI 命名导出，适合课堂、访谈、会议纪要和资料整理。</p>
+                </div>
+              </article>
             </div>
           </div>
         </section>
 
-        <section id="order-panel" class="panel order-panel hidden">
-          <p id="order-text"></p>
-          <div class="actions" style="margin-top: 16px;">
-            <button id="order-open-btn" class="btn primary" type="button">继续支付</button>
-            <button id="order-refresh-btn" class="btn" type="button">刷新订单</button>
+        <section class="pillars-section">
+          <div class="section-kicker">File over app, but for audio</div>
+          <h2>语音数据留在你的工作流里</h2>
+          <div class="pillar-grid">
+            <article>
+              <span>01</span>
+              <h3>本地优先</h3>
+              <p>SenseVoice-Small + sherpa-onnx 可离线运行。敏感会议、私密笔记和低延迟场景继续走本机。</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>按量云端</h3>
+              <p>不需要长期订阅，云端 ASR 按小时计费。注册送体验额度，之后按余额扣费。</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>OpenAI 兼容后处理</h3>
+              <p>翻译、润色、摘要都使用 OpenAI 兼容接口，DeepSeek、通义等模型可以直接接入。</p>
+            </article>
+            <article>
+              <span>04</span>
+              <h3>Obsidian 原生</h3>
+              <p>历史记录、转写卡片、导出文件和设置面板都在 Obsidian 内完成，不额外维护另一个知识库。</p>
+            </article>
           </div>
         </section>
 
-        <section id="usage-panel" class="panel hidden">
-          <div class="usage-head">
-            <div>
-              <h2>最近用量</h2>
-              <p id="usage-summary"></p>
-            </div>
+        <section class="testimonials-section">
+          <h2>为真实知识工作场景准备</h2>
+          <p>课堂、采访、会议、播客草稿、个人复盘，一套插件覆盖从录音到整理的日常链路。</p>
+          <div class="quote-row" aria-label="Use cases">
+            <article><b>课堂复习</b><span>录完即得分段文本，导出后直接进入课程笔记。</span></article>
+            <article><b>会议纪要</b><span>长会议用云端稳定跑，结束后生成摘要和行动项。</span></article>
+            <article><b>访谈整理</b><span>中英混杂识别，后续润色成更适合发布的材料。</span></article>
           </div>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr><th>时间</th><th>模型</th><th>时长</th><th>费用</th></tr>
-              </thead>
-              <tbody id="usage-table"></tbody>
-            </table>
-          </div>
-          <div id="usage-empty" class="empty hidden">暂无云端转写用量。</div>
         </section>
 
-      </div>
-    </main>
-  </div>
-
-  <script>
-    const $ = (id) => document.getElementById(id);
-    let currentOrder = null;
-    let plans = [];
-    let providers = [];
-    let oauthProviders = [];
-    let selectedProvider = "xunhu";
-    let authMode = "login";
-    let authMethod = "password";
-    let loggedIn = false;
-    let captchaId = "";
-    let captchaImage = "";
-    let codeCooldown = 0;
-    let codeTimer = null;
-    const sessionKey = "ort.billing.browserSession.v2";
-    localStorage.removeItem("ort.billing.loggedIn");
-    const svgData = (svg) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-    const captchaFallback = svgData(`<svg xmlns="http://www.w3.org/2000/svg" width="104" height="38" viewBox="0 0 104 38">
-      <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#eef5ff"/><stop offset="1" stop-color="#d7e8ff"/></linearGradient></defs>
-      <rect width="104" height="38" rx="8" fill="url(#g)"/>
-      <path d="M5 24C20 9 36 32 52 17S83 5 99 23" fill="none" stroke="#8fb8ff" stroke-width="2" opacity=".55"/>
-      <text x="52" y="25" text-anchor="middle" font-family="Menlo, monospace" font-size="18" font-weight="700" letter-spacing="3" fill="#1768ff">R7K4</text>
-      <circle cx="17" cy="10" r="2" fill="#6fc8ff"/><circle cx="85" cy="29" r="2" fill="#1768ff"/>
-    </svg>`);
-    const oauthIcons = {
-      google: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h6.5c-.3 1.4-1.1 2.7-2.4 3.5v2.9h3.8c2.2-2 3.6-5 3.6-8.4Z"/><path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.1-4.1 1.1-3.1 0-5.7-2.1-6.7-4.9H1.4v3c1.9 3.9 5.9 6.6 10.6 6.6Z"/><path fill="#FBBC05" d="M5.3 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.6.4-2.4v-3H1.4C.5 8.2 0 10.1 0 12s.5 3.8 1.4 5.4l3.9-3Z"/><path fill="#EA4335" d="M12 4.7c1.7 0 3.3.6 4.5 1.8l3.4-3.4C17.9 1.2 15.2 0 12 0 7.3 0 3.3 2.7 1.4 6.6l3.9 3C6.3 6.8 8.9 4.7 12 4.7Z"/></svg>`,
-      github: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.2.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 .1.9 2.1 3.4 1.5.1-.8.4-1.3.7-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.3 11.3 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/></svg>`,
-    };
-    const authPaths = {
-      login: "/api/auth/login",
-      register: "/api/auth/register",
-      code: "/api/auth/verify-code",
-    };
-
-    function money(cents) {
-      return `¥${(Number(cents || 0) / 100).toFixed(2)}`;
-    }
-
-    function duration(seconds) {
-      const total = Math.max(0, Math.round(Number(seconds || 0)));
-      const minutes = Math.floor(total / 60);
-      const rest = total % 60;
-      return minutes ? `${minutes} 分 ${rest} 秒` : `${rest} 秒`;
-    }
-
-    function dateLabel(value) {
-      const date = new Date(value);
-      return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    }
-
-    function escapeHTML(value) {
-      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-      }[char]));
-    }
-
-    function status(text) {
-      $("status").textContent = text || "";
-      const accountStatus = $("account-status");
-      if (accountStatus) accountStatus.textContent = text || "";
-    }
-
-    function authNeedsCode() {
-      return authMode === "register" || (authMode === "login" && authMethod === "code");
-    }
-
-    function authNeedsPassword() {
-      return authMode === "register" || authMethod === "password";
-    }
-
-    function authNeedsCaptcha() {
-      return authMode === "register" || authMethod === "password";
-    }
-
-    function renderAuth() {
-      const isRegister = authMode === "register";
-      $("auth-title").textContent = isRegister ? "注册账号" : "登录账号";
-      $("login-tab").classList.toggle("selected", !isRegister);
-      $("register-tab").classList.toggle("selected", isRegister);
-      $("login-tab").setAttribute("aria-selected", String(!isRegister));
-      $("register-tab").setAttribute("aria-selected", String(isRegister));
-      $("password-field").classList.toggle("hidden", !authNeedsPassword());
-      $("confirm-field").classList.toggle("hidden", !isRegister);
-      $("code-field").classList.toggle("hidden", !authNeedsCode());
-      $("captcha-field").classList.toggle("hidden", !authNeedsCaptcha());
-      $("auth-submit-btn").textContent = isRegister ? "注册" : "登录";
-      $("password").autocomplete = isRegister ? "new-password" : "current-password";
-      $("auth-method-btn").classList.toggle("hidden", isRegister);
-      $("auth-method-btn").textContent = authMethod === "code" ? "使用密码登录" : "换用邮箱验证码登录";
-      $("send-code-btn").textContent = codeCooldown > 0 ? `${codeCooldown}s` : "发送验证码";
-      $("send-code-btn").disabled = codeCooldown > 0;
-      $("captcha-image").src = captchaImage || captchaFallback;
-    }
-
-    function syncCodeDigits() {
-      $("email-code").value = [...document.querySelectorAll("[data-code-digit]")].map((input) => input.value).join("");
-    }
-
-    async function loadCaptcha() {
-      if (!authNeedsCaptcha()) return;
-      const data = await api("/api/auth/captcha/image", { method: "POST", body: "{}" });
-      captchaId = data.captcha_id || "";
-      captchaImage = data.image || "";
-      renderAuth();
-    }
-
-    function startCodeCooldown() {
-      codeCooldown = 60;
-      clearInterval(codeTimer);
-      renderAuth();
-      codeTimer = setInterval(() => {
-        codeCooldown = Math.max(0, codeCooldown - 1);
-        if (codeCooldown === 0) clearInterval(codeTimer);
-        renderAuth();
-      }, 1000);
-    }
-
-    async function api(path, options = {}, retry = true) {
-      const resp = await fetch(path, {
-        ...options,
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          ...(options.headers || {}),
-        },
-      });
-      if (resp.status === 401 && retry) {
-        const refreshed = await fetch("/api/auth/refresh", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        });
-        if (refreshed.ok) return api(path, options, false);
-      }
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.error || data.message || resp.statusText);
-      }
-      return resp.json();
-    }
-
-    function setLoggedIn(loggedIn) {
-      window.loggedIn = loggedIn;
-      document.body.classList.remove("is-auth");
-      document.body.classList.toggle("is-logged-in", loggedIn);
-      $("login-panel").classList.add("hidden");
-      $("account-panel").classList.remove("hidden");
-      $("usage-panel").classList.toggle("hidden", !loggedIn);
-      $("account-email").textContent = loggedIn ? $("account-email").textContent : "未登录";
-      $("balance").textContent = loggedIn ? $("balance").textContent : "登录后查看余额";
-    }
-
-    function showLogin(message = "请先登录后再购买套餐") {
-      document.body.classList.add("is-auth");
-      $("login-panel").classList.remove("hidden");
-      $("account-panel").classList.add("hidden");
-      $("usage-panel").classList.add("hidden");
-      status(message);
-    }
-
-    async function loadAccount() {
-      const [account, usage] = await Promise.all([
-        api("/api/billing/me"),
-        api("/api/billing/usage"),
-      ]);
-      const records = usage.records || [];
-      setLoggedIn(true);
-      $("account-email").textContent = account.email || "已登录";
-      $("balance").textContent = money(account.balance_cents);
-      $("usage-summary").textContent = `最近 ${records.length} 条用量，共 ${duration(usage.total_seconds)}，费用 ${money(usage.total_cost_cents)}`;
-      $("usage-table").replaceChildren(...records.map((record) => {
-        const tr = document.createElement("tr");
-        [
-          dateLabel(record.created_at),
-          record.engine_model || "-",
-          duration(record.duration_seconds),
-          money(record.cost_cents),
-        ].forEach((text) => {
-          const td = document.createElement("td");
-          td.textContent = text;
-          tr.appendChild(td);
-        });
-        return tr;
-      }));
-      $("usage-empty").classList.toggle("hidden", records.length > 0);
-    }
-
-    async function loadPlans() {
-      const data = await api("/api/billing/plans");
-      plans = data.plans || [];
-      providers = data.providers || [];
-      selectedProvider = providers.includes(data.default_provider) ? data.default_provider : (providers[0] || "xunhu");
-      renderPlans();
-    }
-
-    async function loadOAuthProviders() {
-      const data = await api("/api/auth/oauth/providers");
-      oauthProviders = data.providers || [];
-      renderOAuthProviders();
-    }
-
-    function renderOAuthProviders() {
-      $("oauth-actions").replaceChildren(...oauthProviders.map((provider) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "btn";
-        const label = provider === "google" ? "使用 Google 登录" : "使用 GitHub 登录";
-        button.innerHTML = `${oauthIcons[provider] || ""}<span>${label}</span>`;
-        button.onclick = () => oauthLogin(provider).catch((e) => status(e.message));
-        return button;
-      }));
-    }
-
-    async function oauthLogin(provider) {
-      const returnUrl = `${location.origin}/account`;
-      const data = await api(`/api/auth/oauth/${provider}/authorize?return_url=${encodeURIComponent(returnUrl)}`);
-      location.href = data.url;
-    }
-
-    function renderPlans() {
-      $("plans").replaceChildren(...plans.map((plan, index) => {
-        const card = document.createElement("article");
-        const copy = [
-          {
-            outcome: "解锁云端转写，轻量试用",
-            includes: "包含：",
-            features: ["腾讯云实时 ASR", `约 ${plan.minutes} 分钟转写额度`, "Obsidian 插件内直接使用", "按实际识别时长扣费", "支付后自动到账"],
-          },
-          {
-            outcome: "覆盖课堂、会议和访谈的日常记录",
-            includes: "体验包中的所有内容，以及：",
-            features: ["更适合连续长段录音", `约 ${plan.minutes} 分钟转写额度`, "减少频繁充值打断", "余额长期保留", "最近用量和费用明细"],
-          },
-          {
-            outcome: "面向高频转写，集中处理更省心",
-            includes: "常用包中的所有内容，以及：",
-            features: ["适合课程、访谈和批量记录", `约 ${plan.minutes} 分钟转写额度`, "重度使用成本更稳定", "云端免密钥配置", "随时追加充值"],
-          },
-        ][index] || {
-          outcome: "云端实时转写额度",
-          includes: "包含：",
-          features: [`约 ${plan.minutes} 分钟转写额度`, "按实际使用扣费", "余额长期保留"],
-        };
-        const price = Number(plan.amount_yuan || 0).toFixed(2).replace(/\.00$/, "");
-        const badge = index === 1 ? `<span class="plan-badge">推荐</span>` : "";
-        card.className = `plan ${index === 1 ? "featured" : ""}`;
-        card.innerHTML = `
-          <div class="plan-title-row">
-            <strong>${escapeHTML(plan.name)}</strong>
-            ${badge}
+        <section class="pricing-section" id="pricing">
+          <div class="pricing-copy">
+            <div class="section-kicker">The stack you choose</div>
+            <h2>免费本地版继续保留，云端按需付费</h2>
+            <p>你可以一直使用本地模型。付费只用于零配置云端 ASR 和托管识别成本。</p>
           </div>
-          <div class="price"><span class="currency">¥</span>${escapeHTML(price)} <small>一次充值</small></div>
-          <p class="plan-outcome">${escapeHTML(copy.outcome)}</p>
-          <button class="btn ${index === 1 ? "primary" : ""}" type="button">选择 ${escapeHTML(plan.name)}</button>
-          <p class="plan-includes">${escapeHTML(copy.includes)}</p>
-          <ul class="plan-features">${copy.features.map((item) => `<li><span class="feature-icon" aria-hidden="true">✦</span><span>${escapeHTML(item)}</span></li>`).join("")}</ul>
-        `;
-        card.querySelector("button").onclick = () => createOrder(plan).catch((e) => status(e.message));
-        return card;
-      }));
-    }
+          <div class="pricing-grid">
+            <article class="price-card">
+              <span>Local</span>
+              <h3>¥0</h3>
+              <p>本地模型、BYOK 翻译/摘要、完整 Obsidian 工作流。</p>
+              <a href="#install">使用本地版</a>
+            </article>
+            <article class="price-card featured">
+              <span>Cloud ASR</span>
+              <h3>¥2 / 小时</h3>
+              <p>云端实时识别，注册送 ¥1 体验额度，余额按实际识别时长扣减。</p>
+              <a href="#install">在插件设置中充值</a>
+            </article>
+            <article class="price-card">
+              <span>LLM</span>
+              <h3>BYOK</h3>
+              <p>摘要、翻译和润色继续使用你自己的 OpenAI 兼容 API Key。</p>
+              <a href="#faq">查看说明</a>
+            </article>
+          </div>
+        </section>
 
-    async function sendCode() {
-      const email = $("email").value.trim();
-      if (!email) throw new Error("请输入邮箱");
-      await api("/api/auth/send-code", {
-        method: "POST",
-        body: JSON.stringify({ email, scene: authMode }),
-      });
-      startCodeCooldown();
-      status("验证码已发送");
-    }
+        <section class="install-section" id="install">
+          <h2>从 Obsidian 设置页开始</h2>
+          <p>安装插件后打开设置，选择“云端付费（零配置）”，注册或登录账户，再点击充值。支付完成后余额会在插件中显示。</p>
+          <div class="hero-actions">
+            <a class="primary-button" href="#faq">常见问题</a>
+            <a class="secondary-button" href="health">服务状态 →</a>
+          </div>
+        </section>
 
-    async function auth() {
-      const email = $("email").value.trim();
-      const password = $("password").value;
-      const code = $("email-code").value.trim();
-      const captchaAnswer = $("captcha-answer").value.trim();
-      if (!email) throw new Error("请输入邮箱");
-      if (authNeedsPassword() && !password) throw new Error("请输入密码");
-      if (authMode === "register" && password !== $("confirm-password").value) throw new Error("两次密码不一致");
-      if (authNeedsCode() && !code) throw new Error("请输入邮箱验证码");
-      if (authNeedsCaptcha() && (!captchaId || !captchaAnswer)) throw new Error("请输入图形验证码");
-      const path = authMode === "login" && authMethod === "code" ? authPaths.code : authPaths[authMode];
-      await api(path, {
-        method: "POST",
-        body: JSON.stringify({
-          email,
-          password,
-          code,
-          captcha_id: captchaId,
-          captcha_answer: captchaAnswer,
-          browser_session: true,
-        }),
-      });
-      localStorage.setItem(sessionKey, "1");
-      await Promise.all([loadAccount(), loadPlans()]);
-      status("");
-    }
+        <section class="faq-section" id="faq">
+          <h2>Frequently Asked Questions</h2>
+          <div class="faq-list">
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>本地模式还免费吗？</span>
+              <p>免费。本地 SenseVoice-Small 模式、导出和基础文本处理继续保留，不依赖付费账户。</p>
+            </button>
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>为什么云端模式要收费？</span>
+              <p>云端模式使用托管 ASR 服务，费用覆盖实时识别、签名服务和结算成本，按实际使用时长扣费。</p>
+            </button>
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>录音内容会被保存到服务器吗？</span>
+              <p>计费服务保存账户、订单和用量记录；转写历史保存在你的 Obsidian vault。云端 ASR 的传输取决于所选提供方。</p>
+            </button>
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>余额不足会怎样？</span>
+              <p>插件会提示余额不足并停止新的云端签名请求。充值后即可继续使用。</p>
+            </button>
+            <button class="faq-item" type="button" aria-expanded="false">
+              <span>可以继续使用自己的腾讯云密钥吗？</span>
+              <p>可以。ASR 提供方里仍有腾讯云 BYOK 模式，适合已有腾讯云账号和密钥的用户。</p>
+            </button>
+          </div>
+        </section>
+      </main>
 
-    async function createOrder(plan) {
-      if (!window.loggedIn) {
-        showLogin();
-        return;
-      }
-      currentOrder = await api("/api/billing/create-order", {
-        method: "POST",
-        body: JSON.stringify({ plan_id: plan.id, provider: selectedProvider }),
-      });
-      localStorage.setItem("rtCloudOrderId", currentOrder.order_id);
-      $("order-panel").classList.remove("hidden");
-      $("order-text").textContent = `订单 ${currentOrder.order_id} 已创建，金额 ¥${plan.amount_yuan}`;
-      $("order-open-btn").onclick = () => window.open(currentOrder.url, "_self");
-      window.open(currentOrder.url, "_self");
-    }
-
-    async function refreshOrder(orderId) {
-      const order = await api(`/api/billing/orders/${encodeURIComponent(orderId)}/refresh`, { method: "POST" });
-      $("order-panel").classList.remove("hidden");
-      $("order-text").textContent = `订单 ${order.order_id || orderId} 状态：${order.status}，当前余额 ${money(order.balance_cents)}`;
-      await loadAccount();
-      if (order.status === "CREDITED") localStorage.removeItem("rtCloudOrderId");
-    }
-
-    document.querySelectorAll("[data-auth-mode]").forEach((button) => {
-      button.onclick = () => {
-        authMode = button.dataset.authMode;
-        authMethod = "password";
-        status("");
-        renderAuth();
-        loadCaptcha().catch((e) => status(e.message));
-      };
-    });
-    $("auth-method-btn").onclick = () => {
-      authMethod = authMethod === "code" ? "password" : "code";
-      status("");
-      renderAuth();
-      loadCaptcha().catch((e) => status(e.message));
-    };
-    $("captcha-image").onclick = () => loadCaptcha().catch((e) => status(e.message));
-    $("captcha-refresh-btn").onclick = () => loadCaptcha().catch((e) => status(e.message));
-    document.querySelectorAll("[data-code-digit]").forEach((input, index, inputs) => {
-      input.addEventListener("input", () => {
-        input.value = input.value.replace(/\D/g, "").slice(0, 1);
-        syncCodeDigits();
-        if (input.value && inputs[index + 1]) inputs[index + 1].focus();
-      });
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "Backspace" && !input.value && inputs[index - 1]) inputs[index - 1].focus();
-      });
-    });
-    $("send-code-btn").onclick = () => sendCode().catch((e) => status(e.message));
-    $("auth-submit-btn").onclick = () => auth().catch(async (e) => {
-      status(e.message);
-      await loadCaptcha().catch(() => null);
-    });
-    $("refresh-btn").onclick = () => loadAccount().catch((e) => status(e.message));
-    $("logout-btn").onclick = async () => {
-      await api("/api/auth/logout", { method: "POST" }).catch(() => null);
-      localStorage.removeItem(sessionKey);
-      localStorage.removeItem("rtCloudOrderId");
-      currentOrder = null;
-      setLoggedIn(false);
-      $("order-panel").classList.add("hidden");
-      status("已退出登录");
-    };
-    $("order-refresh-btn").onclick = () => {
-      const orderId = currentOrder?.order_id || localStorage.getItem("rtCloudOrderId");
-      if (!orderId) return status("没有待刷新订单");
-      refreshOrder(orderId).catch((e) => status(e.message));
-    };
-
-    const queryOrder = new URLSearchParams(location.search).get("order");
-    if (queryOrder) localStorage.setItem("rtCloudOrderId", queryOrder);
-    renderAuth();
-    const oauthError = sessionStorage.getItem("ort.billing.oauthError");
-    if (oauthError) {
-      sessionStorage.removeItem("ort.billing.oauthError");
-      status(oauthError);
-    }
-    loadOAuthProviders().catch(() => {
-      oauthProviders = ["google", "github"];
-      renderOAuthProviders();
-    });
-    loadCaptcha().catch(() => null);
-    loadPlans().catch((e) => status(e.message));
-    if (localStorage.getItem(sessionKey)) {
-      loadAccount()
-        .then(() => {
-          const orderId = queryOrder || localStorage.getItem("rtCloudOrderId");
-          if (orderId) refreshOrder(orderId).catch((e) => status(e.message));
-        })
-        .catch(() => {
-          localStorage.removeItem(sessionKey);
-          setLoggedIn(false);
-        });
-    } else {
-      setLoggedIn(false);
-    }
-  </script>
-</body>
+      <footer class="site-footer">
+        <span>Copyright © 2026 Realtime Transcription.</span>
+        <nav aria-label="Footer">
+          <a href="#features">功能</a>
+          <a href="#pricing">价格</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+      </footer>
+    </div>
+    <script src="site.js"></script>
+  </body>
 </html>
