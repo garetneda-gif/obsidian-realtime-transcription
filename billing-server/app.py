@@ -12,10 +12,8 @@ from database import init_db
 from auth import auth_bp
 from signing import signing_bp
 from billing import billing_bp, settle_expired_requests
-from oauth import oauth_bp
 from payment_xunhu import payment_bp
-from payment_creem import creem_bp
-from account_center import account_bp
+from account_center import account_bp, account_center
 
 STATIC_DIR = Path(__file__).with_name("static")
 STATIC_FILES = {
@@ -44,9 +42,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(signing_bp)
     app.register_blueprint(billing_bp)
-    app.register_blueprint(oauth_bp)
     app.register_blueprint(payment_bp)
-    app.register_blueprint(creem_bp)
     app.register_blueprint(account_bp)
 
     @app.route("/health")
