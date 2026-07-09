@@ -28,7 +28,7 @@ interface AuthResult {
   token: string;
   refresh_token: string;
   expires_at: string;
-  balance_cents: number;
+  balance_cents?: number;
 }
 
 interface UsageRecord {
@@ -44,11 +44,11 @@ export class CloudAuthService {
   private onSettingsChanged: ((settings: CloudAuthSettings) => void) | null = null;
 
   constructor(settings: CloudAuthSettings) {
-    this.settings = { ...settings };
+    this.settings = CloudAuthService.normalizeSettings(settings);
   }
 
   updateSettings(settings: CloudAuthSettings): void {
-    this.settings = { ...settings };
+    this.settings = CloudAuthService.normalizeSettings(settings);
   }
 
   setOnSettingsChanged(cb: (settings: CloudAuthSettings) => void): void {
@@ -92,10 +92,8 @@ export class CloudAuthService {
         refresh_token: this.settings.refreshToken,
       });
       if (!resp.ok) return false;
-      const data = await resp.json();
-      this.settings.token = data.token;
-      this.settings.tokenExpiresAt = data.expires_at;
-      this.onSettingsChanged?.(this.settings);
+      const data = await resp.json() as AuthResult;
+      this.updateTokens(data);
       return true;
     } catch {
       return false;
@@ -166,11 +164,20 @@ export class CloudAuthService {
 
   // ── 私有方法 ──
 
+  private static normalizeSettings(settings: CloudAuthSettings): CloudAuthSettings {
+    return {
+      ...settings,
+      serverUrl: settings.serverUrl.trim().replace(/\/+$/, ""),
+    };
+  }
+
   private updateTokens(data: AuthResult): void {
     this.settings.token = data.token;
     this.settings.refreshToken = data.refresh_token;
     this.settings.tokenExpiresAt = data.expires_at;
-    this.settings.balanceCents = data.balance_cents;
+    if (typeof data.balance_cents === "number") {
+      this.settings.balanceCents = data.balance_cents;
+    }
     this.onSettingsChanged?.(this.settings);
   }
 

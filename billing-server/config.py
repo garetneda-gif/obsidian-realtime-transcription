@@ -5,6 +5,19 @@ import os
 HOST = os.getenv("BS_HOST", "0.0.0.0")
 PORT = int(os.getenv("BS_PORT", "8900"))
 SECRET_KEY = os.getenv("BS_SECRET_KEY", "change-me-in-production")
+ENV = os.getenv("BS_ENV", "development").lower()
+
+if ENV in {"production", "prod"} and (
+    not SECRET_KEY or SECRET_KEY == "change-me-in-production" or len(SECRET_KEY) < 32
+):
+    raise RuntimeError(
+        "BS_SECRET_KEY is missing or too weak. "
+        "Please set a strong, unpredictable value (>= 32 characters) in the environment."
+    )
+
+
+def is_production() -> bool:
+    return ENV in {"production", "prod"}
 
 # JWT
 JWT_ACCESS_EXPIRE_DAYS = int(os.getenv("BS_JWT_ACCESS_DAYS", "7"))

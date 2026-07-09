@@ -273,10 +273,10 @@ export class TranscriptionSettingTab extends PluginSettingTab {
         .setDesc("选择识别引擎，大模型精度更高但延迟略增")
         .addDropdown((dropdown) => {
           dropdown
-            .addOption("16k_zh", "中文 (16k_zh)")
-            .addOption("16k_zh_large", "中文大模型 (16k_zh_large)")
-            .addOption("16k_en", "英文 (16k_en)")
-            .addOption("16k_zh_en", "中英混合 (16k_zh_en)")
+            .addOption("16k_zh", t("settings.tencent.engineModel.option.zh"))
+            .addOption("16k_zh_large", t("settings.tencent.engineModel.option.zhLarge"))
+            .addOption("16k_en", t("settings.tencent.engineModel.option.en"))
+            .addOption("16k_zh_en", t("settings.tencent.engineModel.option.zhEn"))
             .setValue(this.plugin.settings.tencentASR.engineModelType)
             .onChange(async (value) => {
               this.plugin.settings.tencentASR.engineModelType = value;
@@ -301,7 +301,8 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           .addButton((btn) =>
             btn.setButtonText(t("settings.cloud.recharge.btn")).onClick(() => {
               // 打开浏览器充值页面
-              window.open(`${cloudAuth.serverUrl}/account`);
+              const serverUrl = cloudAuth.serverUrl.trim().replace(/\/+$/, "");
+              window.open(`${serverUrl}/account`);
             }),
           )
           .addButton((btn) =>

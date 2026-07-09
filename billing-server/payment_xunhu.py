@@ -1,8 +1,11 @@
 """虎皮椒支付封装：签名、下单、回调验签"""
+# pyright: reportImplicitRelativeImport=false
 import hashlib
 import hmac
 import os
 import time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from typing import Any
 
 import requests
 from flask import Blueprint, request, jsonify
@@ -16,7 +19,15 @@ payment_bp = Blueprint("payment", __name__, url_prefix="/api/billing")
 XUNHU_PAY_URL = "https://api.xunhupay.com/payment/do.html"
 
 
-def _sign(params: dict, app_secret: str) -> str:
+def _amount_to_cents(amount_yuan: str) -> int:
+    try:
+        cents = (Decimal(str(amount_yuan)) * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        raise ValueError("Invalid amount")
+    return int(cents)
+
+
+def _sign(params: dict[str, Any], app_secret: str) -> str:
     """虎皮椒签名：按 key 排序拼接 + appsecret，取 MD5"""
     sorted_params = sorted(
         (k, str(v)) for k, v in params.items()
@@ -27,16 +38,17 @@ def _sign(params: dict, app_secret: str) -> str:
     return hashlib.md5(sign_str.encode()).hexdigest()
 
 
-def _verify_sign(params: dict, app_secret: str) -> bool:
+def _verify_sign(params: dict[str, Any], app_secret: str) -> bool:
     """验证虎皮椒回调签名（使用 hmac.compare_digest 防时序攻击）"""
     received_hash = params.get("hash", "")
     expected_hash = _sign(params, app_secret)
     return hmac.compare_digest(received_hash, expected_hash)
 
 
-def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: str) -> dict:
+def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: str) -> dict[str, Any]:
     """创建虎皮椒支付订单，返回支付链接"""
     trade_order_id = f"RT-{int(time.time())}-{os.urandom(4).hex()}"
+    amount_cents = _amount_to_cents(amount_yuan)
 
     db = SessionLocal()
     try:
@@ -44,7 +56,7 @@ def create_payment_url(user_id: str, amount_yuan: str, title: str, return_url: s
             id=new_uuid(),
             user_id=user_id,
             trade_order_id=trade_order_id,
-            amount_cents=int(float(amount_yuan) * 100),
+            amount_cents=amount_cents,
             status=OrderStatus.CREATED,
             idempotency_key=trade_order_id,
         )
@@ -109,7 +121,10 @@ def xunhu_callback():
             return "success"
 
         # 金额验证
-        callback_cents = int(float(total_fee) * 100)
+        try:
+            callback_cents = _amount_to_cents(total_fee)
+        except ValueError:
+            return "fail", 400
         if callback_cents != order.amount_cents:
             return "fail", 400
 
@@ -132,6 +147,7 @@ def create_order():
     user_id, err = require_auth()
     if err:
         return err
+    assert user_id is not None
 
     data = request.get_json(silent=True) or {}
     amount = data.get("amount", "9.90")

@@ -1,4 +1,5 @@
 """签名模块：生成腾讯云 ASR 签名 URL + 预扣费"""
+# pyright: reportImplicitRelativeImport=false
 import hashlib
 import hmac
 import math
@@ -52,7 +53,7 @@ def _build_signed_url(voice_id: str, engine_model: str) -> str:
     signature = base64.b64encode(
         hmac.new(secret_key.encode(), sign_plaintext.encode(), hashlib.sha1).digest()
     ).decode()
-    encoded_sig = urllib.parse.quote(signature)
+    encoded_sig = urllib.parse.quote(signature, safe="")
 
     return f"wss://asr.cloud.tencent.com/asr/v2/{app_id}?{query_string}&signature={encoded_sig}"
 
@@ -78,6 +79,10 @@ def sign():
         return jsonify({"error": "ASR service not configured"}), 503
 
     precharge = _calculate_precharge_cents()
+    try:
+        signed_url = _build_signed_url(voice_id, engine_model)
+    except Exception as e:
+        return jsonify({"error": f"Signing failed: {e}"}), 503
 
     db = SessionLocal()
     try:
@@ -103,17 +108,11 @@ def sign():
             precharge_cents=precharge,
         )
         db.add(sign_req)
-        db.commit()
-
         try:
-            signed_url = _build_signed_url(voice_id, engine_model)
-        except Exception as e:
-            # 签名失败：回滚预扣费
-            user.balance_cents += precharge
-            sign_req.settled = 1
-            sign_req.actual_cost_cents = 0
             db.commit()
-            return jsonify({"error": f"Signing failed: {e}"}), 503
+        except Exception as e:
+            db.rollback()
+            return jsonify({"error": f"Database error: {e}"}), 503
 
         return jsonify({
             "signed_url": signed_url,

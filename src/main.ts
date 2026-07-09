@@ -110,7 +110,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.cloudAuthService = new CloudAuthService(this.settings.cloudAuth);
     this.cloudAuthService.setOnSettingsChanged((newSettings) => {
       this.settings.cloudAuth = newSettings;
-      this.saveData(this.settings);
+      void this.saveData(this.settings).catch((error) => {
+        console.error("[Transcription] Failed to persist settings after cloud auth change:", error);
+      });
     });
 
     // WebSocket 结果回调
@@ -319,8 +321,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       } catch (err) {
         console.error("[Transcription] 云端付费连接失败:", err);
         this.tencentClient?.disconnect();
-        new Notice(`${t("notice.cannotConnectBackend")}: ${err instanceof Error ? err.message : String(err)}`);
-        currentView.setConnectionStatus(false, t("status.backendStartFailed"));
+        if (this.activeSignRequestId && this.cloudAuthService) {
+          void this.cloudAuthService.reportUsage(this.activeSignRequestId, 0);
+        }
+        this.activeSignRequestId = null;
+        this.recordingStartTime = 0;
+        new Notice(`${t("notice.cannotConnectCloudAsr")}: ${err instanceof Error ? err.message : String(err)}`);
+        currentView.setConnectionStatus(false, t("status.cloudConnectFailed"));
         return;
       }
     } else if (isCloudASR(provider)) {
