@@ -3,203 +3,276 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Obsidian Realtime Transcription - 云端实时转写</title>
-    <meta name="description" content="Obsidian 实时语音转写插件：本地免费，云端付费零配置，支持会议、课堂、访谈和长音频笔记。">
-    <link rel="icon" href="favicon.ico">
-    <link rel="stylesheet" href="site.css">
+    <title>Obsidian RealTime Transcriber</title>
+    <meta name="description" content="Obsidian RealTime Transcriber：把每一场对话记录、转写、沉淀成可复用的知识资产。">
+    <link rel="icon" href="/static/imgs/zhuanwenzi2026/brand-recording-icon.svg">
+    <link rel="stylesheet" href="/static/css/newHomepage.css">
+    <style>
+      :root { color-scheme: light; }
+      body { margin: 0; background: #f4f6f7; }
+
+      .ort-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        height: 64px;
+        border-bottom: 1px solid rgba(18, 24, 38, 0.08);
+        background: rgba(255, 255, 255, 0.88);
+        backdrop-filter: blur(16px);
+      }
+
+      .ort-topbar__inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 1180px;
+        height: 100%;
+        margin: 0 auto;
+      }
+
+      .ort-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: #121826;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .ort-brand img { width: 18px; height: 18px; }
+      .ort-actions { display: inline-flex; align-items: center; gap: 14px; }
+
+      .ort-login {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 84px;
+        height: 34px;
+        border: 1px solid #1d5cff;
+        border-radius: 8px;
+        color: #1d5cff;
+        background: #fff;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .ort-menu {
+        position: relative;
+        width: 24px;
+        height: 24px;
+      }
+
+      .ort-menu::before,
+      .ort-menu::after {
+        content: "";
+        position: absolute;
+        right: 2px;
+        width: 16px;
+        height: 2px;
+        border-radius: 999px;
+        background: #121826;
+      }
+
+      .ort-menu::before { top: 8px; }
+      .ort-menu::after { top: 15px; }
+      .zwz2026-page { padding-top: 1px; }
+      .zwz2026-hero { min-height: 704px; }
+      .zwz2026-hero__copy { padding-top: 126px; }
+      .zwz2026-hero__title { width: 590px; }
+      .zwz2026-hero__copy p { width: 532px; }
+      .zwz2026-hero__visual { margin-top: 82px; }
+      .zwz2026-hero__visual .zwz2026-hero__visual-poster { opacity: 1; }
+      .zwz2026-thinking { margin-top: -100px; }
+      .zwz2026-thinking__card { box-shadow: 0 20px 50px rgba(85, 102, 133, 0.06); }
+      .zwz2026-tools { padding-bottom: 108px; }
+
+      .ort-footer {
+        padding: 42px 0 52px;
+        text-align: center;
+        color: rgba(18, 24, 38, 0.48);
+        font-size: 14px;
+      }
+
+      @media (max-width: 900px) {
+        .zwz2026-page { min-width: 0; }
+        .ort-topbar__inner,
+        .zwz2026-shell { width: calc(100vw - 32px); }
+        .ort-brand { font-size: 12px; }
+        .zwz2026-hero { min-height: auto; padding-bottom: 72px; }
+        .zwz2026-hero__inner { display: block; padding-top: 0; }
+        .zwz2026-hero__copy { width: auto; padding-top: 72px; }
+        .zwz2026-hero__title { width: auto; font-size: 40px; line-height: 52px; }
+        .zwz2026-hero__title::after { left: 240px; top: 118px; }
+        .zwz2026-hero__copy p { width: auto; font-size: 16px; line-height: 27px; }
+        .zwz2026-hero__visual { width: 100%; height: auto; margin-top: 44px; transform: none; }
+        .zwz2026-hero__visual .zwz2026-hero__visual-poster {
+          position: relative;
+          width: 100%;
+          height: auto !important;
+          transform: none;
+        }
+        .zwz2026-hero__visual-bg,
+        .zwz2026-hero__visual video,
+        .zwz2026-hero__visual-fallback { display: none; }
+        .zwz2026-thinking { margin-top: 0; padding-bottom: 84px; }
+        .zwz2026-thinking__title,
+        .zwz2026-tools__title { width: auto; font-size: 36px; line-height: 46px; }
+        .zwz2026-thinking__title::after {
+          left: calc(50% - 16px);
+          top: 42px;
+          width: 160px;
+        }
+        .zwz2026-thinking__cards { grid-template-columns: 1fr; gap: 18px; }
+        .zwz2026-thinking__card,
+        .zwz2026-thinking__card > img { width: 100%; }
+        .zwz2026-tools__columns { display: block; }
+        .zwz2026-tools__column { width: 100%; gap: 18px; }
+        .zwz2026-tools__column:not(:last-child) { margin-right: 0; margin-bottom: 18px; }
+        .zwz2026-tool-card,
+        .zwz2026-tool-card--multilang,
+        .zwz2026-tool-card--realtime,
+        .zwz2026-tool-card--ask,
+        .zwz2026-tool-card--summary { height: auto; }
+        .zwz2026-tool-card__visual,
+        .zwz2026-tool-card--multilang .zwz2026-tool-card__visual,
+        .zwz2026-tool-card--realtime .zwz2026-tool-card__visual,
+        .zwz2026-tool-card--ask .zwz2026-tool-card__visual,
+        .zwz2026-tool-card--summary .zwz2026-tool-card__visual {
+          width: 100%;
+          height: auto;
+          margin: 0;
+        }
+        .zwz2026-tool-card__text,
+        .zwz2026-tool-card--multilang .zwz2026-tool-card__text,
+        .zwz2026-tool-card--realtime .zwz2026-tool-card__text,
+        .zwz2026-tool-card--ask .zwz2026-tool-card__text,
+        .zwz2026-tool-card--summary .zwz2026-tool-card__text {
+          width: auto;
+          margin: 24px 24px 30px;
+        }
+        .zwz2026-tool-card__title {
+          width: auto !important;
+          font-size: 28px;
+          line-height: 34px;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div class="site-shell">
-      <div class="grid-layer" aria-hidden="true"></div>
-      <div class="grain-layer" aria-hidden="true"></div>
-
-      <header class="site-header">
-        <a class="brand" href="#top" aria-label="Obsidian Realtime Transcription">
-          <img src="paid-site-mark.svg" alt="" class="brand-mark">
-          <span>Realtime Transcription</span>
-          <span class="version">Cloud · preview</span>
+    <header class="ort-topbar">
+      <div class="ort-topbar__inner">
+        <a class="ort-brand" href="/" aria-label="Obsidian RealTime Transcriber">
+          <img src="/static/imgs/zhuanwenzi2026/brand-recording-icon.svg" alt="">
+          <span>Obsidian RealTime Transcriber</span>
         </a>
-        <nav class="nav-links" aria-label="Primary">
-          <a href="#features">功能</a>
-          <a href="#pricing">价格</a>
-          <a href="#faq">FAQ</a>
-        </nav>
-        <div class="header-actions">
-          <button class="language-toggle" type="button" aria-label="Switch language" data-language-toggle>EN</button>
-          <a class="ghost-link" href="#pricing">开始充值</a>
+        <div class="ort-actions">
+          <a class="ort-login" href="/pricing">登录</a>
+          <span class="ort-menu" aria-hidden="true"></span>
         </div>
-      </header>
+      </div>
+    </header>
 
-      <main id="top">
-        <section class="hero-section">
-          <div class="hero-badges">
-            <span>Obsidian 原生插件</span>
-            <span>本地 + 云端双引擎</span>
-            <span>中英日韩粤</span>
-          </div>
-          <img src="paid-site-mark.svg" alt="" class="hero-mark">
-          <h1>把每一次对话变成可检索的 Obsidian 笔记</h1>
-          <p class="hero-copy">本地模型免费跑，云端模式零配置。会议、课堂、访谈和灵感记录，边说边进库。</p>
-          <div class="hero-actions">
-            <a class="primary-button" href="#pricing">查看云端方案</a>
-            <a class="secondary-button" href="#install">继续使用本地免费版 →</a>
+    <main class="homepage-new">
+      <div class="zwz2026-page zwz2026-lang-zh-CN">
+        <section class="zwz2026-hero">
+          <div class="zwz2026-shell zwz2026-hero__inner">
+            <div class="zwz2026-hero__copy">
+              <h1 class="zwz2026-hero__title">每一场对话<br>都被记录、转写、沉淀</h1>
+              <p>边录边转文字，随时插入照片和添加批注。AI 同步理解言外之意，给到风险预判与建议。对话结束即刻生成全面直观的图文纪要，并帮你自动分类存好，成为随时可翻阅的知识积累。</p>
+              <a class="zwz2026-btn zwz2026-btn--primary zwz2026-btn--hero" href="/pricing">
+                <span class="zwz2026-btn__text">免费体验</span>
+                <span class="zwz2026-btn__icon-wrap zwz2026-btn__icon-wrap--arrow" aria-hidden="true">→</span>
+              </a>
+            </div>
+            <div class="zwz2026-hero__visual">
+              <img class="zwz2026-hero__visual-bg" src="/static/imgs/zhuanwenzi2026/hero-video-bg.png" alt="">
+              <img class="zwz2026-hero__visual-poster" src="/static/imgs/zhuanwenzi2026/hero-video-fallback.png" alt="实时记录与转写示意">
+            </div>
           </div>
         </section>
 
-        <section class="feature-tabs" id="features" aria-labelledby="features-title">
-          <div class="section-kicker">Daily capture system</div>
-          <h2 id="features-title">录音、识别、整理，一条链路完成</h2>
-          <div class="tabs-layout">
-            <div class="tab-list" role="tablist" aria-label="Feature tabs">
-              <button class="tab-button is-active" type="button" role="tab" aria-selected="true" data-tab="capture">
-                <span>实时转写</span>
-                <small>边说边显示，自动分段</small>
-              </button>
-              <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="cloud">
-                <span>云端零配置</span>
-                <small>登录后直接使用腾讯云 ASR</small>
-              </button>
-              <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="notes">
-                <span>笔记工作流</span>
-                <small>摘要、润色、导出到 vault</small>
-              </button>
-            </div>
-            <div class="tab-stage">
-              <article class="tab-panel is-active" data-panel="capture">
-                <img src="actual-ui-live.webp" alt="Obsidian 转写界面预览">
-                <div>
-                  <h3>实时字幕不是终点，结构化笔记才是</h3>
-                  <p>16kHz 单声道采集、partial 稳定过滤、final 聚合输出，减少重复和回滚，让长时间录音保持可读。</p>
+        <section class="zwz2026-thinking is-visible">
+          <div class="zwz2026-shell">
+            <h2 class="zwz2026-thinking__title zwz2026-reveal-item">更懂你的<br>AI语音记录助手</h2>
+            <div class="zwz2026-thinking__cards">
+              <article class="zwz2026-thinking__card zwz2026-thinking__card--record zwz2026-reveal-item">
+                <img src="/static/imgs/zhuanwenzi2026/thinking-record-card@2x.png" alt="">
+                <div class="zwz2026-thinking__card-copy">
+                  <h3 class="zwz2026-thinking__card-title">录音 / 转写 / 总结</h3>
+                  <p class="zwz2026-thinking__card-desc">1小时音频最快5分钟出稿 · 98%准确率</p>
+                </div>
+                <div class="zwz2026-thinking__card-metric zwz2026-thinking__card-metric--record">
+                  <img class="zwz2026-thinking__card-metric-icon zwz2026-thinking__card-metric-icon--record" src="/static/imgs/zhuanwenzi2026/thinking-record-metric.zh-CN.svg" alt="5分钟">
                 </div>
               </article>
-              <article class="tab-panel" data-panel="cloud">
-                <img src="actual-ui-cloud.webp" alt="云端识别配置预览">
-                <div>
-                  <h3>不想装 Python，也能马上开始</h3>
-                  <p>云端付费模式免模型、免密钥、免后端进程管理。按实际使用时长结算，余额不足时自动提示充值。</p>
+              <article class="zwz2026-thinking__card zwz2026-thinking__card--insight zwz2026-reveal-item">
+                <img src="/static/imgs/zhuanwenzi2026/thinking-insight-card@2x.png" alt="">
+                <div class="zwz2026-thinking__card-copy">
+                  <h3 class="zwz2026-thinking__card-title">洞察与启发</h3>
+                  <p class="zwz2026-thinking__card-desc">风险识别 · 决策建议 · 知识拓展</p>
+                </div>
+                <div class="zwz2026-thinking__card-metric zwz2026-thinking__card-metric--insight">
+                  <img class="zwz2026-thinking__card-metric-icon zwz2026-thinking__card-metric-icon--insight" src="/static/imgs/zhuanwenzi2026/thinking-insight-metric.zh-CN.svg" alt="聪明">
                 </div>
               </article>
-              <article class="tab-panel" data-panel="notes">
-                <img src="actual-ui-summary.webp" alt="摘要和笔记导出预览">
-                <div>
-                  <h3>从原始语音到可复习资料</h3>
-                  <p>自动翻译、AI 摘要、二次摘要和手动/AI 命名导出，适合课堂、访谈、会议纪要和资料整理。</p>
+              <article class="zwz2026-thinking__card zwz2026-thinking__card--asset zwz2026-reveal-item">
+                <img src="/static/imgs/zhuanwenzi2026/thinking-asset-card@2x.png" alt="">
+                <div class="zwz2026-thinking__card-copy">
+                  <h3 class="zwz2026-thinking__card-title">知识资产沉淀</h3>
+                  <p class="zwz2026-thinking__card-desc">可溯源 · 可分享 · 持续复利</p>
+                </div>
+                <div class="zwz2026-thinking__card-metric zwz2026-thinking__card-metric--asset">
+                  <span class="zwz2026-thinking__card-infinity" aria-label="持续复利"></span>
                 </div>
               </article>
             </div>
           </div>
         </section>
 
-        <section class="pillars-section">
-          <div class="section-kicker">File over app, but for audio</div>
-          <h2>语音数据留在你的工作流里</h2>
-          <div class="pillar-grid">
-            <article>
-              <span>01</span>
-              <h3>本地优先</h3>
-              <p>SenseVoice-Small + sherpa-onnx 可离线运行。敏感会议、私密笔记和低延迟场景继续走本机。</p>
-            </article>
-            <article>
-              <span>02</span>
-              <h3>按量云端</h3>
-              <p>不需要长期订阅，云端 ASR 按小时计费。注册送体验额度，之后按余额扣费。</p>
-            </article>
-            <article>
-              <span>03</span>
-              <h3>OpenAI 兼容后处理</h3>
-              <p>翻译、润色、摘要都使用 OpenAI 兼容接口，DeepSeek、通义等模型可以直接接入。</p>
-            </article>
-            <article>
-              <span>04</span>
-              <h3>Obsidian 原生</h3>
-              <p>历史记录、转写卡片、导出文件和设置面板都在 Obsidian 内完成，不额外维护另一个知识库。</p>
-            </article>
+        <section class="zwz2026-tools is-visible">
+          <div class="zwz2026-shell zwz2026-tools__new">
+            <h2 class="zwz2026-tools__title">每一场对话<br>都能帮你扩宽思考</h2>
+            <div class="zwz2026-tools__columns">
+              <div class="zwz2026-tools__column">
+                <article class="zwz2026-tool-card zwz2026-tool-card--multilang">
+                  <img class="zwz2026-tool-card__visual" src="/static/imgs/zhuanwenzi2026/tool-visual-multilang@2x.png" alt="">
+                  <div class="zwz2026-tool-card__text">
+                    <h3 class="zwz2026-tool-card__title">多语种混合识别<br>24种语言自由转译</h3>
+                    <span>支持中英混说、粤普英混说及多种语言识别，会议、课堂、访谈都能稳定转写。</span>
+                  </div>
+                </article>
+                <article class="zwz2026-tool-card zwz2026-tool-card--ask">
+                  <img class="zwz2026-tool-card__visual" src="/static/imgs/zhuanwenzi2026/tool-visual-ask@2x.png" alt="">
+                  <div class="zwz2026-tool-card__text">
+                    <h3 class="zwz2026-tool-card__title">有问题，直接问</h3>
+                    <span>边转写边提问，AI 会结合上下文给出明确回答，并推荐追问方向，帮你快速抓住问题核心。</span>
+                  </div>
+                </article>
+              </div>
+              <div class="zwz2026-tools__column">
+                <article class="zwz2026-tool-card zwz2026-tool-card--realtime">
+                  <img class="zwz2026-tool-card__visual" src="/static/imgs/zhuanwenzi2026/tool-visual-realtime@2x.png" alt="">
+                  <div class="zwz2026-tool-card__text">
+                    <h3 class="zwz2026-tool-card__title">实时洞察<br>给你启发和思考</h3>
+                    <span>AI 不止能听懂你说了什么，还能结合照片和批注理解现场信息，给出的见解更贴合实际需求。</span>
+                  </div>
+                </article>
+                <article class="zwz2026-tool-card zwz2026-tool-card--summary">
+                  <img class="zwz2026-tool-card__visual" src="/static/imgs/zhuanwenzi2026/tool-visual-summary@2x.png" alt="">
+                  <div class="zwz2026-tool-card__text">
+                    <h3 class="zwz2026-tool-card__title">即时丰富的图文纪要</h3>
+                    <span>录音保存后即可生成直观的图文纪要。每条观点都能回看对应原文和录音，复盘更有依据。</span>
+                  </div>
+                </article>
+              </div>
+            </div>
           </div>
         </section>
+      </div>
+    </main>
 
-        <section class="testimonials-section">
-          <h2>为真实知识工作场景准备</h2>
-          <p>课堂、采访、会议、播客草稿、个人复盘，一套插件覆盖从录音到整理的日常链路。</p>
-          <div class="quote-row" aria-label="Use cases">
-            <article><b>课堂复习</b><span>录完即得分段文本，导出后直接进入课程笔记。</span></article>
-            <article><b>会议纪要</b><span>长会议用云端稳定跑，结束后生成摘要和行动项。</span></article>
-            <article><b>访谈整理</b><span>中英混杂识别，后续润色成更适合发布的材料。</span></article>
-          </div>
-        </section>
-
-        <section class="pricing-section" id="pricing">
-          <div class="pricing-copy">
-            <div class="section-kicker">The stack you choose</div>
-            <h2>免费本地版继续保留，云端按需付费</h2>
-            <p>你可以一直使用本地模型。付费只用于零配置云端 ASR 和托管识别成本。</p>
-          </div>
-          <div class="pricing-grid">
-            <article class="price-card">
-              <span>Local</span>
-              <h3>¥0</h3>
-              <p>本地模型、BYOK 翻译/摘要、完整 Obsidian 工作流。</p>
-              <a href="#install">使用本地版</a>
-            </article>
-            <article class="price-card featured">
-              <span>Cloud ASR</span>
-              <h3>¥2 / 小时</h3>
-              <p>云端实时识别，注册送 ¥1 体验额度，余额按实际识别时长扣减。</p>
-              <a href="#install">在插件设置中充值</a>
-            </article>
-            <article class="price-card">
-              <span>LLM</span>
-              <h3>BYOK</h3>
-              <p>摘要、翻译和润色继续使用你自己的 OpenAI 兼容 API Key。</p>
-              <a href="#faq">查看说明</a>
-            </article>
-          </div>
-        </section>
-
-        <section class="install-section" id="install">
-          <h2>从 Obsidian 设置页开始</h2>
-          <p>安装插件后打开设置，选择“云端付费（零配置）”，注册或登录账户，再点击充值。支付完成后余额会在插件中显示。</p>
-          <div class="hero-actions">
-            <a class="primary-button" href="#faq">常见问题</a>
-            <a class="secondary-button" href="health">服务状态 →</a>
-          </div>
-        </section>
-
-        <section class="faq-section" id="faq">
-          <h2>Frequently Asked Questions</h2>
-          <div class="faq-list">
-            <button class="faq-item" type="button" aria-expanded="false">
-              <span>本地模式还免费吗？</span>
-              <p>免费。本地 SenseVoice-Small 模式、导出和基础文本处理继续保留，不依赖付费账户。</p>
-            </button>
-            <button class="faq-item" type="button" aria-expanded="false">
-              <span>为什么云端模式要收费？</span>
-              <p>云端模式使用托管 ASR 服务，费用覆盖实时识别、签名服务和结算成本，按实际使用时长扣费。</p>
-            </button>
-            <button class="faq-item" type="button" aria-expanded="false">
-              <span>录音内容会被保存到服务器吗？</span>
-              <p>计费服务保存账户、订单和用量记录；转写历史保存在你的 Obsidian vault。云端 ASR 的传输取决于所选提供方。</p>
-            </button>
-            <button class="faq-item" type="button" aria-expanded="false">
-              <span>余额不足会怎样？</span>
-              <p>插件会提示余额不足并停止新的云端签名请求。充值后即可继续使用。</p>
-            </button>
-            <button class="faq-item" type="button" aria-expanded="false">
-              <span>可以继续使用自己的腾讯云密钥吗？</span>
-              <p>可以。ASR 提供方里仍有腾讯云 BYOK 模式，适合已有腾讯云账号和密钥的用户。</p>
-            </button>
-          </div>
-        </section>
-      </main>
-
-      <footer class="site-footer">
-        <span>Copyright © 2026 Realtime Transcription.</span>
-        <nav aria-label="Footer">
-          <a href="#features">功能</a>
-          <a href="#pricing">价格</a>
-          <a href="#faq">FAQ</a>
-        </nav>
-      </footer>
-    </div>
-    <script src="site.js"></script>
+    <footer class="ort-footer">Copyright © 2026 Obsidian RealTime Transcriber.</footer>
   </body>
 </html>

@@ -17,14 +17,7 @@ from account_center import account_bp, account_center
 
 STATIC_DIR = Path(__file__).with_name("static")
 STATIC_FILES = {
-    "actual-ui-cloud.webp",
-    "actual-ui-live.webp",
-    "actual-ui-summary.webp",
     "favicon.ico",
-    "paid-site-icon.svg",
-    "paid-site-mark.svg",
-    "site.css",
-    "site.js",
 }
 ASSET_ROOTS = {
     "bat.bing.com",
