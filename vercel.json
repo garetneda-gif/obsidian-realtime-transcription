@@ -1,15 +1,15 @@
 {
   "version": 2,
-  "buildCommand": "echo skip plugin build",
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "billing-server/**"
-    }
-  },
-  "rewrites": [
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/api/index.py"
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.py"
     }
   ]
 }
