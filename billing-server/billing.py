@@ -11,6 +11,46 @@ from models import User, SignRequest, UsageRecord, new_uuid, utcnow
 
 billing_bp = Blueprint("billing", __name__, url_prefix="/api/billing")
 
+PLANS = [
+    {"id": "trial", "name": "体验包", "amount_yuan": "4.90"},
+    {"id": "standard", "name": "常用包", "amount_yuan": "9.90"},
+    {"id": "pro", "name": "高频包", "amount_yuan": "29.90"},
+]
+
+
+def plan_by_id(plan_id: str | None) -> dict | None:
+    return next((plan for plan in PLANS if plan["id"] == plan_id), None)
+
+
+def plan_minutes(amount_yuan: str) -> int:
+    cents = round(float(amount_yuan) * 100)
+    return round(cents / max(config.PRICE_PER_HOUR_CENTS, 1) * 60)
+
+
+@billing_bp.route("/plans", methods=["GET"])
+def get_plans():
+    return jsonify({
+        "providers": ["xunhu"],
+        "default_provider": "xunhu",
+        "plans": [{**plan, "minutes": plan_minutes(plan["amount_yuan"])} for plan in PLANS],
+    }), 200
+
+
+@billing_bp.route("/me", methods=["GET"])
+def get_me():
+    user_id, err = require_auth()
+    if err:
+        return err
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        return jsonify({"email": user.email, "balance_cents": user.balance_cents}), 200
+    finally:
+        db.close()
+
 
 @billing_bp.route("/balance", methods=["GET"])
 def get_balance():
