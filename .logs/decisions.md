@@ -1,18 +1,7 @@
-# 决策档案
+## 2026-07-01 15:52 — Do not resubmit marketplace PR
 
-> ADR 精简版。每次做不可逆决策后立刻追加。
+**选择**：不重新向 `obsidianmd/obsidian-releases` 提交插件收录 PR。
 
-## 模板
+**备选**：重复提交 `community-plugins.json` 条目。
 
-```markdown
-## YYYY-MM-DD HH:MM — <一句话决策主题>
-
-**背景**:为什么需要做这个决策(1-2 行)
-**选择**:最终选了什么
-**备选**:还考虑过什么(列表,2-4 项)
-**否决理由**:为什么不选备选
-**影响范围**:动了哪些模块/文件
-```
-
----
-
+**否决理由**：上游 `community-plugins.json` 已包含 `realtime-transcription`，重复提交只会制造无效 PR；当前需修正的是本仓库默认分支的版本元数据。

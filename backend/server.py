@@ -280,9 +280,11 @@ class TranscriptionServer:
             return False
         if new_text == old_text:
             return True
-        # 新文本是旧文本的子串，或旧文本是新文本的子串
+        # 文本在增长（旧文本是新文本的前缀）：始终放行，保证实时预览持续更新
+        if new_text.startswith(old_text):
+            return False
+        # 新文本是旧文本的子串（文本缩短），或旧文本是新文本的子串但非前缀
         if new_text in old_text or old_text in new_text:
-            # 只有长度差异很小时才算相似（避免过滤掉真正更长的更新）
             if abs(len(new_text) - len(old_text)) <= 3:
                 return True
         # 编辑距离过小（仅差 1-2 个字符）也跳过
