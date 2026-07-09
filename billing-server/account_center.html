@@ -1120,6 +1120,9 @@
       justify-content: center;
       margin-top: 28px;
     }
+    body:not(.is-logged-in) .account-strip {
+      display: none;
+    }
     .account-chip {
       width: min(420px, 100%);
       min-width: 0;
@@ -1208,7 +1211,7 @@
     }
   </style>
 </head>
-<body class="is-auth">
+<body>
   <div class="shell">
     <div class="brand">
       <img src="static/imgs/zhuanwenzi2026/brand-recording-icon.png" alt="">
@@ -1227,7 +1230,7 @@
           </div>
         </div>
 
-        <section id="login-panel" class="login-scene cnu-auth-wrap">
+        <section id="login-panel" class="login-scene cnu-auth-wrap hidden">
           <button class="cnu-auth-close" type="button" onclick="location.href='/'" aria-label="关闭登录"></button>
           <div class="login-stack cnu-auth-stack">
             <section class="login-copy cnu-auth-copy" aria-label="产品介绍">
@@ -1293,7 +1296,7 @@
           </div>
         </section>
 
-        <section id="account-panel" class="pricing-clone hidden">
+        <section id="account-panel" class="pricing-clone">
           <button class="account-page-close" type="button" onclick="location.href='/'" aria-label="关闭">×</button>
           <h1 class="pricing-clone-title">选择套餐</h1>
           <p class="status account-status" id="account-status"></p>
@@ -1352,6 +1355,7 @@
     let selectedProvider = "xunhu";
     let authMode = "login";
     let authMethod = "password";
+    let loggedIn = false;
     let captchaId = "";
     let captchaImage = "";
     let codeCooldown = 0;
@@ -1492,10 +1496,22 @@
     }
 
     function setLoggedIn(loggedIn) {
-      document.body.classList.toggle("is-auth", !loggedIn);
-      $("login-panel").classList.toggle("hidden", loggedIn);
-      $("account-panel").classList.toggle("hidden", !loggedIn);
+      window.loggedIn = loggedIn;
+      document.body.classList.remove("is-auth");
+      document.body.classList.toggle("is-logged-in", loggedIn);
+      $("login-panel").classList.add("hidden");
+      $("account-panel").classList.remove("hidden");
       $("usage-panel").classList.toggle("hidden", !loggedIn);
+      $("account-email").textContent = loggedIn ? $("account-email").textContent : "未登录";
+      $("balance").textContent = loggedIn ? $("balance").textContent : "登录后查看余额";
+    }
+
+    function showLogin(message = "请先登录后再购买套餐") {
+      document.body.classList.add("is-auth");
+      $("login-panel").classList.remove("hidden");
+      $("account-panel").classList.add("hidden");
+      $("usage-panel").classList.add("hidden");
+      status(message);
     }
 
     async function loadAccount() {
@@ -1648,6 +1664,10 @@
     }
 
     async function createOrder(plan) {
+      if (!window.loggedIn) {
+        showLogin();
+        return;
+      }
       currentOrder = await api("/api/billing/create-order", {
         method: "POST",
         body: JSON.stringify({ plan_id: plan.id, provider: selectedProvider }),
@@ -1727,7 +1747,8 @@
       renderOAuthProviders();
     });
     loadCaptcha().catch(() => null);
-    Promise.all([loadAccount(), loadPlans()])
+    loadPlans().catch((e) => status(e.message));
+    loadAccount()
       .then(() => {
         const orderId = queryOrder || localStorage.getItem("rtCloudOrderId");
         if (orderId) refreshOrder(orderId).catch((e) => status(e.message));
