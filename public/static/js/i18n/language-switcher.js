@@ -334,7 +334,7 @@
                 showArrow: options.showArrow !== false, // 默认显示箭头
                 className: options.className || 'language-switcher'
             };
-            
+
             this.init();
         }
 
@@ -352,7 +352,7 @@
                 });
                 return;
             }
-            
+
             // 检查是否已存在切换器，避免重复创建
             if (document.querySelector(`.${this.config.className}`)) {
                 console.warn('Language switcher already exists');
@@ -361,10 +361,10 @@
 
             // 创建语言切换按钮
             // this.createSwitcher();
-            
+
             // 绑定事件
             // this.bindEvents();
-            
+
             // 初始化显示
             this.updateDisplay();
 
@@ -401,15 +401,15 @@
         createSwitcher() {
             const switcher = document.createElement('div');
             switcher.className = this.config.className;
-            
+
             // 设置样式
             this.applyStyles(switcher);
-            
+
             // 构建语言选项HTML
-            const langOptionsHTML = this.config.languages.map(lang => 
+            const langOptionsHTML = this.config.languages.map(lang =>
                 `<li data-lang="${lang.code}">${lang.label}</li>`
             ).join('');
-            
+
             switcher.innerHTML = `
                 <div class="language-select">
                     <div class="selected-lang">
@@ -421,19 +421,19 @@
                     </ul>
                 </div>
             `;
-            
+
             // 添加到指定容器或body
-            const container = this.config.container 
+            const container = this.config.container
                 ? document.querySelector(this.config.container)
                 : document.body;
-            
+
             if (container) {
                 container.appendChild(switcher);
             } else {
                 console.error('Container not found:', this.config.container);
                 document.body.appendChild(switcher);
             }
-            
+
             // 保存元素引用
             this.switcher = switcher;
             this.select = switcher.querySelector('.language-select');
@@ -487,13 +487,13 @@
 
         updateDisplay() {
             if (!window.I18N) return;
-            
+
             const currentLang = I18N.currentLang;
-            
+
             // 查找当前语言的显示文本
             const currentLangObj = this.config.languages.find(lang => lang.code === currentLang);
             const langText = currentLangObj ? currentLangObj.label : currentLang;
-            
+
             // 更新当前显示的语言
             if (this.currentLangSpan) {
                 this.currentLangSpan.textContent = langText;
@@ -501,7 +501,7 @@
             if (this.currentLangIcon && currentLangObj) {
                 this.currentLangIcon.textContent = currentLangObj.shortLabel || langText;
             }
-            
+
             // 更新选项的激活状态
             if (this.options) {
                 this.options.querySelectorAll('li').forEach(option => {
@@ -581,4 +581,4 @@
         // 默认初始化
         initializeSwitcher();
     }
-})(window); 
+})(window);
