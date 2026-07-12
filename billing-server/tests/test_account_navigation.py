@@ -54,6 +54,13 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn('captcha_id: captchaId', ACCOUNT_HTML)
         self.assertIn('captcha_answer: captchaAnswer', ACCOUNT_HTML)
 
+    def test_captcha_placeholder_cannot_be_submitted_as_a_real_challenge(self):
+        self.assertNotIn(">R7K4</text>", ACCOUNT_HTML)
+        self.assertIn('let captchaLoading = true;', ACCOUNT_HTML)
+        self.assertIn('$("captcha-answer").disabled = !captchaReady;', ACCOUNT_HTML)
+        self.assertIn('$("auth-submit-btn").disabled = authNeedsCaptcha() && !captchaReady;', ACCOUNT_HTML)
+        self.assertIn('图形验证码正在加载，请稍候', ACCOUNT_HTML)
+
     def test_card_payment_has_no_overseas_subtitle(self):
         self.assertNotIn("主要面向海外用户", ACCOUNT_HTML)
 

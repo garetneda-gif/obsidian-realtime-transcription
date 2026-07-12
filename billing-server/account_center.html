@@ -1963,6 +1963,8 @@
     let loggedIn = false;
     let captchaId = "";
     let captchaImage = "";
+    let captchaLoading = true;
+    let captchaRequestVersion = 0;
     let codeCooldown = 0;
     let codeTimer = null;
     const sessionKey = "ort.billing.browserSession.v2";
@@ -1975,12 +1977,9 @@
     const paymentHosts = new Set(["api.xunhupay.com", "creem.io", "www.creem.io", "checkout.creem.io"]);
     localStorage.removeItem("ort.billing.loggedIn");
     const svgData = (svg) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-    const captchaFallback = svgData(`<svg xmlns="http://www.w3.org/2000/svg" width="104" height="38" viewBox="0 0 104 38">
-      <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#eef5ff"/><stop offset="1" stop-color="#d7e8ff"/></linearGradient></defs>
-      <rect width="104" height="38" rx="8" fill="url(#g)"/>
-      <path d="M5 24C20 9 36 32 52 17S83 5 99 23" fill="none" stroke="#8fb8ff" stroke-width="2" opacity=".55"/>
-      <text x="52" y="25" text-anchor="middle" font-family="Menlo, monospace" font-size="18" font-weight="700" letter-spacing="3" fill="#1768ff">R7K4</text>
-      <circle cx="17" cy="10" r="2" fill="#6fc8ff"/><circle cx="85" cy="29" r="2" fill="#1768ff"/>
+    const captchaPlaceholder = (label) => svgData(`<svg xmlns="http://www.w3.org/2000/svg" width="104" height="38" viewBox="0 0 104 38">
+      <rect width="104" height="38" rx="8" fill="#e8f1ff"/>
+      <text x="52" y="24" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600" fill="#6b7c99">${label}</text>
     </svg>`);
     const oauthIcons = {
       google: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h6.5c-.3 1.4-1.1 2.7-2.4 3.5v2.9h3.8c2.2-2 3.6-5 3.6-8.4Z"/><path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.1-4.1 1.1-3.1 0-5.7-2.1-6.7-4.9H1.4v3c1.9 3.9 5.9 6.6 10.6 6.6Z"/><path fill="#FBBC05" d="M5.3 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.6.4-2.4v-3H1.4C.5 8.2 0 10.1 0 12s.5 3.8 1.4 5.4l3.9-3Z"/><path fill="#EA4335" d="M12 4.7c1.7 0 3.3.6 4.5 1.8l3.4-3.4C17.9 1.2 15.2 0 12 0 7.3 0 3.3 2.7 1.4 6.6l3.9 3C6.3 6.8 8.9 4.7 12 4.7Z"/></svg>`,
@@ -2089,6 +2088,7 @@
 
     function renderAuth() {
       const isRegister = authMode === "register";
+      const captchaReady = Boolean(captchaId && captchaImage) && !captchaLoading;
       $("auth-title").textContent = isRegister ? "注册账号" : "登录账号";
       $("login-tab").classList.toggle("selected", !isRegister);
       $("register-tab").classList.toggle("selected", isRegister);
@@ -2104,7 +2104,12 @@
       $("auth-method-btn").textContent = authMethod === "code" ? "使用密码登录" : "换用邮箱验证码登录";
       $("send-code-btn").textContent = codeCooldown > 0 ? `${codeCooldown}s` : "发送验证码";
       $("send-code-btn").disabled = codeCooldown > 0;
-      $("captcha-image").src = captchaImage || captchaFallback;
+      $("captcha-refresh-btn").textContent = captchaLoading ? "加载中" : "换一张";
+      $("captcha-refresh-btn").disabled = captchaLoading;
+      $("captcha-answer").disabled = !captchaReady;
+      $("captcha-answer").placeholder = captchaLoading ? "验证码加载中" : (captchaReady ? "输入验证码" : "请点击换一张");
+      $("auth-submit-btn").disabled = authNeedsCaptcha() && !captchaReady;
+      $("captcha-image").src = captchaImage || captchaPlaceholder(captchaLoading ? "加载中…" : "请重试");
     }
 
     function syncCodeDigits() {
@@ -2113,10 +2118,23 @@
 
     async function loadCaptcha() {
       if (!authNeedsCaptcha()) return;
-      const data = await api("/api/auth/captcha/image", { method: "POST", body: "{}" });
-      captchaId = data.captcha_id || "";
-      captchaImage = data.image || "";
+      const requestVersion = ++captchaRequestVersion;
+      captchaLoading = true;
+      captchaId = "";
+      captchaImage = "";
+      $("captcha-answer").value = "";
       renderAuth();
+      try {
+        const data = await api("/api/auth/captcha/image", { method: "POST", body: "{}" });
+        if (requestVersion !== captchaRequestVersion) return;
+        captchaId = data.captcha_id || "";
+        captchaImage = data.image || "";
+      } finally {
+        if (requestVersion === captchaRequestVersion) {
+          captchaLoading = false;
+          renderAuth();
+        }
+      }
     }
 
     function startCodeCooldown() {
@@ -2375,7 +2393,9 @@
       if (authNeedsPassword() && !password) throw new Error("请输入密码");
       if (authMode === "register" && password !== $("confirm-password").value) throw new Error("两次密码不一致");
       if (authNeedsCode() && !code) throw new Error("请输入邮箱验证码");
-      if (authNeedsCaptcha() && (!captchaId || !captchaAnswer)) throw new Error("请输入图形验证码");
+      if (authNeedsCaptcha() && captchaLoading) throw new Error("图形验证码正在加载，请稍候");
+      if (authNeedsCaptcha() && (!captchaId || !captchaImage)) throw new Error("图形验证码加载失败，请点击换一张");
+      if (authNeedsCaptcha() && !captchaAnswer) throw new Error("请输入图形验证码");
       const path = authMode === "login" && authMethod === "code" ? authPaths.code : authPaths[authMode];
       const data = await api(path, {
         method: "POST",
