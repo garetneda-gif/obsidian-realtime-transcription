@@ -37,6 +37,13 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn("Every conversation<br>recorded, transcribed, refined", script)
         self.assertIn("recharge: 'Top up'", script)
 
+    def test_landing_pages_use_the_waveform_brand_icon(self):
+        icon_path = "/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260712-1"
+        for html in (HOME_HTML, PUBLIC_HOME_HTML):
+            self.assertIn(f'rel="icon" type="image/png" sizes="256x256" href="{icon_path}"', html)
+            self.assertIn(f'<img src="{icon_path}" alt="">', html)
+            self.assertNotIn("brand-recording-icon.svg", html)
+
     def test_username_entry_still_targets_personal_center(self):
         self.assertIn('accountLink.href = "/account"', HOME_HTML)
 
