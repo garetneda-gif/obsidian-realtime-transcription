@@ -20,7 +20,6 @@ AGENTS.md
 app.js
 pnpm-lock.yaml
 pnpm-workspace.yaml
-public/
 billing-server/schema.sql
 billing-server/static/bat.bing.com/
 billing-server/static/idatalogconf.iflysec.com/
