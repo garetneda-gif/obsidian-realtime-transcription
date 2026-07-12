@@ -8,3 +8,9 @@ __pycache__/
 .DS_Store
 backend/venv/
 dist/
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+.vercel

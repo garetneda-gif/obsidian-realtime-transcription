@@ -2,12 +2,15 @@ import { requestUrl } from "obsidian";
 import { FormalizeSettings } from "../types";
 import { t } from "../i18n";
 import { extractTextFromResponse } from "../utils/llmResponse";
+import { AgentBackendService } from "./AgentBackendService";
 
 export class FormalizeService {
   private settings: FormalizeSettings;
+  private agentBackend: AgentBackendService;
 
-  constructor(settings: FormalizeSettings) {
+  constructor(settings: FormalizeSettings, agentBackend: AgentBackendService) {
     this.settings = settings;
+    this.agentBackend = agentBackend;
   }
 
   updateSettings(settings: FormalizeSettings): void {
@@ -15,17 +18,30 @@ export class FormalizeService {
   }
 
   canFormalize(): boolean {
-    return Boolean(
+    return this.agentBackend.isConfigured() || Boolean(
       this.settings.apiKey?.trim() &&
       this.settings.apiUrl?.trim() &&
       this.settings.model?.trim(),
     );
   }
 
-  async formalize(text: string): Promise<string> {
+  async formalize(text: string, outputLanguage: string, contextText = "", signal?: AbortSignal): Promise<string> {
+    throwIfAborted(signal);
     const inputText = text?.trim();
     if (!inputText) {
       throw new Error(t("formalize.emptyText"));
+    }
+    const promptText = buildFormalizeUserText(inputText, contextText);
+
+    const systemPrompt =
+      `你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为${outputLanguage}的通顺书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。如果提供上下文，仅用于理解指代、承接关系和术语，不要把上下文中不属于待润色文本的信息扩写进结果。只输出待润色文本的改写结果，不要解释。`;
+    if (this.agentBackend.isConfigured()) {
+      return this.agentBackend.run({
+        systemPrompt,
+        userText: promptText,
+        label: "润色",
+        signal,
+      });
     }
 
     const apiUrl = normalizeApiUrl(this.settings.apiUrl);
@@ -39,7 +55,7 @@ export class FormalizeService {
     console.log("[Formalize] 开始请求", { apiUrl, model });
 
     try {
-      const response = await requestUrl({
+      const response = await abortable(requestUrl({
         url: apiUrl,
         method: "POST",
         headers: {
@@ -51,15 +67,14 @@ export class FormalizeService {
           messages: [
             {
               role: "system",
-              content:
-                "你是一个文本润色助手。请将用户提供的口语化语音转写文本改写为通顺的书面语。要求：保持原意不变，修正口语化表达、语气词、重复和冗余，使句子更简洁正式。只输出改写后的结果，不要解释。",
+              content: systemPrompt,
             },
-            { role: "user", content: inputText },
+            { role: "user", content: promptText },
           ],
           temperature: 0.3,
-          max_tokens: 1024,
         }),
-      });
+      }), signal);
+      throwIfAborted(signal);
 
       console.log("[Formalize] 收到响应", response.status);
 
@@ -82,6 +97,28 @@ export class FormalizeService {
   }
 }
 
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const error = new Error("操作已取消");
+  error.name = "AbortError";
+  throw error;
+}
+
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  throwIfAborted(signal);
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      signal.addEventListener("abort", () => {
+        const error = new Error("操作已取消");
+        error.name = "AbortError";
+        reject(error);
+      }, { once: true });
+    }),
+  ]);
+}
+
 function normalizeApiUrl(url: string): string {
   const trimmed = (url ?? "").trim();
   if (!trimmed) return "";
@@ -89,4 +126,16 @@ function normalizeApiUrl(url: string): string {
     return trimmed.replace(/\/v1\/completions\/?$/i, "/v1/chat/completions");
   }
   return trimmed;
+}
+
+function buildFormalizeUserText(inputText: string, contextText: string): string {
+  const context = contextText?.trim();
+  if (!context) return inputText;
+  return [
+    "上下文（仅供理解，不要改写输出）：",
+    context,
+    "",
+    "待润色文本：",
+    inputText,
+  ].join("\n");
 }

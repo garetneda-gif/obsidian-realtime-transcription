@@ -1,18 +1,24 @@
 {
   "name": "obsidian-realtime-transcription",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "description": "基于 SenseVoice-Small 的 Obsidian 实时语音转写插件",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts",
+    "build": "npm run typecheck && node esbuild.config.mjs production",
     "post-sync-refresh": "bash ./scripts/post-sync-refresh.sh"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
     "esbuild": "^0.24.0",
     "obsidian": "latest",
-    "typescript": "^5.7.0",
-    "tslib": "^2.7.0"
+    "tslib": "^2.7.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
   }
 }

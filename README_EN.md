@@ -347,7 +347,7 @@ macOS may block unnotarized Python scripts with an "unidentified developer" aler
 
 ### Cloud Billing Server
 
-Hosted cloud mode uses `billing-server/`: the server keeps Tencent Cloud ASR credentials, the plugin logs in and requests a signed ASR URL, the server pre-charges balance, then settles by recording duration.
+Hosted cloud mode uses `billing-server/`. Mainland China defaults to Tencent Cloud, while other regions default to Deepgram Nova-3; users can override the route in plugin settings. The server pre-charges account balance. Tencent sessions settle by session duration, while the overseas route streams through a same-origin WebSocket proxy and uses server-side request logs for authoritative settlement.
 
 Minimal startup config:
 
@@ -356,6 +356,8 @@ export BS_SECRET_KEY="at least 32 random characters"
 export TENCENT_APP_ID="Tencent Cloud AppID"
 export TENCENT_SECRET_ID="Tencent Cloud SecretID"
 export TENCENT_SECRET_KEY="Tencent Cloud SecretKey"
+export DEEPGRAM_API_KEY="production Deepgram API key with Member permissions"
+export DEEPGRAM_PROJECT_ID="Deepgram Project ID"
 export AP_XUNHU_APPID="Xunhu AppID"
 export AP_XUNHU_APPSECRET="Xunhu AppSecret"
 export AP_XUNHU_NOTIFY_URL="https://your-domain/api/billing/callback/xunhu"
@@ -365,6 +367,8 @@ cd billing-server
 pip install -r requirements.txt
 python app.py
 ```
+
+Never place the Deepgram API key in the plugin or repository. Configure it only in Vercel so the server-side WebSocket proxy can stream audio and read project request usage.
 
 After deployment, set the plugin's Server URL to your HTTPS API domain.
 

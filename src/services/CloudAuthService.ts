@@ -2,7 +2,7 @@
  * 云端付费模式的认证和签名服务
  *
  * 职责：
- * - 用户注册/登录/token 刷新
+ * - 用户登录/token 刷新（注册在托管网页完成）
  * - 获取签名 URL（服务端生成，客户端直连腾讯云）
  * - 使用报告和结算
  * - 余额查询和用量统计
@@ -13,7 +13,12 @@
  *   Plugin → CloudAuthService → Billing Server → 使用报告
  */
 
-import { CloudAuthSettings } from "../types";
+import type {
+  CloudAsrSession,
+  CloudAuthSettings,
+  CloudLanguage,
+  CloudProviderPreference,
+} from "../types";
 
 interface SignResult {
   signed_url: string;
@@ -31,12 +36,26 @@ interface AuthResult {
   balance_cents?: number;
 }
 
+export interface CloudCaptcha {
+  captcha_id: string;
+  image: string;
+}
+
 interface UsageRecord {
   id: string;
   duration_seconds: number;
   cost_cents: number;
   engine_model: string;
+  provider: "tencent" | "deepgram";
+  language: CloudLanguage;
+  provider_cost_microusd: number | null;
   created_at: string;
+}
+
+interface AccountInfo {
+  email?: string;
+  balance_cents: number;
+  created_at?: string;
 }
 
 export class CloudAuthService {
@@ -44,11 +63,11 @@ export class CloudAuthService {
   private onSettingsChanged: ((settings: CloudAuthSettings) => void) | null = null;
 
   constructor(settings: CloudAuthSettings) {
-    this.settings = CloudAuthService.normalizeSettings(settings);
+    this.settings = this.normalizeSettings(settings);
   }
 
   updateSettings(settings: CloudAuthSettings): void {
-    this.settings = CloudAuthService.normalizeSettings(settings);
+    this.settings = this.normalizeSettings(settings);
   }
 
   setOnSettingsChanged(cb: (settings: CloudAuthSettings) => void): void {
@@ -63,22 +82,33 @@ export class CloudAuthService {
     return this.settings.balanceCents;
   }
 
-  async register(email: string, password: string): Promise<AuthResult> {
-    const resp = await this.post("/api/auth/register", { email, password });
-    if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.error || "Registration failed");
-    }
-    const data = await resp.json() as AuthResult;
-    this.updateTokens(data);
-    return data;
+  static normalizeServerUrl(serverUrl: string): string {
+    const trimmed = serverUrl.trim().replace(/\/+$/, "");
+    if (!trimmed) return "";
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
   }
 
-  async login(email: string, password: string): Promise<AuthResult> {
-    const resp = await this.post("/api/auth/login", { email, password });
+  async getCaptcha(): Promise<CloudCaptcha> {
+    const resp = await this.post("/api/auth/captcha/image", {});
+    if (!resp.ok) throw await this.readError(resp, "Unable to load security verification");
+    return resp.json() as Promise<CloudCaptcha>;
+  }
+
+  async login(
+    email: string,
+    password: string,
+    captchaId: string,
+    captchaAnswer: string,
+  ): Promise<AuthResult> {
+    const resp = await this.post("/api/auth/login", {
+      email,
+      password,
+      captcha_id: captchaId,
+      captcha_answer: captchaAnswer,
+    });
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.error || "Login failed");
+      throw await this.readError(resp, "Login failed");
     }
     const data = await resp.json() as AuthResult;
     this.updateTokens(data);
@@ -92,8 +122,10 @@ export class CloudAuthService {
         refresh_token: this.settings.refreshToken,
       });
       if (!resp.ok) return false;
-      const data = await resp.json() as AuthResult;
-      this.updateTokens(data);
+      const data = await resp.json();
+      this.settings.token = data.token;
+      this.settings.tokenExpiresAt = data.expires_at;
+      this.onSettingsChanged?.(this.settings);
       return true;
     } catch {
       return false;
@@ -111,10 +143,28 @@ export class CloudAuthService {
       voice_id: voiceId,
     });
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.error || "Signing failed");
+      throw await this.readError(resp, "Signing failed");
     }
     const data = await resp.json() as SignResult;
+    this.settings.balanceCents = data.balance_cents;
+    this.onSettingsChanged?.(this.settings);
+    return data;
+  }
+
+  async createAsrSession(
+    clientSessionId: string,
+    provider: CloudProviderPreference,
+    language: CloudLanguage,
+  ): Promise<CloudAsrSession> {
+    const resp = await this.authPost("/api/asr/session", {
+      client_session_id: clientSessionId,
+      provider,
+      language,
+    });
+    if (!resp.ok) {
+      throw await this.readError(resp, "Unable to create cloud ASR session");
+    }
+    const data = await resp.json() as CloudAsrSession;
     this.settings.balanceCents = data.balance_cents;
     this.onSettingsChanged?.(this.settings);
     return data;
@@ -123,35 +173,70 @@ export class CloudAuthService {
   /**
    * 报告使用时长，触发结算
    */
-  async reportUsage(signRequestId: string, durationSeconds: number): Promise<void> {
-    try {
-      const resp = await this.authPost("/api/billing/report", {
-        sign_request_id: signRequestId,
-        duration_seconds: Math.round(durationSeconds),
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        this.settings.balanceCents = data.balance_cents;
-        this.onSettingsChanged?.(this.settings);
+  async reportUsage(
+    sessionId: string,
+    durationSeconds: number,
+    providerRequestId?: string,
+  ): Promise<void> {
+    const delays = [0, 500, 1000, 2000, 4000];
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (delays[attempt] > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
       }
-    } catch (e) {
-      console.error("[CloudAuth] Failed to report usage:", e);
+      try {
+        const resp = await this.authPost("/api/billing/report", {
+          session_id: sessionId,
+          provider_request_id: providerRequestId,
+          duration_seconds: Math.round(durationSeconds),
+        });
+        if (resp.status === 202) continue;
+        if (!resp.ok) {
+          throw await this.readError(resp, "Usage settlement failed");
+        }
+        const data = await resp.json() as { balance_cents?: number };
+        if (typeof data.balance_cents === "number") {
+          this.settings.balanceCents = data.balance_cents;
+          this.onSettingsChanged?.(this.settings);
+        }
+        return;
+      } catch (error) {
+        if (attempt === delays.length - 1) {
+          console.error("[CloudAuth] Failed to report usage:", error);
+        }
+      }
     }
   }
 
   async getBalance(): Promise<number> {
     const resp = await this.authGet("/api/billing/balance");
-    if (!resp.ok) throw new Error("Failed to get balance");
+    if (!resp.ok) throw await this.readError(resp, "Failed to get balance");
     const data = await resp.json();
     this.settings.balanceCents = data.balance_cents;
     this.onSettingsChanged?.(this.settings);
     return data.balance_cents;
   }
 
+  async getAccount(): Promise<AccountInfo> {
+    const resp = await this.authGet("/api/billing/me");
+    if (resp.status === 404) {
+      const balance = await this.getBalance();
+      return { balance_cents: balance };
+    }
+    if (!resp.ok) throw await this.readError(resp, "Failed to get account");
+    const data = await resp.json() as AccountInfo;
+    this.settings.balanceCents = data.balance_cents;
+    this.onSettingsChanged?.(this.settings);
+    return data;
+  }
+
   async getUsage(): Promise<{ total_seconds: number; total_cost_cents: number; records: UsageRecord[] }> {
     const resp = await this.authGet("/api/billing/usage");
-    if (!resp.ok) throw new Error("Failed to get usage");
+    if (!resp.ok) throw await this.readError(resp, "Failed to get usage");
     return resp.json();
+  }
+
+  getAccountCenterUrl(): string {
+    return this.buildUrl("/account");
   }
 
   logout(): void {
@@ -164,13 +249,6 @@ export class CloudAuthService {
 
   // ── 私有方法 ──
 
-  private static normalizeSettings(settings: CloudAuthSettings): CloudAuthSettings {
-    return {
-      ...settings,
-      serverUrl: settings.serverUrl.trim().replace(/\/+$/, ""),
-    };
-  }
-
   private updateTokens(data: AuthResult): void {
     this.settings.token = data.token;
     this.settings.refreshToken = data.refresh_token;
@@ -181,14 +259,21 @@ export class CloudAuthService {
     this.onSettingsChanged?.(this.settings);
   }
 
-  private async authPost(path: string, body: Record<string, unknown>): Promise<Response> {
+  private normalizeSettings(settings: CloudAuthSettings): CloudAuthSettings {
+    return {
+      ...settings,
+      serverUrl: CloudAuthService.normalizeServerUrl(settings.serverUrl),
+    };
+  }
+
+  private async authPost(path: string, body: Record<string, unknown> = {}): Promise<Response> {
     await this.ensureValidToken();
     return this.post(path, body, { Authorization: `Bearer ${this.settings.token}` });
   }
 
   private async authGet(path: string): Promise<Response> {
     await this.ensureValidToken();
-    const url = `${this.settings.serverUrl}${path}`;
+    const url = this.buildUrl(path);
     return fetch(url, {
       headers: { Authorization: `Bearer ${this.settings.token}` },
     });
@@ -199,12 +284,38 @@ export class CloudAuthService {
     body: Record<string, unknown>,
     extraHeaders?: Record<string, string>,
   ): Promise<Response> {
-    const url = `${this.settings.serverUrl}${path}`;
+    const url = this.buildUrl(path);
     return fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...extraHeaders },
       body: JSON.stringify(body),
     });
+  }
+
+  private buildUrl(path: string): string {
+    const serverUrl = CloudAuthService.normalizeServerUrl(this.settings.serverUrl);
+    if (!serverUrl) throw new Error("Cloud server URL is required");
+    this.settings.serverUrl = serverUrl;
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return `${serverUrl}${normalizedPath}`;
+  }
+
+  private async readError(resp: Response, fallback: string): Promise<Error> {
+    const payload = await this.readJson(resp);
+    const code = typeof payload?.code === "string" ? payload.code : "";
+    const message =
+      (typeof payload?.error === "string" && payload.error) ||
+      (typeof payload?.message === "string" && payload.message) ||
+      fallback;
+    return new Error(code ? `${code}: ${message}` : message);
+  }
+
+  private async readJson(resp: Response): Promise<Record<string, unknown> | null> {
+    try {
+      return await resp.json() as Record<string, unknown>;
+    } catch {
+      return null;
+    }
   }
 
   private async ensureValidToken(): Promise<void> {

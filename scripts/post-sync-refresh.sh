@@ -87,10 +87,10 @@ if ! command -v obsidian >/dev/null 2>&1; then
 fi
 
 echo "[INFO] 调用 Obsidian CLI 强制重载插件: $PLUGIN_ID"
+reload_args=(plugin:reload "id=$PLUGIN_ID")
 if [[ -n "$VAULT_NAME" ]]; then
-  obsidian "vault=$VAULT_NAME" plugin:reload "id=$PLUGIN_ID"
-else
-  obsidian plugin:reload "id=$PLUGIN_ID"
+  reload_args=("vault=$VAULT_NAME" "${reload_args[@]}")
 fi
+nohup obsidian "${reload_args[@]}" >/dev/null 2>&1 < /dev/null &
 
-echo "[OK] 插件文件已覆盖并完成强制重载"
+echo "[OK] 插件文件已覆盖，并已在后台发送重载请求"

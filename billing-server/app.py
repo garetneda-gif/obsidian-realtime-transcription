@@ -1,5 +1,6 @@
 """Billing Server 主应用"""
 # pyright: reportImplicitRelativeImport=false, reportMissingImports=false, reportMissingModuleSource=false
+import os
 import threading
 import time
 from pathlib import Path
@@ -10,9 +11,11 @@ from flask_cors import CORS
 import config
 from database import init_db
 from auth import auth_bp
+from oauth import oauth_bp
 from signing import signing_bp
 from billing import billing_bp, settle_expired_requests
 from payment_xunhu import payment_bp
+from payment_creem import creem_bp
 from account_center import account_bp, account_center
 
 STATIC_DIR = Path(__file__).with_name("static")
@@ -33,14 +36,19 @@ def create_app() -> Flask:
     CORS(app, origins=["app://obsidian.md"])  # Obsidian 桌面端的 origin
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(oauth_bp)
     app.register_blueprint(signing_bp)
     app.register_blueprint(billing_bp)
     app.register_blueprint(payment_bp)
+    app.register_blueprint(creem_bp)
     app.register_blueprint(account_bp)
 
     @app.route("/health")
     def health():
-        return {"status": "ok"}, 200
+        return {
+            "status": "ok",
+            "revision": os.getenv("VERCEL_GIT_COMMIT_SHA", "local")[:12],
+        }, 200
 
     @app.route("/")
     @app.route("/en")

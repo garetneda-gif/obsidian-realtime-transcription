@@ -348,7 +348,7 @@ macOS 可能拦截未经公证的 Python 脚本，出现「无法验证开发者
 
 ### 云端收费服务
 
-云端托管模式使用 `billing-server/`：服务端持有腾讯云 ASR 密钥，插件登录后向服务端请求签名 URL，服务端预扣余额，录音结束后按时长结算。
+云端托管模式使用 `billing-server/`：中国大陆默认走腾讯云，其他地区默认走 Deepgram Nova-3，也可在插件设置中手动选择。服务端预扣余额；腾讯云按会话时长结算，海外线路通过同域 WebSocket 代理转发，并由服务端回查请求记录与真实用量。
 
 最小启动配置：
 
@@ -357,6 +357,8 @@ export BS_SECRET_KEY="至少 32 位随机字符串"
 export TENCENT_APP_ID="腾讯云 AppID"
 export TENCENT_SECRET_ID="腾讯云 SecretID"
 export TENCENT_SECRET_KEY="腾讯云 SecretKey"
+export DEEPGRAM_API_KEY="Deepgram Member 权限的生产 API Key"
+export DEEPGRAM_PROJECT_ID="Deepgram Project ID"
 export AP_XUNHU_APPID="虎皮椒 AppID"
 export AP_XUNHU_APPSECRET="虎皮椒 AppSecret"
 export AP_XUNHU_NOTIFY_URL="https://你的域名/api/billing/callback/xunhu"
@@ -366,6 +368,8 @@ cd billing-server
 pip install -r requirements.txt
 python app.py
 ```
+
+不要将 Deepgram API Key 写入插件或仓库。该 Key 只配置在 Vercel 服务端，用于 WebSocket 代理和读取项目请求用量。
 
 上线后把插件设置里的「服务器地址」填成你的 HTTPS API 域名。
 

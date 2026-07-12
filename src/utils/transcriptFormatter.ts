@@ -3,17 +3,25 @@ import type { TranscriptEntry } from "../types";
 export function formatTranscriptEntriesAsMarkdown(
   entries: TranscriptEntry[],
   formalLabel: string,
+  options: { useFormalTextAsOriginal?: boolean } = {},
 ): string {
-  return entries.map((entry) => formatEntry(entry, formalLabel)).join("\n\n");
+  return entries.map((entry) => formatEntry(entry, formalLabel, options)).join("\n\n");
 }
 
-function formatEntry(entry: TranscriptEntry, formalLabel: string): string {
+function formatEntry(
+  entry: TranscriptEntry,
+  formalLabel: string,
+  options: { useFormalTextAsOriginal?: boolean },
+): string {
+  const text = options.useFormalTextAsOriginal && entry.formalText
+    ? entry.formalText
+    : entry.result.text;
   const lines = [
     `**[${formatTime(entry.wallTime)}]** \`${entry.result.language.toUpperCase()}\``,
-    entry.result.text,
+    text,
   ];
 
-  if (entry.formalText) {
+  if (entry.formalText && !options.useFormalTextAsOriginal) {
     lines.push(`> **${formalLabel}**: ${entry.formalText}`);
   }
   if (entry.translation) {

@@ -4,16 +4,27 @@ import { TranscriptionView } from "./views/TranscriptionView";
 import { BackendManager } from "./services/BackendManager";
 import { WebSocketClient } from "./services/WebSocketClient";
 import { TencentASRClient } from "./services/TencentASRClient";
+import { DeepgramASRClient } from "./services/DeepgramASRClient";
 import { AudioCapture } from "./services/AudioCapture";
 import { TranslationService } from "./services/TranslationService";
 import { SummaryService } from "./services/SummaryService";
 import { FormalizeService } from "./services/FormalizeService";
+import { AgentBackendService, isAiBackendCliPathCompatible, resolveAiBackendCliPath } from "./services/AgentBackendService";
 import { TranscriptionSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, PluginSettings, TranscriptEntry, TranscriptionResult, SerializedTranscriptEntry, isCloudASR, isHostedCloud } from "./types";
+import { DEFAULT_SETTINGS, HOSTED_CLOUD_ENABLED, isCloudASR, isHostedCloud, normalizeAiBackendSettings, normalizeHostedCloudAuthSettings } from "./types";
+import type { AiOutputLanguage, AsrProvider, CloudAsrSession, PanelSettingsValues, PluginSettings, SerializedTranscriptEntry, SummarySettings, TranscriptEntry, TranscriptionResult } from "./types";
+import type { AiBackendProfileRole, AiBackendProfileSettings, AiBackendProvider } from "./types";
 import { CloudAuthService } from "./services/CloudAuthService";
 import { resolvePluginDir } from "./utils/pluginPaths";
 import { serializeEntry, deserializeEntry } from "./utils/entrySerializer";
 import { formatTranscriptEntriesAsMarkdown } from "./utils/transcriptFormatter";
+import {
+  buildClaudianContextMarkdown,
+  CLAUDIAN_CONTEXT_FILE,
+  CLAUDIAN_CONTEXT_FOLDER,
+} from "./utils/claudianContext";
+import { executeObsidianCommand } from "./utils/obsidianCommands";
+import { inferTranscriptLanguage } from "./utils/language";
 import {
   comparableLength,
   comparableStartsWith,
@@ -24,6 +35,18 @@ import { isStalePartialResult, trimCommittedPrefix } from "./utils/transcriptDed
 import { TitleInputModal } from "./views/TitleInputModal";
 import { t, setLocale } from "./i18n";
 
+const AI_SUMMARY_FAILURE_RETRY_MS = 60_000;
+const FORMALIZE_CONTEXT_MAX_CHARS = 180;
+const AI_BACKEND_PROFILE_ROLES: AiBackendProfileRole[] = ["fast", "smart"];
+const TITLE_SERVICE_SETTINGS: SummarySettings = {
+  enabled: false,
+  displayMode: "both",
+  apiUrl: "",
+  apiKey: "",
+  model: "",
+  thresholdChars: 500,
+};
+
 interface PendingTranscript {
   id: string;
   language: string;
@@ -31,8 +54,6 @@ interface PendingTranscript {
   wallTime: Date;
   lastUpdatedAt: number;
   partialOnly: boolean;
-  /** 云端模式：该 pending 对应的原始累积文本长度（用于 flush 后更新去重游标） */
-  cloudOriginalLength?: number;
 }
 
 export default class RealtimeTranscriptionPlugin extends Plugin {
@@ -40,14 +61,22 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private backendManager!: BackendManager;
   private wsClient!: WebSocketClient;
   private tencentClient: TencentASRClient | null = null;
+  private deepgramClient: DeepgramASRClient | null = null;
   private cloudAuthService: CloudAuthService | null = null;
-  private activeSignRequestId: string | null = null;
+  private activeCloudSession: CloudAsrSession | null = null;
   private recordingStartTime: number = 0;
+  private recordingProvider: AsrProvider | null = null;
   private audioCapture!: AudioCapture;
+  private fastAgentBackendService!: AgentBackendService;
+  private smartAgentBackendService!: AgentBackendService;
   private translationService!: TranslationService;
   private summaryService!: SummaryService;
+  private titleService!: SummaryService;
   private formalizeService!: FormalizeService;
+  private aiBackendTestInFlight: Partial<Record<AiBackendProfileRole, Promise<string>>> = {};
   private recording = false;
+  private recordingTransition = false;
+  private connectionLossTimer: ReturnType<typeof setTimeout> | null = null;
   private entryCounter = 0;
   private pendingTranscript: PendingTranscript | null = null;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -55,8 +84,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private committedPartialTexts: string[] = [];
   private summaryBuffer = "";
   private summaryInFlight = false;
+  private summaryRetryAfter = 0;
+  private batchTaskAbortController: AbortController | null = null;
   private metaSummaryTexts: string[] = [];
   private metaSummaryInFlight = false;
+  private metaSummaryRetryAfter = 0;
   private lastPartialText = "";
   private lastStablePartialText = "";
   private renderedPartialText = "";
@@ -65,8 +97,6 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private rollbackCandidateAt = 0;
   private lastPartialLanguage = "zh";
   private lastPartialWallTime: Date | null = null;
-  /** 云端累积式 partial 已提交的前缀长度（用于去重，避免重复显示已 flush 的文本） */
-  private cloudCommittedLength = 0;
   private transcriptEntries: TranscriptEntry[] = [];
   private saveEntriesTimer: ReturnType<typeof setTimeout> | null = null;
   private transcriptSessionVersion = 0;
@@ -108,20 +138,24 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.backendManager = new BackendManager(pluginDir, this.settings);
     this.wsClient = new WebSocketClient();
     this.audioCapture = new AudioCapture();
-    this.translationService = new TranslationService(this.settings.translation);
-    this.summaryService = new SummaryService(this.settings.summary);
-    this.formalizeService = new FormalizeService(this.settings.formalize);
+    this.fastAgentBackendService = new AgentBackendService(this.settings.aiBackend.fast, getVaultBasePath(this.app));
+    this.smartAgentBackendService = new AgentBackendService(this.settings.aiBackend.smart, getVaultBasePath(this.app));
+    this.translationService = new TranslationService(this.settings.translation, this.fastAgentBackendService);
+    this.summaryService = new SummaryService(this.settings.summary, this.smartAgentBackendService);
+    this.titleService = new SummaryService(TITLE_SERVICE_SETTINGS, this.fastAgentBackendService);
+    this.formalizeService = new FormalizeService(this.settings.formalize, this.fastAgentBackendService);
     this.cloudAuthService = new CloudAuthService(this.settings.cloudAuth);
     this.cloudAuthService.setOnSettingsChanged((newSettings) => {
       this.settings.cloudAuth = newSettings;
-      void this.saveData(this.settings).catch((error) => {
-        console.error("[Transcription] Failed to persist settings after cloud auth change:", error);
-      });
+      this.saveData(this.settings);
     });
 
     // WebSocket 结果回调
     this.wsClient.setOnResult((result) => this.handleTranscriptionResult(result));
     this.wsClient.setOnStatusChange((connected) => {
+      if (connected) {
+        this.clearConnectionLossTimer();
+      }
       const view = this.getView();
       if (view) {
         if (connected && this.recording) {
@@ -129,6 +163,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         } else {
           view.setConnectionStatus(connected);
         }
+      }
+      if (!connected && this.recording) {
+        this.scheduleConnectionLossGuard();
       }
     });
     this.wsClient.setOnReconnecting((attempt) => {
@@ -150,8 +187,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   async onunload(): Promise<void> {
-    await this.flushPendingTranscript();
+    if (this.recording) {
+      await this.stopRecording();
+    } else {
+      await this.flushPendingTranscript();
+    }
     this.clearFlushTimer();
+    this.clearConnectionLossTimer();
     if (this.saveEntriesTimer) {
       clearTimeout(this.saveEntriesTimer);
     }
@@ -159,6 +201,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.audioCapture.stop();
     this.wsClient.disconnect();
     this.tencentClient?.disconnect();
+    this.deepgramClient?.disconnect();
     await this.backendManager.stop();
   }
 
@@ -185,15 +228,31 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (!this.settings.asrProvider) {
       this.settings.asrProvider = "local";
     }
+    if (!this.settings.cloudProvider) {
+      this.settings.cloudProvider = DEFAULT_SETTINGS.cloudProvider;
+    }
+    if (!this.settings.cloudLanguage) {
+      this.settings.cloudLanguage = DEFAULT_SETTINGS.cloudLanguage;
+    }
+    if (!HOSTED_CLOUD_ENABLED && this.settings.asrProvider === "cloud") {
+      this.settings.asrProvider = "local";
+    }
     // 深合并 tencentASR（应对部分保存的情况，确保所有字段都有默认值）
     this.settings.tencentASR = { ...DEFAULT_SETTINGS.tencentASR, ...this.settings.tencentASR };
-    // 深合并 cloudAuth
-    this.settings.cloudAuth = { ...DEFAULT_SETTINGS.cloudAuth, ...this.settings.cloudAuth };
-
-    const fixedPythonPath = await BackendManager.resolvePythonPath(this.settings.pythonPath);
-    if (fixedPythonPath && fixedPythonPath !== this.settings.pythonPath) {
-      this.settings.pythonPath = fixedPythonPath;
-      await this.saveData(this.settings);
+    this.settings.cloudAuth = normalizeHostedCloudAuthSettings(this.settings.cloudAuth);
+    this.settings.aiBackend = normalizeAiBackendSettings((raw as { aiBackend?: unknown } | null)?.aiBackend);
+    this.migrateAiBackendProfilesFromLegacyApi(raw);
+    this.refreshAiBackendCliPaths();
+    if (!["auto", "zh", "en", "custom"].includes(this.settings.aiOutputLanguage)) {
+      this.settings.aiOutputLanguage = DEFAULT_SETTINGS.aiOutputLanguage;
+    }
+    if (typeof this.settings.customAiOutputLanguage !== "string") {
+      this.settings.customAiOutputLanguage = DEFAULT_SETTINGS.customAiOutputLanguage;
+    }
+    this.settings.customAiOutputLanguage = this.settings.customAiOutputLanguage.trim();
+    this.settings.transcriptFontSize = clampFontSize(this.settings.transcriptFontSize);
+    if (typeof this.settings.autoFormalize !== "boolean") {
+      this.settings.autoFormalize = DEFAULT_SETTINGS.autoFormalize;
     }
   }
 
@@ -201,16 +260,77 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     await this.saveData(this.settings);
     setLocale(this.settings.locale ?? "zh");
     this.backendManager?.updateSettings(this.settings);
+    this.fastAgentBackendService?.updateSettings(this.settings.aiBackend.fast, getVaultBasePath(this.app));
+    this.smartAgentBackendService?.updateSettings(this.settings.aiBackend.smart, getVaultBasePath(this.app));
     this.translationService?.updateSettings(this.settings.translation);
     this.summaryService?.updateSettings(this.settings.summary);
+    this.titleService?.updateSettings(TITLE_SERVICE_SETTINGS);
     this.formalizeService?.updateSettings(this.settings.formalize);
     this.tencentClient?.updateSettings(this.settings.tencentASR);
+    this.deepgramClient?.updateLanguage(this.settings.cloudLanguage);
     this.cloudAuthService?.updateSettings(this.settings.cloudAuth);
     const view = this.getView();
     if (view) {
       view.setDisplayMode(this.settings.summary.displayMode);
+      view.setPanelSettings(this.getPanelSettingsValues());
       view.refreshLocale();
     }
+  }
+
+  private migrateAiBackendProfilesFromLegacyApi(raw: unknown): void {
+    const rawRecord = raw && typeof raw === "object" && !Array.isArray(raw)
+      ? raw as Record<string, unknown>
+      : {};
+    const rawAiBackend = rawRecord.aiBackend;
+    const hasProfileShape = Boolean(
+      rawAiBackend &&
+      typeof rawAiBackend === "object" &&
+      !Array.isArray(rawAiBackend) &&
+      ("fast" in rawAiBackend || "smart" in rawAiBackend),
+    );
+    if (hasProfileShape) return;
+
+    applyLegacyApiConfig(this.settings.aiBackend.fast, this.settings.translation);
+    applyLegacyApiConfig(this.settings.aiBackend.fast, this.settings.formalize);
+    applyLegacyApiConfig(this.settings.aiBackend.smart, this.settings.summary);
+  }
+
+  private refreshAiBackendCliPaths(): void {
+    for (const role of AI_BACKEND_PROFILE_ROLES) {
+      const profile = this.settings.aiBackend[role];
+      if (profile.provider === "openai-compatible") continue;
+
+      const detectedCliPath = resolveAiBackendCliPath(profile);
+      if (!isAiBackendCliPathCompatible(profile) && detectedCliPath) {
+        profile.cliPath = detectedCliPath;
+      } else if (!profile.cliPath.trim() && detectedCliPath) {
+        profile.cliPath = detectedCliPath;
+      } else if (!isAiBackendCliPathCompatible(profile)) {
+        profile.cliPath = "";
+      }
+    }
+  }
+
+  async testAiBackendConnection(role: AiBackendProfileRole): Promise<string> {
+    const existing = this.aiBackendTestInFlight[role];
+    if (existing) return existing;
+
+    const promise = this.runAiBackendConnectionTest(role)
+      .finally(() => {
+        delete this.aiBackendTestInFlight[role];
+      });
+    this.aiBackendTestInFlight[role] = promise;
+    return promise;
+  }
+
+  detectAiBackendCliPath(
+    provider: AiBackendProvider,
+    role: AiBackendProfileRole,
+  ): string {
+    return resolveAiBackendCliPath({
+      ...this.settings.aiBackend[role],
+      provider,
+    });
   }
 
   async activateView(): Promise<void> {
@@ -251,6 +371,10 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   async toggleRecording(): Promise<void> {
+    if (this.recordingTransition) {
+      return;
+    }
+    this.recordingTransition = true;
     try {
       if (this.recording) {
         await this.stopRecording();
@@ -260,6 +384,8 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     } catch (err) {
       console.error("[Transcription] toggleRecording 错误:", err);
       new Notice(`${t("notice.recordingError")}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.recordingTransition = false;
     }
   }
 
@@ -289,6 +415,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     this.pendingTranscript = null;
     this.clearFlushTimer();
+    this.clearConnectionLossTimer();
     this.lastPartialText = "";
     this.lastStablePartialText = "";
     this.renderedPartialText = "";
@@ -296,14 +423,12 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.lastPartialLanguage = "zh";
     this.lastPartialWallTime = null;
     this.committedPartialTexts = [];
-    this.cloudCommittedLength = 0;
     currentView.clearStreamingTranscript();
 
     const provider = this.settings.asrProvider;
 
     if (isHostedCloud(provider)) {
-      // [CLOUD 付费] 签名委托模式：服务端签名，客户端直连腾讯云
-      console.log("[Transcription] 云端付费模式（签名委托）");
+      console.log("[Transcription] 云端付费模式");
       currentView.setConnectionStatus(false, t("status.connecting"));
 
       if (!this.cloudAuthService || !this.cloudAuthService.isLoggedIn) {
@@ -312,27 +437,36 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         return;
       }
 
-      this.ensureTencentClient();
-      if (this.tencentClient!.isConnected) {
-        this.tencentClient!.disconnect();
-      }
+      this.tencentClient?.disconnect();
+      this.deepgramClient?.disconnect();
 
       try {
-        const engineModel = this.settings.tencentASR.engineModelType || "16k_zh";
-        const signResult = await this.cloudAuthService.getSignedUrl(engineModel);
-        this.activeSignRequestId = signResult.sign_request_id;
+        const session = await this.cloudAuthService.createAsrSession(
+          this.generateClientSessionId(),
+          this.settings.cloudProvider,
+          this.settings.cloudLanguage,
+        );
+        this.activeCloudSession = session;
         this.recordingStartTime = Date.now();
-        await this.tencentClient!.connectWithSignedUrl(signResult.signed_url);
+        if (session.provider === "tencent") {
+          this.ensureTencentClient();
+          this.tencentClient!.updateSettings({
+            ...this.settings.tencentASR,
+            engineModelType: session.engine_model,
+          });
+          await this.tencentClient!.connectWithSignedUrl(session.signed_url);
+        } else {
+          this.ensureDeepgramClient();
+          this.deepgramClient!.updateLanguage(session.language);
+          await this.deepgramClient!.connect(session.websocket_url, session.proxy_token, "proxy");
+        }
       } catch (err) {
         console.error("[Transcription] 云端付费连接失败:", err);
         this.tencentClient?.disconnect();
-        if (this.activeSignRequestId && this.cloudAuthService) {
-          void this.cloudAuthService.reportUsage(this.activeSignRequestId, 0);
-        }
-        this.activeSignRequestId = null;
-        this.recordingStartTime = 0;
-        new Notice(`${t("notice.cannotConnectCloudAsr")}: ${err instanceof Error ? err.message : String(err)}`);
-        currentView.setConnectionStatus(false, t("status.cloudConnectFailed"));
+        this.deepgramClient?.disconnect();
+        await this.settleActiveCloudSession(0);
+        new Notice(`${t("notice.cannotConnectBackend")}: ${err instanceof Error ? err.message : String(err)}`);
+        currentView.setConnectionStatus(false, t("status.backendStartFailed"));
         return;
       }
     } else if (isCloudASR(provider)) {
@@ -382,16 +516,24 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
 
     // 开始音频采集（两种模式共用）
+    this.recordingProvider = provider;
     const client = this.getActiveASRClient();
     console.log("[Transcription] 正在启动麦克风...");
     try {
       await this.audioCapture.start((data) => {
         client.sendAudio(data);
       });
+      if (!client.isConnected) {
+        throw new Error("ASR connection closed before audio capture started");
+      }
     } catch (err) {
       console.error("[Transcription] 麦克风启动失败:", err);
       new Notice(t("notice.micPermission"));
       client.disconnect();
+      if (isHostedCloud(provider)) {
+        await this.settleActiveCloudSession(0);
+      }
+      this.recordingProvider = null;
       return;
     }
 
@@ -403,7 +545,13 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private async stopRecording(): Promise<void> {
+    const provider = this.recordingProvider ?? this.settings.asrProvider;
+    this.clearConnectionLossTimer();
     this.audioCapture.stop();
+    this.recording = false;
+    if (this.activeCloudSession?.provider === "deepgram" && this.deepgramClient) {
+      await this.deepgramClient.finalizeAndDisconnect();
+    }
     const fallbackPartial =
       this.lastStablePartialText.trim() ||
       this.renderedPartialText.trim() ||
@@ -421,19 +569,18 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
     await this.flushPendingTranscript();
     this.clearFlushTimer();
-    if (isCloudASR(this.settings.asrProvider) && this.tencentClient) {
-      // cloud 付费模式：报告使用时长
-      if (isHostedCloud(this.settings.asrProvider) && this.activeSignRequestId && this.cloudAuthService) {
-        const durationSec = (Date.now() - this.recordingStartTime) / 1000;
-        this.cloudAuthService.reportUsage(this.activeSignRequestId, durationSec);
-        this.activeSignRequestId = null;
+    if (isCloudASR(provider)) {
+      if (isHostedCloud(provider)) {
+        const durationSec = Math.max(0, (Date.now() - this.recordingStartTime) / 1000);
+        await this.settleActiveCloudSession(durationSec);
       }
-      this.tencentClient.disconnect();
+      this.tencentClient?.disconnect();
+      this.deepgramClient?.disconnect();
     } else {
       this.wsClient.disconnect();
       await this.backendManager.stop();
     }
-    this.recording = false;
+    this.recordingProvider = null;
     this.lastPartialText = "";
     this.lastStablePartialText = "";
     this.renderedPartialText = "";
@@ -441,7 +588,6 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.lastPartialLanguage = "zh";
     this.lastPartialWallTime = null;
     this.committedPartialTexts = [];
-    this.cloudCommittedLength = 0;
 
     const view = this.getView();
     if (view) {
@@ -451,6 +597,32 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
 
     new Notice(t("notice.recordingStopped"));
+  }
+
+  private scheduleConnectionLossGuard(): void {
+    if (this.connectionLossTimer) return;
+    this.connectionLossTimer = setTimeout(() => {
+      this.connectionLossTimer = null;
+      if (!this.recording || this.getActiveASRClient().isConnected) return;
+      void this.stopAfterConnectionLoss();
+    }, 4000);
+  }
+
+  private clearConnectionLossTimer(): void {
+    if (!this.connectionLossTimer) return;
+    clearTimeout(this.connectionLossTimer);
+    this.connectionLossTimer = null;
+  }
+
+  private async stopAfterConnectionLoss(): Promise<void> {
+    if (!this.recording || this.recordingTransition) return;
+    this.recordingTransition = true;
+    try {
+      await this.stopRecording();
+      new Notice(t("notice.recordingConnectionLost"));
+    } finally {
+      this.recordingTransition = false;
+    }
   }
 
   private async handleTranscriptionResult(result: TranscriptionResult): Promise<void> {
@@ -503,21 +675,6 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const showStreaming = this.settings.aggregation.realtimePreview;
       const cloudMode = isCloudASR(this.settings.asrProvider);
 
-      // 云端累积式 partial：记录原始长度，然后剥离已提交的前缀
-      let cloudOriginalLength = 0;
-      if (isCloud) {
-        cloudOriginalLength = text.length;
-        if (this.cloudCommittedLength > 0) {
-          if (text.length > this.cloudCommittedLength) {
-            text = text.substring(this.cloudCommittedLength).replace(/^[，。、！？,.\s]+/, "");
-          } else {
-            // 累积文本变短（新句子开始），重置去重游标
-            this.cloudCommittedLength = 0;
-          }
-          if (!text) return;
-        }
-      }
-
       const now = new Date();
       // 云端模式跳过 stabilize：云端 ASR 已自行管理文本稳定性，
       // 且插入标点会导致 stabilize 误判为回滚而拒绝更新
@@ -558,10 +715,6 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         this.pendingTranscript.wallTime = this.pendingTranscript.wallTime ?? now;
         this.pendingTranscript.lastUpdatedAt = Date.now();
       }
-      // 云端模式：记录原始累积长度，flush 时用于更新去重游标
-      if (isCloud) {
-        this.pendingTranscript.cloudOriginalLength = cloudOriginalLength;
-      }
       if (showStreaming) {
         console.log(`[Transcription] ✓ partial → upsert id=${this.pendingTranscript.id} "${stabilizedText}"`);
         view.upsertStreamingTranscript(
@@ -577,11 +730,6 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
           this.scheduleFlush();
         }
       }
-      // 云端模式：确保 flush timer 运行，定期检查文本长度并分段
-      // （本地模式由 final 触发 scheduleFlush，但云端连续说话时 final 可能不到）
-      if (isCloud && isNewPending) {
-        this.scheduleFlush();
-      }
       return;
     }
 
@@ -592,15 +740,6 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.lastPartialLanguage = "zh";
     this.lastPartialWallTime = null;
     this.committedPartialTexts = []; // final 意味着后端缓冲区已清空
-
-    // 云端 final：剥离已提交前缀，并重置去重游标（句子结束）
-    if (this.settings.asrProvider !== "local" && this.cloudCommittedLength > 0) {
-      if (text.length > this.cloudCommittedLength) {
-        text = text.substring(this.cloudCommittedLength).replace(/^[，。、！？,.\s]+/, "");
-      }
-      this.cloudCommittedLength = 0;
-      if (!text) return;
-    }
 
     const now = Date.now();
     const flushWindowMs = Math.max(1, this.settings.aggregation.flushWindowSec) * 1000;
@@ -645,10 +784,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     const pendingText = this.pendingTranscript.texts.join(" ");
     const mergedTextLength = pendingText.length + 1 + text.length;
-    // 云端 ASR（腾讯云）每个 final 都是服务端分好的句子边界，不再聚合
-    const isCloudFinal = this.settings.asrProvider !== "local";
     const canMerge =
-      !isCloudFinal &&
       this.pendingTranscript.language === normalizedLanguage &&
       now - this.pendingTranscript.lastUpdatedAt <= flushWindowMs &&
       mergedTextLength <= maxChars;
@@ -704,26 +840,18 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     const pending = this.pendingTranscript;
     if (!pending) return;
 
-    // 云端模式 + partialOnly：连续说话时 final 可能很久不到。
-    // 文本较短时继续等待；超过 maxChars 则强制提交，并更新去重游标。
-    const isCloudFlush = this.settings.asrProvider !== "local";
-    if (pending.partialOnly && isCloudFlush) {
-      const pendingText = pending.texts.join(" ").trim();
-      const maxChars = Math.max(80, this.settings.aggregation.maxChars);
-      if (pendingText.length < maxChars) {
-        // 文本尚短，继续等待
-        const view = this.getView();
-        if (view) {
-          view.upsertStreamingTranscript(pending.id, pendingText, pending.language, pending.wallTime);
-        }
-        this.clearFlushTimer();
-        this.scheduleFlush();
-        return;
+    // 云端模式 + partialOnly：句子尚未结束（final 未到），不提交。
+    // 刷新流式卡片让用户看到当前文本，然后重新等待 final。
+    const cloudFlush = isCloudASR(this.settings.asrProvider);
+    if (pending.partialOnly && cloudFlush) {
+      const view = this.getView();
+      if (view) {
+        const text = pending.texts.join(" ").trim();
+        view.upsertStreamingTranscript(pending.id, text, pending.language, pending.wallTime);
       }
-      // 文本已超限，更新云端去重游标后 fall through 到正常 flush 流程
-      if (typeof pending.cloudOriginalLength === "number") {
-        this.cloudCommittedLength = pending.cloudOriginalLength;
-      }
+      this.clearFlushTimer();
+      this.scheduleFlush();
+      return;
     }
 
     this.pendingTranscript = null;
@@ -778,12 +906,15 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.commitStreamingTranscript(entry);
     this.addEntry(entry);
     this.enqueueSummaryText(entry.result.text, entry.wallTime);
+    this.maybeAutoFormalizeEntry(entry);
 
-    if (this.translationService.shouldTranslate(entry.result.language)) {
+    const targetLanguage = this.resolveAiOutputLanguageCode();
+    if (this.translationService.shouldTranslate(entry.result.language, targetLanguage)) {
       try {
         const translation = await this.translationService.translate(
           entry.result.text,
           entry.result.language,
+          this.outputLanguageName(),
         );
         entry.translation = translation;
         view.updateTranslation(entry.id, translation);
@@ -797,44 +928,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   }
 
   private normalizeLanguage(rawLanguage: string, text: string): string {
-    const mode = this.settings.recognitionMode ?? "zh-en";
-    if (mode === "zh") return "zh";
-    if (mode === "en") return "en";
-
-    const language = (rawLanguage || "auto").toLowerCase();
-
-    const hanCount = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
-    const latinCount = (text.match(/[A-Za-z]/g) ?? []).length;
-    const kanaCount = (text.match(/[\u3040-\u30ff]/g) ?? []).length;
-    const hangulCount = (text.match(/[\uac00-\ud7af]/g) ?? []).length;
-
-    // 日语/韩语脚本出现时优先保留
-    if (kanaCount > 0) return "ja";
-    if (hangulCount > 0) return "ko";
-
-    // 汉字为主时，优先中文（粤语标签保留）
-    if (hanCount >= 2) {
-      if (latinCount >= Math.max(12, Math.floor(hanCount * 2.5))) {
-        return "en";
-      }
-      return language === "yue" ? "yue" : "zh";
-    }
-
-    // 单汉字 + 大量英文，按英文处理；否则中文
-    if (hanCount === 1) {
-      if (latinCount >= 8) return "en";
-      return language === "yue" ? "yue" : "zh";
-    }
-
-    // 纯英文/短英文句子也要识别为英文（例如 "The." / "Hello"）
-    if (hanCount === 0 && latinCount >= 3) return "en";
-
-    if (language === "ja" || language === "ko" || language === "yue" || language === "en") {
-      return language;
-    }
-    if (language === "zh") return "zh";
-
-    return "zh";
+    return inferTranscriptLanguage(rawLanguage, text, this.settings.recognitionMode ?? "zh-en");
   }
 
   private stabilizePartialText(currentRaw: string): string | null {
@@ -966,25 +1060,31 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.rollbackCandidateAt = 0;
   }
 
-  /**
-   * 返回当前活跃的 ASR 客户端（本地 WebSocketClient 或腾讯云 TencentASRClient）
-   * 两者共享相同的方法签名：sendAudio / sendCommand / disconnect / setOnResult 等
-   */
-  private getActiveASRClient(): WebSocketClient | TencentASRClient {
-    if (isCloudASR(this.settings.asrProvider) && this.tencentClient) {
+  private getActiveASRClient(): WebSocketClient | TencentASRClient | DeepgramASRClient {
+    const provider = this.recordingProvider ?? this.settings.asrProvider;
+    if (isHostedCloud(provider)) {
+      if (this.activeCloudSession?.provider === "deepgram" && this.deepgramClient) {
+        return this.deepgramClient;
+      }
+      if (this.activeCloudSession?.provider === "tencent" && this.tencentClient) {
+        return this.tencentClient;
+      }
+      throw new Error("Hosted cloud ASR session is not connected");
+    }
+    if (provider === "tencent" && this.tencentClient) {
       return this.tencentClient;
     }
     return this.wsClient;
   }
 
-  /**
-   * 创建/复用 TencentASRClient 实例（tencent BYOK 和 cloud 付费共用）
-   */
   private ensureTencentClient(): void {
     if (this.tencentClient) return;
     this.tencentClient = new TencentASRClient(this.settings.tencentASR);
     this.tencentClient.setOnResult((result) => this.handleTranscriptionResult(result));
     this.tencentClient.setOnStatusChange((connected) => {
+      if (connected) {
+        this.clearConnectionLossTimer();
+      }
       const v = this.getView();
       if (v) {
         if (connected && this.recording) {
@@ -993,6 +1093,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
           v.setConnectionStatus(connected);
         }
       }
+      if (!connected && this.recording) {
+        this.scheduleConnectionLossGuard();
+      }
     });
     this.tencentClient.setOnReconnecting((attempt) => {
       const v = this.getView();
@@ -1000,6 +1103,56 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         v.setConnectionStatus(false, `${t("status.reconnecting")} (${attempt})`);
       }
     });
+  }
+
+  private ensureDeepgramClient(): void {
+    if (this.deepgramClient) return;
+    this.deepgramClient = new DeepgramASRClient();
+    this.deepgramClient.setOnResult((result) => this.handleTranscriptionResult(result));
+    this.deepgramClient.setOnStatusChange((connected) => {
+      if (connected) {
+        this.clearConnectionLossTimer();
+      }
+      const view = this.getView();
+      if (view) {
+        if (connected && this.recording) {
+          view.setListeningStatus(true);
+        } else {
+          view.setConnectionStatus(connected);
+        }
+      }
+      if (!connected && this.recording) {
+        this.scheduleConnectionLossGuard();
+      }
+    });
+    this.deepgramClient.setOnReconnecting(() => undefined);
+    this.deepgramClient.setOnError((message) => {
+      console.error(`[CloudASR] ${message}`);
+      this.getView()?.setConnectionStatus(false, message);
+    });
+    this.deepgramClient.setOnUnexpectedClose(() => {
+      if (!this.recording || this.recordingTransition) return;
+      void this.stopAfterConnectionLoss();
+    });
+  }
+
+  private async settleActiveCloudSession(durationSeconds: number): Promise<void> {
+    const session = this.activeCloudSession;
+    const authService = this.cloudAuthService;
+    if (!session) return;
+    const providerRequestId = session.provider === "deepgram"
+      ? this.deepgramClient?.requestId ?? undefined
+      : undefined;
+    this.activeCloudSession = null;
+    this.recordingStartTime = 0;
+    if (!authService) return;
+    await authService.reportUsage(session.session_id, durationSeconds, providerRequestId);
+  }
+
+  private generateClientSessionId(): string {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).slice(2, 14);
+    return `obsidian-${timestamp}-${random}`;
   }
 
   private async connectBackendWithRetry(port: number): Promise<void> {
@@ -1021,6 +1174,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private syncViewControlStates(view: TranscriptionView): void {
     view.setRecordingState(this.recording);
     view.setDisplayMode(this.settings.summary.displayMode);
+    view.setPanelSettings(this.getPanelSettingsValues());
   }
 
   private bindViewCallbacks(view: TranscriptionView): void {
@@ -1028,8 +1182,22 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     view.onToggleDisplayMode = () => this.toggleDisplayMode();
     view.onExport = () => this.exportToNote();
     view.onCopyTranscripts = () => this.copyTranscriptsToClipboard();
+    view.onSendToClaudian = () => this.sendToClaudian();
+    view.onBatchFormalize = (entryIds) => this.batchFormalizeEntries(entryIds);
+    view.onBatchTranslate = (entryIds) => this.batchTranslateEntries(entryIds);
+    view.onBatchSendToClaudian = (entryIds) => this.sendToClaudian(entryIds);
+    view.onCancelBatchTask = () => this.cancelBatchTask();
+    view.onCopyEntryText = (_entryId, text) => writeTextToClipboard(text);
+    view.onRegenerateSummary = (entryId, sourceText, kind) =>
+      this.regenerateSummaryEntry(entryId, sourceText, kind);
     view.onFormalize = (entryId, text) => this.formalizeEntry(entryId, text);
+    view.onTranslate = (entryId, text, language) => this.translateEntry(entryId, text, language);
     view.onClearTranscripts = () => this.clearEntries();
+    view.onSavePanelSettings = (values) => this.savePanelSettings(values);
+    view.onReady = () => {
+      this.syncViewControlStates(view);
+      view.restoreEntries(this.transcriptEntries);
+    };
   }
 
   private async refreshLegacyTranscriptionViews(): Promise<void> {
@@ -1064,7 +1232,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       : trimmed;
 
     const threshold = Math.max(500, this.settings.summary.thresholdChars);
-    if (this.summaryBuffer.length >= threshold) {
+    if (this.summaryBuffer.length >= threshold && Date.now() >= this.summaryRetryAfter) {
       void this.maybeRunSummary(wallTime);
     }
   }
@@ -1073,6 +1241,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     if (!this.settings.summary.enabled) return;
     if (!this.summaryService.isConfigured()) return;
     if (this.summaryInFlight) return;
+    if (Date.now() < this.summaryRetryAfter) return;
 
     const threshold = Math.max(500, this.settings.summary.thresholdChars);
     if (this.summaryBuffer.trim().length < threshold) return;
@@ -1083,8 +1252,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.summaryInFlight = true;
 
     try {
-      const summaryText = await this.summaryService.summarize(source);
+      const summaryText = await this.summaryService.summarize(source, this.outputLanguageName());
       if (sessionVersion !== this.transcriptSessionVersion) return;
+      this.summaryRetryAfter = 0;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -1102,6 +1272,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         translation: null,
         formalText: null,
         wallTime,
+        summarySourceText: source,
       };
       view.addTranscript(entry);
       this.addEntry(entry);
@@ -1114,10 +1285,11 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`${t("notice.summaryFailed")}: ${detail}`);
       this.summaryBuffer = source;
+      this.summaryRetryAfter = Date.now() + AI_SUMMARY_FAILURE_RETRY_MS;
       return;
     } finally {
       this.summaryInFlight = false;
-      if (this.summaryBuffer.trim().length >= threshold) {
+      if (this.summaryBuffer.trim().length >= threshold && Date.now() >= this.summaryRetryAfter) {
         void this.maybeRunSummary(new Date());
       }
     }
@@ -1129,7 +1301,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
 
     this.metaSummaryTexts.push(summaryText);
     const triggerCount = Math.max(2, this.settings.metaSummary.triggerCount);
-    if (this.metaSummaryTexts.length >= triggerCount) {
+    if (this.metaSummaryTexts.length >= triggerCount && Date.now() >= this.metaSummaryRetryAfter) {
       void this.maybeRunMetaSummary(wallTime);
     }
   }
@@ -1137,6 +1309,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
   private async maybeRunMetaSummary(wallTime: Date = new Date()): Promise<void> {
     if (this.metaSummaryInFlight) return;
     if (this.metaSummaryTexts.length < 2) return;
+    if (Date.now() < this.metaSummaryRetryAfter) return;
 
     const texts = [...this.metaSummaryTexts];
     const sessionVersion = this.transcriptSessionVersion;
@@ -1144,8 +1317,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.metaSummaryInFlight = true;
 
     try {
-      const metaText = await this.summaryService.metaSummarize(texts);
+      const metaText = await this.summaryService.metaSummarize(texts, this.outputLanguageName());
       if (sessionVersion !== this.transcriptSessionVersion) return;
+      this.metaSummaryRetryAfter = 0;
       this.entryCounter++;
       const view = this.getView();
       if (!view) {
@@ -1163,6 +1337,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         translation: null,
         formalText: null,
         wallTime,
+        summarySourceText: texts.join("\n\n"),
       };
       view.addTranscript(entry);
       this.addEntry(entry);
@@ -1172,20 +1347,23 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       const detail = err instanceof Error && err.message ? err.message : "未知错误";
       new Notice(`${t("notice.metaSummaryFailed")}: ${detail}`);
       this.metaSummaryTexts.push(...texts);
+      this.metaSummaryRetryAfter = Date.now() + AI_SUMMARY_FAILURE_RETRY_MS;
     } finally {
       this.metaSummaryInFlight = false;
       const triggerCount = Math.max(2, this.settings.metaSummary.triggerCount);
-      if (this.metaSummaryTexts.length >= triggerCount) {
+      if (this.metaSummaryTexts.length >= triggerCount && Date.now() >= this.metaSummaryRetryAfter) {
         void this.maybeRunMetaSummary(new Date());
       }
     }
   }
 
-  private async formalizeEntry(entryId: string, text: string): Promise<string> {
+  private async formalizeEntry(entryId: string, text: string, signal?: AbortSignal): Promise<string> {
     if (!this.formalizeService.canFormalize()) {
       throw new Error(t("notice.configureFormalizeApi"));
     }
-    const result = await this.formalizeService.formalize(text);
+    const context = this.buildFormalizeContext(entryId);
+    const result = await this.formalizeService.formalize(text, this.outputLanguageName(), context, signal);
+    throwIfAborted(signal);
     const view = this.getView();
     if (view) {
       view.updateFormalText(entryId, result);
@@ -1194,11 +1372,237 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     return result;
   }
 
+  private buildFormalizeContext(entryId: string): string {
+    const entryIndex = this.transcriptEntries.findIndex((entry) => entry.id === entryId);
+    if (entryIndex < 0) return "";
+
+    const previous = this.findFormalizeContextEntry(entryIndex, -1);
+    const next = this.findFormalizeContextEntry(entryIndex, 1);
+    const parts: string[] = [];
+    if (previous) {
+      parts.push(`上一段：${trimFormalizeContextText(previous.result.text)}`);
+    }
+    if (next) {
+      parts.push(`下一段：${trimFormalizeContextText(next.result.text)}`);
+    }
+    return parts.join("\n");
+  }
+
+  private findFormalizeContextEntry(fromIndex: number, direction: -1 | 1): TranscriptEntry | null {
+    for (
+      let index = fromIndex + direction;
+      index >= 0 && index < this.transcriptEntries.length;
+      index += direction
+    ) {
+      const entry = this.transcriptEntries[index];
+      if (isFormalizeContextEntry(entry)) return entry;
+    }
+    return null;
+  }
+
+  private async translateEntry(entryId: string, text: string, language: string, signal?: AbortSignal): Promise<string> {
+    if (!this.translationService.isConfigured()) {
+      throw new Error(t("notice.configureTranslationApi"));
+    }
+    const result = await this.translationService.translate(text, language, this.outputLanguageName(), signal);
+    throwIfAborted(signal);
+    const view = this.getView();
+    if (view) {
+      view.updateTranslation(entryId, result);
+    }
+    this.updateEntry(entryId, { translation: result });
+    return result;
+  }
+
+  private getBatchTranscriptEntries(entryIds: string[]): TranscriptEntry[] {
+    const selectedIds = new Set(entryIds);
+    return this.transcriptEntries.filter((entry) => selectedIds.has(entry.id) && isFormalizeContextEntry(entry));
+  }
+
+  private async batchFormalizeEntries(entryIds: string[]): Promise<void> {
+    const entries = this.getBatchTranscriptEntries(entryIds);
+    if (entries.length === 0) {
+      new Notice(t("view.noSelectedTranscripts"));
+      return;
+    }
+    if (!this.formalizeService.canFormalize()) {
+      new Notice(t("notice.configureFormalizeApi"));
+      return;
+    }
+
+    const controller = this.startBatchTask();
+    let completed = 0;
+    let failed = 0;
+    for (const entry of entries) {
+      if (controller.signal.aborted) break;
+      try {
+        await this.formalizeEntry(entry.id, entry.result.text, controller.signal);
+        completed++;
+      } catch (err) {
+        if (isAbortError(err) || controller.signal.aborted) break;
+        failed++;
+        console.error("[Transcription] 批量润色失败:", err);
+      }
+    }
+    const prefix = controller.signal.aborted ? t("notice.batchCancelled") : t("notice.batchFormalizeDone");
+    new Notice(`${prefix}: ${completed}/${entries.length}${failed > 0 ? `, ${t("notice.batchFailed")}: ${failed}` : ""}`);
+    this.finishBatchTask(controller);
+  }
+
+  private async batchTranslateEntries(entryIds: string[]): Promise<void> {
+    const entries = this.getBatchTranscriptEntries(entryIds);
+    if (entries.length === 0) {
+      new Notice(t("view.noSelectedTranscripts"));
+      return;
+    }
+    if (!this.translationService.isConfigured()) {
+      new Notice(t("notice.configureTranslationApi"));
+      return;
+    }
+
+    const controller = this.startBatchTask();
+    let completed = 0;
+    let failed = 0;
+    for (const entry of entries) {
+      if (controller.signal.aborted) break;
+      try {
+        const sourceLanguage = this.normalizeLanguage(entry.result.language, entry.result.text);
+        await this.translateEntry(entry.id, entry.result.text, sourceLanguage, controller.signal);
+        completed++;
+      } catch (err) {
+        if (isAbortError(err) || controller.signal.aborted) break;
+        failed++;
+        console.error("[Transcription] 批量翻译失败:", err);
+      }
+    }
+    const prefix = controller.signal.aborted ? t("notice.batchCancelled") : t("notice.batchTranslateDone");
+    new Notice(`${prefix}: ${completed}/${entries.length}${failed > 0 ? `, ${t("notice.batchFailed")}: ${failed}` : ""}`);
+    this.finishBatchTask(controller);
+  }
+
+  private startBatchTask(): AbortController {
+    this.batchTaskAbortController?.abort();
+    const controller = new AbortController();
+    this.batchTaskAbortController = controller;
+    return controller;
+  }
+
+  private finishBatchTask(controller: AbortController): void {
+    if (this.batchTaskAbortController === controller) {
+      this.batchTaskAbortController = null;
+    }
+  }
+
+  private cancelBatchTask(): void {
+    this.batchTaskAbortController?.abort();
+    new Notice(t("notice.batchCancelled"));
+  }
+
+  private maybeAutoFormalizeEntry(entry: TranscriptEntry): void {
+    if (!this.settings.autoFormalize) return;
+    if (!this.formalizeService.canFormalize()) return;
+
+    void this.formalizeEntry(entry.id, entry.result.text).catch((err) => {
+      console.error("自动润色失败:", err);
+      const detail = err instanceof Error && err.message ? err.message : "未知错误";
+      new Notice(`${t("view.formalizeFailed")}: ${detail}`);
+    });
+  }
+
+  private getPanelSettingsValues(): PanelSettingsValues {
+    return {
+      aiOutputLanguage: this.settings.aiOutputLanguage,
+      customAiOutputLanguage: this.settings.customAiOutputLanguage ?? DEFAULT_SETTINGS.customAiOutputLanguage,
+      transcriptFontSize: this.settings.transcriptFontSize,
+      autoTranslate: this.settings.translation.enabled,
+      autoFormalize: this.settings.autoFormalize,
+      copyContentMode: this.settings.copyContentMode ?? DEFAULT_SETTINGS.copyContentMode,
+      exportMode: this.settings.exportMode ?? DEFAULT_SETTINGS.exportMode,
+      exportTextMode: this.settings.exportTextMode ?? DEFAULT_SETTINGS.exportTextMode,
+    };
+  }
+
+  private async savePanelSettings(values: PanelSettingsValues): Promise<void> {
+    this.settings.aiOutputLanguage = isAiOutputLanguage(values.aiOutputLanguage)
+      ? values.aiOutputLanguage
+      : DEFAULT_SETTINGS.aiOutputLanguage;
+    this.settings.customAiOutputLanguage = sanitizeCustomOutputLanguage(values.customAiOutputLanguage);
+    this.settings.transcriptFontSize = clampFontSize(values.transcriptFontSize);
+    this.settings.translation.enabled = Boolean(values.autoTranslate);
+    this.settings.autoFormalize = Boolean(values.autoFormalize);
+    this.settings.copyContentMode = values.copyContentMode === "summaryOnly" ? "summaryOnly" : "full";
+    this.settings.exportMode = values.exportMode === "summaryOnly" ? "summaryOnly" : "full";
+    this.settings.exportTextMode = values.exportTextMode === "formalized" ? "formalized" : "original";
+    await this.saveSettings();
+  }
+
+  private resolveAiOutputLanguageCode(): "zh" | "en" | "custom" {
+    if (this.settings.aiOutputLanguage === "zh" || this.settings.aiOutputLanguage === "en") {
+      return this.settings.aiOutputLanguage;
+    }
+    if (this.settings.aiOutputLanguage === "custom") {
+      const standardCode = standardLanguageCodeFromName(this.settings.customAiOutputLanguage);
+      if (standardCode) return standardCode;
+      return sanitizeCustomOutputLanguage(this.settings.customAiOutputLanguage) ? "custom" : this.interfaceLanguageCode();
+    }
+    return this.interfaceLanguageCode();
+  }
+
+  private interfaceLanguageCode(): "zh" | "en" {
+    return this.settings.locale === "en" ? "en" : "zh";
+  }
+
+  private outputLanguageName(): string {
+    if (this.settings.aiOutputLanguage === "custom") {
+      const customLanguage = sanitizeCustomOutputLanguage(this.settings.customAiOutputLanguage);
+      if (customLanguage) return customLanguage;
+    }
+    const languageCode = this.resolveAiOutputLanguageCode();
+    return outputLanguageName(languageCode === "custom" ? this.interfaceLanguageCode() : languageCode);
+  }
+
+  private async runAiBackendConnectionTest(role: AiBackendProfileRole): Promise<string> {
+    await this.saveSettings();
+    const service = role === "fast"
+      ? this.fastAgentBackendService
+      : this.smartAgentBackendService;
+    if (!service.isConfigured()) {
+      throw new Error(t("settings.aiBackend.test.noApiConfig"));
+    }
+    return service.testConnection();
+  }
+
+  private async regenerateSummaryEntry(
+    entryId: string,
+    sourceText: string,
+    kind: "summary" | "meta-summary",
+  ): Promise<string> {
+    if (!this.summaryService.isConfigured()) {
+      throw new Error(t("summary.noModel"));
+    }
+
+    const nextText = kind === "meta-summary"
+      ? await this.summaryService.metaSummarize(
+        sourceText.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean),
+        this.outputLanguageName(),
+      )
+      : await this.summaryService.summarize(sourceText, this.outputLanguageName());
+
+    const entry = this.transcriptEntries.find((item) => item.id === entryId);
+    if (entry) {
+      entry.result.text = nextText;
+      entry.wallTime = new Date();
+      this.debouncedSaveEntries();
+    }
+
+    return nextText;
+  }
+
   private async copyTranscriptsToClipboard(): Promise<void> {
     const view = this.getView();
     if (!view) return;
 
-    const entries = view.getEntries();
+    const entries = this.getCopyTranscriptEntries(view.getEntries());
     if (entries.length === 0) {
       new Notice(t("notice.noTranscriptToCopy"));
       return;
@@ -1212,6 +1616,63 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
       console.error("[Transcription] 复制记录失败:", err);
       new Notice(t("notice.copyFailed"));
     }
+  }
+
+  private getCopyTranscriptEntries(entries: TranscriptEntry[]): TranscriptEntry[] {
+    const scopedEntries = this.settings.copyContentMode === "summaryOnly"
+      ? entries.filter((entry) => entry.result.language === "summary" || entry.result.language === "meta-summary")
+      : entries;
+    return this.settings.copyRangeMode === "latest"
+      ? scopedEntries.slice(-1)
+      : scopedEntries;
+  }
+
+  private async sendToClaudian(entryIds?: string[]): Promise<void> {
+    const view = this.getView();
+    if (!view) return;
+
+    const selectedIds = entryIds ? new Set(entryIds) : null;
+    const entries = selectedIds
+      ? view.getEntries().filter((entry) => selectedIds.has(entry.id) && isFormalizeContextEntry(entry))
+      : view.getEntries();
+    if (entries.length === 0) {
+      new Notice(t("notice.noTranscriptToClaudian"));
+      return;
+    }
+
+    const markdown = formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"));
+    const body = buildClaudianContextMarkdown(markdown, entries.length);
+
+    try {
+      await ensureVaultFolder(this.app, CLAUDIAN_CONTEXT_FOLDER);
+      await this.app.vault.adapter.write(CLAUDIAN_CONTEXT_FILE, body);
+      executeObsidianCommand(this.app, "realclaudian:open-view");
+
+      const contextDir = getVaultAbsolutePath(this.app, CLAUDIAN_CONTEXT_FOLDER);
+      const selector = await this.waitForClaudianExternalContextSelector();
+      const result = contextDir && selector ? selector.addExternalContext(contextDir) : null;
+      const contextReady = result?.success || result?.error?.toLowerCase().includes("already added");
+      const inputSeeded = seedClaudianInput(this.app, CLAUDIAN_CONTEXT_FILE, this.settings.claudianPrompt);
+      if (contextReady || inputSeeded) {
+        new Notice(t("notice.claudianContextReady"));
+        return;
+      }
+
+      await writeTextToClipboard(markdown);
+      new Notice(t("notice.claudianContextFallbackCopied"));
+    } catch (err) {
+      console.error("[Transcription] 交给 Claudian 失败:", err);
+      new Notice(t("notice.claudianContextFailed"));
+    }
+  }
+
+  private async waitForClaudianExternalContextSelector(): Promise<ClaudianExternalContextSelector | null> {
+    for (let i = 0; i < 30; i++) {
+      const selector = getClaudianExternalContextSelector(this.app);
+      if (selector) return selector;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return null;
   }
 
   private async exportToNote(): Promise<void> {
@@ -1250,7 +1711,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         break;
       }
       case "ai": {
-        if (!this.summaryService.isConfigured()) {
+        if (!this.titleService.isConfigured()) {
           new Notice(t("notice.aiNamingNeedConfig"));
           title = timestampTitle;
           break;
@@ -1261,7 +1722,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
             .map((e) => e.result.text)
             .join("\n")
             .slice(0, 2000);
-          const aiTitle = await this.summaryService.generateTitle(contentSnippet);
+          const aiTitle = await this.titleService.generateTitle(contentSnippet, this.outputLanguageName());
           title = this.sanitizeFileName(aiTitle) || timestampTitle;
         } catch (err) {
           console.error("[Transcription] AI 命名失败:", err);
@@ -1276,7 +1737,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         break;
     }
 
-    const md = `# ${title}\n\n${formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"))}\n`;
+    const md = `# ${title}\n\n${formatTranscriptEntriesAsMarkdown(entries, t("export.formalLabel"), {
+      useFormalTextAsOriginal: this.settings.exportTextMode === "formalized",
+    })}\n`;
 
     // 创建笔记文件
     const fileName = `${title}.md`;
@@ -1389,7 +1852,9 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     this.clearFlushTimer();
     this.committedPartialTexts = [];
     this.summaryBuffer = "";
+    this.summaryRetryAfter = 0;
     this.metaSummaryTexts = [];
+    this.metaSummaryRetryAfter = 0;
     this.lastPartialText = "";
     this.lastStablePartialText = "";
     this.renderedPartialText = "";
@@ -1401,6 +1866,73 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
   }
 
+}
+
+function clampFontSize(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_SETTINGS.transcriptFontSize;
+  return Math.min(24, Math.max(12, Math.round(numeric)));
+}
+
+function applyLegacyApiConfig(
+  profile: AiBackendProfileSettings,
+  config: { apiUrl?: string; apiKey?: string; model?: string },
+): void {
+  if (profile.provider !== "openai-compatible") return;
+  if (!profile.apiUrl.trim() && config.apiUrl?.trim()) {
+    profile.apiUrl = config.apiUrl.trim();
+  }
+  if (!profile.apiKey.trim() && config.apiKey?.trim()) {
+    profile.apiKey = config.apiKey;
+  }
+  if (!profile.model.trim() && config.model?.trim()) {
+    profile.model = config.model.trim();
+  }
+}
+
+function isAiOutputLanguage(value: unknown): value is AiOutputLanguage {
+  return value === "auto" || value === "zh" || value === "en" || value === "custom";
+}
+
+function outputLanguageName(language: "zh" | "en"): string {
+  return language === "en" ? "英文" : "简体中文";
+}
+
+function sanitizeCustomOutputLanguage(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, 40);
+}
+
+function isFormalizeContextEntry(entry: TranscriptEntry): boolean {
+  const language = entry.result.language;
+  if (language === "summary" || language === "meta-summary") return false;
+  return Boolean(entry.result.text?.trim());
+}
+
+function trimFormalizeContextText(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= FORMALIZE_CONTEXT_MAX_CHARS) return normalized;
+  return `${normalized.slice(0, FORMALIZE_CONTEXT_MAX_CHARS).trim()}...`;
+}
+
+function standardLanguageCodeFromName(language: unknown): "zh" | "en" | null {
+  if (typeof language !== "string") return null;
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) return null;
+  if (/(中文|汉语|漢語|普通话|普通話|简体|簡體|繁体|繁體|chinese|mandarin)/i.test(normalized)) return "zh";
+  if (/(英文|英语|英語|english)/i.test(normalized)) return "en";
+  return null;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const error = new Error("操作已取消");
+  error.name = "AbortError";
+  throw error;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 async function writeTextToClipboard(text: string): Promise<void> {
@@ -1423,4 +1955,93 @@ async function writeTextToClipboard(text: string): Promise<void> {
   }
 
   throw new Error("Clipboard API unavailable");
+}
+
+async function ensureVaultFolder(app: import("obsidian").App, folder: string): Promise<void> {
+  const parts = folder.split("/").filter(Boolean);
+  let current = "";
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    if (!(await app.vault.adapter.exists(current))) {
+      await app.vault.adapter.mkdir(current);
+    }
+  }
+}
+
+type VaultAdapterWithBasePath = {
+  getBasePath?: () => string;
+};
+
+function getVaultBasePath(app: import("obsidian").App): string {
+  return (app.vault.adapter as VaultAdapterWithBasePath).getBasePath?.() ?? process.cwd();
+}
+
+function getVaultAbsolutePath(app: import("obsidian").App, path: string): string | null {
+  const basePath = getVaultBasePath(app);
+  if (!basePath) return null;
+  return `${basePath.replace(/\/$/, "")}/${path}`;
+}
+
+type ClaudianExternalContextSelector = {
+  addExternalContext: (path: string) => { success: boolean; error?: string };
+  getExternalContexts?: () => string[];
+};
+
+type ClaudianTabLike = {
+  dom?: {
+    inputEl?: HTMLTextAreaElement;
+  };
+  ui?: {
+    externalContextSelector?: ClaudianExternalContextSelector;
+  };
+};
+
+type ClaudianViewLike = {
+  getActiveTab?: () => ClaudianTabLike | null;
+  getTabManager?: () => {
+    getActiveTab?: () => ClaudianTabLike | null;
+  } | null;
+};
+
+function getClaudianTab(view: ClaudianViewLike): ClaudianTabLike | null {
+  return view.getActiveTab?.() ?? view.getTabManager?.()?.getActiveTab?.() ?? null;
+}
+
+function getClaudianExternalContextSelector(app: import("obsidian").App): ClaudianExternalContextSelector | null {
+  for (const leaf of app.workspace.getLeavesOfType("claudian-view")) {
+    const selector = getClaudianTab(leaf.view as ClaudianViewLike)?.ui?.externalContextSelector;
+    if (typeof selector?.addExternalContext === "function") return selector;
+  }
+  return null;
+}
+
+function getClaudianInput(app: import("obsidian").App): HTMLTextAreaElement | null {
+  for (const leaf of app.workspace.getLeavesOfType("claudian-view")) {
+    const input = getClaudianTab(leaf.view as ClaudianViewLike)?.dom?.inputEl;
+    if (input) return input;
+  }
+  return null;
+}
+
+function buildClaudianPrompt(contextFile: string, promptTemplate?: string): string {
+  const template = promptTemplate?.trim() || DEFAULT_SETTINGS.claudianPrompt;
+  if (template.includes("{{contextFile}}")) {
+    return template.split("{{contextFile}}").join(contextFile);
+  }
+  return `${template} ${contextFile}`;
+}
+
+function seedClaudianInput(app: import("obsidian").App, contextFile: string, promptTemplate?: string): boolean {
+  const input = getClaudianInput(app);
+  if (!input) return false;
+  const seed = `${buildClaudianPrompt(contextFile, promptTemplate)}\n`;
+  if (!input.value.includes(contextFile)) {
+    input.value = input.value.trim()
+      ? `${seed}\n${input.value.trim()}`
+      : `${seed}\n`;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  return true;
 }

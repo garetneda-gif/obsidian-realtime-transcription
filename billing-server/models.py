@@ -31,6 +31,7 @@ class User(Base):
 
 class OrderStatus:
     CREATED = "CREATED"
+    CANCELED = "CANCELED"
     PAID = "PAID"
     CREDITED = "CREDITED"
     REFUNDED = "REFUNDED"
@@ -43,6 +44,9 @@ class Order(Base):
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     trade_order_id = Column(String(64), unique=True, nullable=False)
     amount_cents = Column(Integer, nullable=False)
+    credit_cents = Column(Integer, nullable=True)
+    provider_product_id = Column(String(64), nullable=True)
+    provider_transaction_id = Column(String(64), unique=True, nullable=True)
     status = Column(String(16), nullable=False, default=OrderStatus.CREATED)
     idempotency_key = Column(String(64), unique=True, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
@@ -56,6 +60,13 @@ class SignRequest(Base):
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     voice_id = Column(String(32), nullable=False)
     engine_model = Column(String(32), nullable=False)
+    provider = Column(String(16), nullable=False, default="tencent")
+    language = Column(String(16), nullable=False, default="auto")
+    client_session_id = Column(String(64), nullable=True)
+    provider_request_id = Column(String(64), nullable=True)
+    provider_cost_microusd = Column(Integer, nullable=True)
+    provider_verified = Column(Integer, nullable=False, default=1)
+    proxy_connected = Column(Integer, nullable=False, default=0)
     precharge_cents = Column(Integer, nullable=False)
     actual_cost_cents = Column(Integer, nullable=True)
     duration_seconds = Column(Integer, nullable=True)
@@ -66,6 +77,8 @@ class SignRequest(Base):
 
     __table_args__ = (
         Index("ix_sign_pending", "settled", "created_at"),
+        Index("ix_sign_user_client_session", "user_id", "client_session_id", unique=True),
+        Index("ix_sign_provider_request", "provider_request_id", unique=True),
     )
 
 
@@ -78,4 +91,30 @@ class UsageRecord(Base):
     duration_seconds = Column(Integer, nullable=False)
     cost_cents = Column(Integer, nullable=False)
     engine_model = Column(String(32), nullable=False)
+    provider = Column(String(16), nullable=False, default="tencent")
+    language = Column(String(16), nullable=False, default="auto")
+    provider_cost_microusd = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class CaptchaChallenge(Base):
+    __tablename__ = "captcha_challenges"
+
+    id = Column(String(36), primary_key=True)
+    answer_digest = Column(String(64), nullable=False)
+    fail_count = Column(Integer, nullable=False, default=0)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class RateLimitEvent(Base):
+    __tablename__ = "rate_limit_events"
+
+    id = Column(String(36), primary_key=True, default=new_uuid)
+    scope = Column(String(32), nullable=False)
+    key_digest = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_rate_limit_scope_key_created", "scope", "key_digest", "created_at"),
+    )

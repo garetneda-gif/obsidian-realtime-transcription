@@ -1,38 +1,90 @@
 """认证模块：注册、登录、JWT 刷新、rate limiting"""
-import time
-from collections import defaultdict
+# pyright: reportImplicitRelativeImport=false
+import hashlib
+import hmac
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
 from flask import Blueprint, request, jsonify, make_response
+from sqlalchemy.exc import IntegrityError
 
 import config
+from captcha import generate_image_captcha, verify_image_captcha
 from database import SessionLocal
-from models import User, new_uuid, utcnow
+from models import RateLimitEvent, User, new_uuid, utcnow
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 ACCESS_COOKIE = "ort_access_token"
 REFRESH_COOKIE = "ort_refresh_token"
 
-# 简易 IP rate limiter（单 worker 内存级，MVP 足够）
-_login_attempts: dict[str, list[float]] = defaultdict(list)
+def _request_fingerprint(value: str) -> str:
+    payload = value.strip().lower().encode()
+    return hmac.new(config.SECRET_KEY.encode(), payload, hashlib.sha256).hexdigest()
 
 
-def _check_rate_limit(ip: str) -> bool:
-    """返回 True 表示允许，False 表示限流"""
-    now = time.time()
-    window = 60.0
-    attempts = _login_attempts[ip]
-    # 清理过期记录
-    _login_attempts[ip] = [t for t in attempts if now - t < window]
-    if len(_login_attempts[ip]) >= config.LOGIN_RATE_LIMIT_PER_MINUTE:
+def _client_ip() -> str:
+    forwarded = (
+        request.headers.get("x-vercel-forwarded-for")
+        or request.headers.get("x-forwarded-for")
+        or request.remote_addr
+        or "unknown"
+    )
+    return forwarded.split(",", 1)[0].strip()[:64] or "unknown"
+
+
+def _check_rate_limit(scope: str, value: str, limit: int, window_seconds: int = 60) -> bool:
+    if limit <= 0:
         return False
-    _login_attempts[ip].append(now)
-    return True
+    now = utcnow()
+    window_seconds = max(1, window_seconds)
+    window = int(now.timestamp()) // window_seconds
+    key_digest = _request_fingerprint(f"{scope}:{value}")
+    db = SessionLocal()
+    try:
+        db.query(RateLimitEvent).filter(RateLimitEvent.created_at < now - timedelta(days=1)).delete(
+            synchronize_session=False
+        )
+        db.commit()
+        for slot in range(limit):
+            event_id = _request_fingerprint(f"{scope}:{key_digest}:{window}:{slot}")[:36]
+            db.add(RateLimitEvent(
+                id=event_id,
+                scope=scope,
+                key_digest=key_digest,
+                created_at=now,
+            ))
+            try:
+                db.commit()
+                return True
+            except IntegrityError:
+                db.rollback()
+        return False
+    finally:
+        db.close()
 
 
-def _create_tokens(user_id: str) -> dict:
+def _check_login_limits(email: str) -> bool:
+    return (
+        _check_rate_limit("login-ip", _client_ip(), config.AUTH_IP_RATE_LIMIT_PER_MINUTE)
+        and _check_rate_limit("login-account", email, config.LOGIN_RATE_LIMIT_PER_MINUTE)
+    )
+
+
+def _check_registration_limits(email: str) -> bool:
+    return (
+        _check_rate_limit(
+            "register-ip",
+            _client_ip(),
+            config.REGISTRATION_RATE_LIMIT_PER_HOUR,
+            window_seconds=3600,
+        )
+        and _check_rate_limit("register-account", email, config.LOGIN_RATE_LIMIT_PER_MINUTE)
+    )
+
+
+def _create_tokens(user_id: str) -> dict[str, str]:
     now = datetime.now(timezone.utc)
     access_payload = {
         "sub": user_id,
@@ -59,10 +111,10 @@ def _secure_cookie() -> bool:
     return config.is_production() or request.is_secure or request.headers.get("X-Forwarded-Proto", "") == "https"
 
 
-def _json_with_cookies(payload: dict, status: int = 200):
+def _json_with_cookies(payload: Mapping[str, object], status: int = 200):
     resp = make_response(jsonify(payload), status)
-    resp.set_cookie(ACCESS_COOKIE, payload["token"], max_age=config.JWT_ACCESS_EXPIRE_DAYS * 86400, httponly=True, secure=_secure_cookie(), samesite="Lax")
-    resp.set_cookie(REFRESH_COOKIE, payload["refresh_token"], max_age=config.JWT_REFRESH_EXPIRE_DAYS * 86400, httponly=True, secure=_secure_cookie(), samesite="Lax")
+    resp.set_cookie(ACCESS_COOKIE, str(payload["token"]), max_age=config.JWT_ACCESS_EXPIRE_DAYS * 86400, httponly=True, secure=_secure_cookie(), samesite="Lax")
+    resp.set_cookie(REFRESH_COOKIE, str(payload["refresh_token"]), max_age=config.JWT_REFRESH_EXPIRE_DAYS * 86400, httponly=True, secure=_secure_cookie(), samesite="Lax")
     return resp
 
 
@@ -96,11 +148,18 @@ def register():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
+    captcha_id = str(data.get("captcha_id") or "")
+    captcha_answer = str(data.get("captcha_answer") or "")
 
     if not email or "@" not in email:
         return jsonify({"error": "Invalid email"}), 400
+    if not _check_registration_limits(email):
+        return jsonify({"error": "Too many registration attempts, try again later"}), 429
     if len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters"}), 400
+    captcha_ok, _ = verify_image_captcha(captcha_id, captcha_answer)
+    if not captcha_ok:
+        return jsonify({"error": "Invalid or expired captcha"}), 400
 
     db = SessionLocal()
     try:
@@ -126,21 +185,38 @@ def register():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    ip = request.remote_addr or "unknown"
-    if not _check_rate_limit(ip):
-        return jsonify({"error": "Too many login attempts, try again later"}), 429
+    return _password_login()
 
+
+@auth_bp.route("/browser-login", methods=["POST"])
+def browser_login():
+    return _password_login()
+
+
+def _password_login():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
 
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
+    if not _check_login_limits(email):
+        return jsonify({"error": "Too many login attempts, try again later"}), 429
+    captcha_ok, _ = verify_image_captcha(
+        str(data.get("captcha_id") or ""),
+        str(data.get("captcha_answer") or ""),
+    )
+    if not captcha_ok:
+        return jsonify({"error": "Invalid or expired captcha"}), 400
 
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
-        if not user or not bcrypt.checkpw(password.encode(), user.password_hash.encode()):
+        if (
+            not user
+            or not user.password_hash.startswith(("$2a$", "$2b$", "$2y$"))
+            or not bcrypt.checkpw(password.encode(), user.password_hash.encode())
+        ):
             return jsonify({"error": "Invalid email or password"}), 401
 
         tokens = {**_create_tokens(user.id), "balance_cents": user.balance_cents}
@@ -170,11 +246,31 @@ def logout():
     return resp
 
 
-@auth_bp.route("/oauth/providers", methods=["GET"])
-def oauth_providers():
-    return jsonify({"providers": []}), 200
+@auth_bp.route("/password", methods=["POST"])
+def set_password():
+    user_id, err = require_auth()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    password = str(data.get("password") or "")
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).with_for_update().first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        if user.password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+            return jsonify({"error": "Password already set"}), 409
+        user.password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        db.commit()
+        return jsonify({"ok": True}), 200
+    finally:
+        db.close()
 
 
 @auth_bp.route("/captcha/image", methods=["POST"])
 def captcha_image():
-    return jsonify({"captcha_id": "", "image": ""}), 200
+    if not _check_rate_limit("captcha-ip", _client_ip(), config.CAPTCHA_RATE_LIMIT_PER_MINUTE):
+        return jsonify({"error": "Too many captcha requests, try again later"}), 429
+    return jsonify(generate_image_captcha()), 200

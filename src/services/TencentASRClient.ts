@@ -323,12 +323,6 @@ export class TencentASRClient {
     // URL 编码签名（必须编码 + 和 =）
     const encodedSignature = encodeURIComponent(signature);
 
-    console.log(`[TencentASR] AppID: "${appId}" (len=${appId.length})`);
-    console.log(`[TencentASR] SecretID: "${secretId.slice(0, 8)}..." (len=${secretId.length})`);
-    console.log(`[TencentASR] SecretKey len=${secretKey.length}, first4="${secretKey.slice(0, 4)}"`);
-    console.log(`[TencentASR] 签名原文: ${signPlaintext}`);
-    console.log(`[TencentASR] 签名结果: ${signature}`);
-
     return `wss://asr.cloud.tencent.com/asr/v2/${appId}?${queryString}&signature=${encodedSignature}`;
   }
 

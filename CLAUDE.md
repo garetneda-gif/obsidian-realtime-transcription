@@ -18,6 +18,10 @@ npm run build      # 生产构建（压缩，无 sourcemap）
 
 输出产物为 `main.js`（esbuild 打包，CJS 格式，target ES2020）。
 
+**部署到 Obsidian**：构建后需将 `main.js` 复制到 vault 的插件目录（`<vault>/.obsidian/plugins/realtime-transcription/`），然后在 Obsidian 中重新加载插件。项目目录本身不是 Obsidian 加载的位置。
+
+**测试**：`node --experimental-strip-types --test tests/**/*.test.ts`
+
 ## 架构
 
 ```
@@ -72,9 +76,19 @@ Obsidian 插件 (TypeScript)
 
 ### 关键文本处理流程（`main.ts`）
 
-1. **前缀去重** (`committedPartialTexts`) — ≥50% 前缀匹配视为重复，防止后端缓冲区竞态
-2. **Partial 稳定性过滤** (`stabilizePartialText`) — 首次2字即显、尾部增长立即放行、回滚受控二次确认（快模式1次/稳定模式2次）
+1. **前缀去重** (`src/utils/transcriptDedup.ts`) — 标点无关的前缀匹配，≥50% 重叠视为重复，防止后端缓冲区竞态
+2. **Partial 稳定性过滤** (`src/utils/partialStability.ts` + `main.ts#stabilizePartialText`) — 首次2字即显、尾部增长立即放行、回滚受控二次确认（快模式1次/稳定模式2次）；比较时忽略标点/空白差异
 3. **文本聚合** — 同语言多个 final 在 `flushWindowSec`(默认4s) 内合并，上限 `maxChars`(默认320)
+
+### 云端 vs 本地模式的文本处理差异
+
+腾讯云 ASR 每个 partial 发送**累积式完整句子文本**，本地后端发送**增量式缓冲区文本**。因此云端模式（`asrProvider !== "local"`）跳过三层本地专用过滤：
+
+1. **`committedPartialTexts` 前缀去重** — 云端累积文本会被截成碎片
+2. **`stabilizePartialText`** — 云端已管理文本稳定性，标点变化不应被拒绝
+3. **`flushPendingTranscript` 中 partialOnly 定时提交** — 云端改为刷新流式卡片并重新等待 `slice_type=2`（句子 final），避免提前提交不完整 partial
+
+修改云端文本处理逻辑时，搜索 `isCloud` / `isCloudProvider` / `isCloudFlush` 定位这些 guard。
 
 ### 历史记录持久化
 
@@ -105,6 +119,16 @@ Obsidian 开发者控制台: `Cmd+Option+I` (macOS) / `Ctrl+Shift+I` (Windows)
 
 - 本仓库涉及 GitHub 的自动化操作（如创建 PR、查看 Issue、发布版本、推送协作流程）统一使用 GitHub CLI：`gh`
 - 不使用 GitHub MCP 作为默认 GitHub 操作通道
+
+## 发布流程
+
+```bash
+# 1. 更新 package.json 和 manifest.json 中的版本号
+# 2. npm run build
+# 3. git add + commit + push
+# 4. 创建 GitHub Release（Obsidian 社区插件需要 main.js + manifest.json + styles.css 作为附件）
+gh release create <version> main.js manifest.json styles.css --title "v<version>" --notes "..."
+```
 
 ## 兼容性要求
 

@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Obsidian RealTime Transcriber 账户中心</title>
+  <link rel="icon" type="image/png" href="/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260710-2">
+  <link rel="shortcut icon" type="image/png" href="/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260710-2">
   <style>
     :root {
       color-scheme: light;
@@ -115,24 +117,6 @@
     .pricing-top { display: none; }
     .pricing-kicker { display: none; }
     .pricing-top h2 { margin: 0; }
-    .account-strip {
-      display: flex;
-      justify-content: center;
-      margin-top: 22px;
-    }
-    .account-chip {
-      min-width: 270px;
-      padding: 16px;
-      border: 1px solid #dedede;
-      border-radius: 16px;
-      background: var(--panel);
-    }
-    .account-email {
-      margin-bottom: 6px;
-      color: var(--muted);
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
     .money {
       color: var(--ink);
       font-size: 30px;
@@ -170,30 +154,16 @@
       color: #fff;
       box-shadow: 0 18px 36px rgba(23, 104, 255, .28);
     }
-    .provider-tabs {
-      justify-content: center;
-      margin: -8px 0 24px;
-      padding: 4px;
-      border-radius: 999px;
-      background: #ececea;
-      width: fit-content;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .provider-tabs .btn {
-      min-width: 136px;
-      min-height: 38px;
-      padding: 8px 18px;
-      border-radius: 999px;
-      background: transparent;
-      color: #5d5d5d;
-      border-color: transparent;
+    .btn.danger {
+      color: #c62828;
+      border-color: #f0b8b8;
+      background: #fff;
       box-shadow: none;
     }
-    .provider-tabs .btn.selected {
-      background: #fff;
-      color: #171717;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+    .btn.danger:hover {
+      color: #a91515;
+      border-color: #df8f8f;
+      background: #fff7f7;
     }
     .plans {
       display: grid;
@@ -491,7 +461,6 @@
         grid-template-columns: 1fr;
       }
       .pricing-top { align-items: stretch; }
-      .account-chip { min-width: 0; }
       .plan { min-height: 0; }
       .hero-lockup { flex-direction: column; }
       h1 { font-size: 32px; }
@@ -924,6 +893,69 @@
       flex-direction: column;
       align-items: center;
     }
+    .recharge-panel {
+      position: relative;
+      width: min(680px, 100%);
+      margin: 0 auto;
+      padding: 46px 40px;
+      border: 1px solid #dedede;
+      border-radius: 8px;
+      background: #fff;
+      text-align: center;
+    }
+    .recharge-panel h1 {
+      margin: 0 0 8px;
+      color: #171717;
+      font-size: 24px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+    .recharge-panel > p {
+      margin: 0;
+      color: #6f6f6f;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .recharge-email {
+      margin-top: 34px;
+      color: #6f6f6f;
+      font-size: 14px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .recharge-balance-label {
+      margin-top: 26px;
+      color: #777;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .recharge-panel .money {
+      margin-top: 10px;
+      font-size: 48px;
+    }
+    .recharge-actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 34px;
+    }
+    .recharge-actions .btn {
+      min-width: 112px;
+      border-radius: 999px;
+      box-shadow: none;
+    }
+    .pricing-back {
+      margin: 0 0 18px;
+      padding: 6px 10px;
+      border: 0;
+      background: transparent;
+      color: #676767;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .pricing-back:hover {
+      color: #171717;
+    }
     .pricing-clone-title {
       margin: 0 0 24px;
       color: #171717;
@@ -931,39 +963,6 @@
       font-weight: 650;
       line-height: 1.25;
       text-align: center;
-    }
-    .pricing-clone .provider-tabs {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 0;
-      width: 280px;
-      height: 36px;
-      margin: 0 auto 22px;
-      padding: 3px;
-      border: 0;
-      border-radius: 999px;
-      background: #ececec;
-      box-shadow: none;
-    }
-    .pricing-clone .provider-tabs .btn {
-      flex: 1;
-      min-width: 0;
-      min-height: 30px;
-      height: 30px;
-      padding: 0 14px;
-      border: 0;
-      border-radius: 999px;
-      background: transparent;
-      color: #777;
-      font-size: 12px;
-      font-weight: 600;
-      box-shadow: none;
-    }
-    .pricing-clone .provider-tabs .btn.selected {
-      background: #fff;
-      color: #171717;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, .14);
     }
     .pricing-clone .plans {
       width: 100%;
@@ -1115,55 +1114,11 @@
       font-size: 14px;
       line-height: 1;
     }
-    .account-strip {
-      width: 100%;
-      justify-content: center;
-      margin-top: 28px;
-    }
-    body:not(.is-logged-in) .account-strip {
-      display: none;
-    }
-    .account-chip {
-      width: min(420px, 100%);
-      min-width: 0;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 14px 18px;
-      align-items: center;
-      padding: 16px 18px;
-      border: 1px solid #dedede;
-      border-radius: 8px;
-      background: #fff;
-    }
-    .account-email {
-      margin: 0;
-      color: #6f6f6f;
-      font-size: 13px;
-      font-weight: 600;
-      line-height: 1.3;
-    }
     .money {
       color: #171717;
       font-size: 23px;
       font-weight: 650;
       line-height: 1;
-    }
-    .account-actions {
-      grid-column: 1 / -1;
-      display: flex;
-      gap: 10px;
-      margin: 0;
-    }
-    .account-actions .btn {
-      min-height: 34px;
-      padding: 7px 15px;
-      border: 1px solid #dedede;
-      border-radius: 999px;
-      background: #fff;
-      color: #171717;
-      font-size: 13px;
-      font-weight: 650;
-      box-shadow: none;
     }
     .account-status {
       min-height: 18px;
@@ -1172,6 +1127,192 @@
       font-size: 13px;
       font-weight: 500;
       line-height: 1.4;
+      text-align: center;
+    }
+    body:not(.is-auth) .shell {
+      width: min(1220px, 100%);
+    }
+    .pricing-clone {
+      position: relative;
+      width: 100%;
+      min-height: calc(100vh - 48px);
+      padding: 58px 46px 34px;
+      border: 1px solid #ddd9d1;
+      border-radius: 22px;
+      background: #faf9f6;
+      color: #24231f;
+    }
+    .pricing-clone .account-page-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      border: 1px solid #ddd9d1;
+      background: #faf9f6;
+    }
+    .pricing-heading {
+      text-align: center;
+    }
+    .pricing-clone-title {
+      margin: 0;
+      color: #24231f;
+      font-family: Georgia, "Songti SC", "STSong", serif;
+      font-size: 42px;
+      font-weight: 400;
+      line-height: 1.2;
+    }
+    .pricing-subtitle {
+      margin: 14px 0 0;
+      color: #77746d;
+      font-size: 17px;
+      line-height: 1.6;
+    }
+    .pricing-mode {
+      display: inline-flex;
+      align-items: center;
+      margin: 28px 0 30px;
+      padding: 4px;
+      border-radius: 12px;
+      background: #e6e9e9;
+    }
+    .pricing-mode button {
+      min-height: 38px;
+      padding: 7px 15px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: #74736e;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .pricing-mode .selected {
+      border: 1px solid #087f84;
+      background: #fff;
+      color: #087f84;
+      box-shadow: 0 2px 5px rgba(8, 127, 132, .16);
+    }
+    .pricing-mode .pricing-back {
+      margin: 0;
+    }
+    .pricing-clone .plans {
+      width: 100%;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .pricing-clone .plan {
+      min-height: 640px;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid #ddd9d1;
+      border-radius: 14px;
+      background: #fff;
+    }
+    .pricing-clone .plan:hover {
+      border-color: #b9b6ae;
+    }
+    .pricing-clone .plan.featured {
+      border-color: #22aeb5;
+      background: #f7fbfb;
+      box-shadow: 0 0 0 1px rgba(34, 174, 181, .08);
+    }
+    .plan-promo {
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #e6eaeb;
+      color: #087f84;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .plan-promo span:last-child {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    .plan-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 26px 24px 22px;
+    }
+    .plan-title-row {
+      min-height: 34px;
+      align-items: center;
+    }
+    .plan-title-row strong {
+      color: #24231f;
+      font-size: 25px;
+      font-weight: 500;
+    }
+    .plan-badge {
+      margin: 0;
+      background: #e5eff0;
+      color: #087f84;
+    }
+    .plan-outcome {
+      min-height: 42px;
+      margin: 8px 0 0;
+      color: #77746d;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .pricing-clone .price {
+      margin: 19px 0 22px;
+      color: #24231f;
+      font-size: 36px;
+      font-weight: 600;
+    }
+    .pricing-clone .price .currency {
+      color: #24231f;
+      font-size: 18px;
+    }
+    .pricing-clone .price small {
+      margin-bottom: 3px;
+      color: #77746d;
+      font-size: 12px;
+    }
+    .plan-divider {
+      height: 1px;
+      margin-bottom: 22px;
+      background: #e5e2dc;
+    }
+    .plan-includes {
+      margin-bottom: 17px;
+      color: #65635d;
+      font-size: 14px;
+    }
+    .pricing-clone .plan-features {
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .pricing-clone .plan-features li {
+      color: #68665f;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .feature-icon {
+      color: #087f84;
+      font-size: 16px;
+    }
+    .pricing-clone .plan .btn {
+      min-height: 48px;
+      margin: auto 0 0;
+      border-color: #24231f;
+      border-radius: 10px;
+      color: #24231f;
+      font-size: 15px;
+    }
+    .pricing-clone .plan .btn.primary {
+      border-color: #24231f;
+      background: #24231f;
+    }
+    .pricing-note {
+      margin: 28px 0 0;
+      color: #77746d;
+      font-size: 13px;
+      line-height: 1.6;
       text-align: center;
     }
     body:not(.is-auth) .panel {
@@ -1195,23 +1336,448 @@
     }
     @media (max-width: 900px) {
       body:not(.is-auth) {
-        padding: 54px 16px 38px;
+        padding: 12px 10px 28px;
       }
+      .pricing-clone {
+        min-height: calc(100vh - 24px);
+        padding: 52px 18px 28px;
+        border-radius: 18px;
+      }
+      .pricing-clone-title { font-size: 36px; }
+      .pricing-subtitle { font-size: 15px; }
       .pricing-clone .plans {
         grid-template-columns: 1fr;
-        max-width: 430px;
+        max-width: 560px;
       }
       .pricing-clone .plan {
-        min-height: auto;
+        min-height: 580px;
+      }
+      .recharge-panel {
+        padding: 38px 22px;
+      }
+      .recharge-actions {
+        flex-direction: column;
       }
       .account-page-close {
         top: 16px;
         right: 18px;
       }
     }
+    @media (max-width: 600px) {
+      .pricing-clone-title { font-size: 31px; }
+      .pricing-subtitle { font-size: 14px; }
+      .pricing-mode { margin: 24px 0; }
+      .plan-body { padding: 23px 20px 20px; }
+      .plan-promo { align-items: flex-start; }
+    }
+
+    body:not(.is-auth) {
+      padding: 32px 18px 64px;
+      background: #f5f7fa;
+    }
+    body:not(.is-auth) .shell { width: min(1080px, 100%); }
+    body:not(.is-auth) main,
+    body:not(.is-auth) .content { background: transparent; }
+    .profile-center,
+    .pricing-clone,
+    body:not(.is-auth) .panel {
+      border: 1px solid #dbe3ef;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, .05);
+      backdrop-filter: none;
+    }
+    .profile-center {
+      position: relative;
+      padding: 44px 46px 38px;
+    }
+    .profile-heading { margin-bottom: 30px; }
+    .profile-heading h1,
+    .pricing-clone-title {
+      margin: 0;
+      color: #111827;
+      font: 750 34px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+    }
+    .profile-heading p,
+    .pricing-subtitle {
+      margin-top: 8px;
+      color: #667085;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .profile-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .profile-stat {
+      min-width: 0;
+      padding: 20px;
+      border: 1px solid #e1e7f0;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+    .profile-stat-label {
+      color: #667085;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .profile-stat-value {
+      margin-top: 10px;
+      overflow-wrap: anywhere;
+      color: #111827;
+      font-size: 27px;
+      font-weight: 750;
+      line-height: 1.15;
+    }
+    .profile-account {
+      margin-bottom: 24px;
+      padding: 6px 24px;
+      border: 1px solid #e1e7f0;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .profile-account-title {
+      padding: 16px 0 14px;
+      border-bottom: 1px solid #e8edf4;
+      color: #111827;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .profile-row {
+      display: grid;
+      grid-template-columns: 110px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 18px;
+      min-height: 62px;
+      border-bottom: 1px solid #edf1f6;
+    }
+    .profile-row:last-child { border-bottom: 0; }
+    .profile-row-label { color: #667085; font-size: 13px; }
+    .profile-row-value {
+      overflow: hidden;
+      color: #111827;
+      font-size: 14px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .profile-row-state {
+      padding: 5px 10px;
+      border: 0;
+      border-radius: 999px;
+      background: #eef5ff;
+      color: #1768ff;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    button.profile-row-state:not(:disabled) { cursor: pointer; }
+    .profile-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .profile-actions .btn { box-shadow: none; }
+    .profile-actions .btn.primary,
+    .topup-submit {
+      background: #1768ff;
+      border-color: #1768ff;
+      color: #fff;
+      box-shadow: none;
+    }
+    .profile-actions .btn.primary:hover,
+    .topup-submit:hover { background: #0f5ae0; border-color: #0f5ae0; color: #fff; }
+    .pricing-clone {
+      min-height: 0;
+      padding: 44px 46px 38px;
+      color: #111827;
+    }
+    .pricing-clone .account-page-close,
+    .profile-center .account-page-close {
+      position: absolute;
+      top: 16px;
+      right: 18px;
+      border: 0;
+      background: transparent;
+      color: #667085;
+    }
+    .pricing-heading { text-align: left; }
+    .pricing-mode {
+      display: inline-flex;
+      margin: 26px 0 28px;
+      padding: 4px;
+      border-radius: 10px;
+      background: #e9edf3;
+    }
+    .pricing-mode button {
+      min-height: 38px;
+      padding: 8px 18px;
+      border-radius: 7px;
+      color: #667085;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .pricing-mode .selected {
+      border: 1px solid #1768ff;
+      background: #fff;
+      color: #1768ff;
+      box-shadow: none;
+    }
+    .pricing-clone .plans {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .pricing-clone .plan {
+      min-height: 290px;
+      padding: 24px 20px;
+      border: 1px solid #dbe3ef;
+      border-radius: 8px;
+      background: #fff;
+      text-align: center;
+      cursor: pointer;
+    }
+    .pricing-clone .plan:hover { border-color: #90b8ff; }
+    .pricing-clone .plan.featured,
+    .pricing-clone .plan.selected {
+      border-color: #1768ff;
+      background: #f7faff;
+      box-shadow: 0 0 0 1px #1768ff;
+    }
+    .topup-plan-name { color: #667085; font-size: 13px; font-weight: 700; }
+    .topup-plan-minutes {
+      margin-top: 22px;
+      color: #111827;
+      font-size: 38px;
+      font-weight: 750;
+      line-height: 1;
+    }
+    .topup-plan-minutes small { display: block; margin-top: 8px; color: #667085; font-size: 13px; font-weight: 600; }
+    .topup-plan-price { margin-top: 26px; color: #1768ff; font-size: 28px; font-weight: 750; }
+    .topup-plan-valid { margin-top: 10px; color: #667085; font-size: 12px; }
+    .topup-plan-check {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      margin: 20px auto 0;
+      border: 1px solid #cdd6e3;
+      border-radius: 50%;
+      color: transparent;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .plan.selected .topup-plan-check { border-color: #1768ff; background: #1768ff; color: #fff; }
+    .payment-section { margin-top: 24px; }
+    .payment-section-title { margin-bottom: 10px; color: #111827; font-size: 13px; font-weight: 700; }
+    .payment-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .payment-method {
+      min-height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border: 1px solid #dbe3ef;
+      border-radius: 8px;
+      background: #fff;
+      color: #111827;
+      font-weight: 700;
+    }
+    .payment-method small { color: #667085; font-size: 11px; font-weight: 500; }
+    .payment-method.selected { border-color: #1768ff; background: #eef5ff; color: #1768ff; }
+    .topup-submit { width: 100%; min-height: 52px; margin-top: 18px; border-radius: 8px; font-size: 16px; font-weight: 750; }
+    .pricing-note { margin: 16px 0 0; color: #667085; }
+    body:not(.is-auth) #order-panel,
+    body:not(.is-auth) #usage-panel {
+      width: 100%;
+      margin-top: 18px;
+      padding: 28px 30px;
+    }
+    .topup-modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background: rgba(15, 23, 42, .48);
+      overflow-y: auto;
+    }
+    .topup-modal-overlay.hidden { display: none !important; }
+    .topup-modal {
+      position: relative;
+      width: min(520px, 100%);
+      max-height: calc(100vh - 56px);
+      margin: auto;
+      padding: 36px 32px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border: 1px solid #dbe3ef;
+      border-radius: 22px;
+      background: #fff;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+      color: #111827;
+      backdrop-filter: none;
+    }
+    .topup-modal .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 18px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: transparent;
+      color: #667085;
+      font-size: 22px;
+      line-height: 1;
+    }
+    .topup-modal .modal-close:hover { background: #eef2f7; color: #111827; }
+    .topup-modal .modal-title {
+      margin: 0 0 2px;
+      color: #111827;
+      font-family: Georgia, "Songti SC", "STSong", serif;
+      font-size: 28px;
+      font-weight: 400;
+      line-height: 1.14;
+      letter-spacing: 0;
+    }
+    .topup-promo-badge {
+      margin-bottom: 14px;
+      text-align: center;
+    }
+    .topup-promo-badge span {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 10px;
+      background: #eef5ff;
+      color: #1768ff;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .topup-modal .pkg-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .topup-modal .pkg-card {
+      flex: 1;
+      min-width: 0;
+      padding: 22px 16px;
+      border: 1px solid #dbe3ef;
+      border-radius: 18px;
+      background: #fff;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, .05);
+    }
+    .topup-modal .pkg-card:hover { border-color: #90b8ff; transform: translateY(-2px); }
+    .topup-modal .pkg-card.selected {
+      border-color: #1768ff;
+      background: #f7faff;
+      box-shadow: 0 10px 28px rgba(23, 104, 255, .16);
+    }
+    .topup-modal .pkg-card-credits {
+      margin-top: 14px;
+      color: #111827;
+      font-family: Georgia, "Songti SC", "STSong", serif;
+      font-size: 24px;
+      line-height: 1.08;
+    }
+    .topup-modal .pkg-card-label { margin-top: 6px; color: #667085; font-size: 11px; }
+    .topup-modal .pkg-card-price {
+      margin: 0;
+      color: #1768ff;
+      font-family: Georgia, "Songti SC", "STSong", serif;
+      font-size: 32px;
+      font-weight: 600;
+      line-height: 1.08;
+    }
+    .topup-modal .pkg-card-estimate { margin-top: 7px; color: #667085; font-size: 11px; line-height: 1.45; }
+    .topup-modal .pay-tabs { display: flex; gap: 10px; margin-bottom: 18px; }
+    .topup-modal .pay-tab {
+      flex: 1;
+      min-height: 48px;
+      padding: 12px 16px;
+      border: 1px solid #cfd8e5;
+      border-radius: 999px;
+      background: #fff;
+      color: #111827;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+    }
+    .topup-modal .pay-tab:hover { border-color: #1768ff; }
+    .topup-modal .pay-tab.selected { border-color: #1768ff; background: #1768ff; color: #fff; }
+    .topup-modal .topup-pricing-note { margin: 10px 0 14px; color: #667085; font-size: 11.5px; line-height: 1.5; text-align: center; }
+    .topup-modal .auth-row { margin: 0; }
+    .topup-modal .topup-submit { margin: 0; }
+    .topup-modal .topup-feedback { min-height: 18px; margin-top: 12px; color: #b42318; font-size: 13px; text-align: center; }
+    .topup-modal .topup-legal-note { margin-top: 18px; color: #98a2b3; font-size: 11px; line-height: 1.5; text-align: center; }
+    body.topup-open { overflow: hidden; }
+    html.is-topup-embed,
+    body.is-topup-embed {
+      min-height: 100vh;
+      background: transparent !important;
+    }
+    body.is-topup-embed { padding: 0 !important; }
+    body.is-topup-embed .shell,
+    body.is-topup-embed main,
+    body.is-topup-embed .content {
+      position: static;
+      width: 100% !important;
+      margin: 0 !important;
+    }
+    body.is-topup-embed .brand,
+    body.is-topup-embed .hero,
+    body.is-topup-embed #recharge-panel,
+    body.is-topup-embed #order-panel,
+    body.is-topup-embed #usage-panel {
+      display: none !important;
+    }
+
+    @media (max-width: 760px) {
+      body:not(.is-auth) { padding: 12px 10px 28px; }
+      .profile-center,
+      .pricing-clone { padding: 42px 20px 24px; }
+      .profile-heading h1,
+      .pricing-clone-title { font-size: 29px; }
+      .profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pricing-clone .plans { grid-template-columns: 1fr; }
+      .pricing-clone .plan { min-height: 240px; }
+      .payment-methods { grid-template-columns: 1fr; }
+      .profile-row { grid-template-columns: 1fr auto; gap: 6px 12px; padding: 14px 0; }
+      .profile-row-label { grid-column: 1; }
+      .profile-row-value { grid-column: 1; }
+      .profile-row-state { grid-column: 2; grid-row: 1 / span 2; }
+      .profile-actions .btn { flex: 1 1 100%; }
+      .topup-modal-overlay {
+        align-items: flex-start;
+        padding: 10px;
+      }
+      .topup-modal {
+        max-height: calc(100vh - 20px);
+        padding: 20px 16px;
+      }
+      .topup-modal .modal-title { font-size: 20px; }
+      .topup-modal .pkg-row { flex-direction: column; gap: 10px; }
+      .topup-modal .pkg-card { padding: 14px 16px; }
+      .topup-modal .pkg-card-price { font-size: 26px; }
+      .topup-modal .pkg-card-credits { font-size: 20px; }
+    }
   </style>
 </head>
 <body>
+  <script>
+    if (new URLSearchParams(location.search).get("topup") === "embed") {
+      document.documentElement.classList.add("is-topup-embed");
+      document.body.classList.add("is-topup-embed");
+    }
+  </script>
   <div class="shell">
     <div class="brand">
       <img src="static/imgs/zhuanwenzi2026/brand-recording-icon.png" alt="">
@@ -1296,22 +1862,60 @@
           </div>
         </section>
 
-        <section id="account-panel" class="pricing-clone">
+        <section id="recharge-panel" class="profile-center hidden">
           <button class="account-page-close" type="button" onclick="location.href='/'" aria-label="关闭">×</button>
-          <h1 class="pricing-clone-title">选择套餐</h1>
-          <p class="status account-status" id="account-status"></p>
+          <div class="profile-heading">
+            <h1>个人中心</h1>
+            <p>管理账户余额与云端转写使用记录</p>
+          </div>
+          <div class="profile-stats">
+            <div class="profile-stat"><div class="profile-stat-label">当前余额</div><div class="profile-stat-value" id="balance">¥0.00</div></div>
+            <div class="profile-stat"><div class="profile-stat-label">转写次数</div><div class="profile-stat-value" id="stat-count">0</div></div>
+            <div class="profile-stat"><div class="profile-stat-label">累计时长</div><div class="profile-stat-value" id="stat-duration">0 秒</div></div>
+            <div class="profile-stat"><div class="profile-stat-label">累计费用</div><div class="profile-stat-value" id="stat-cost">¥0.00</div></div>
+          </div>
+          <div class="profile-account">
+            <div class="profile-account-title">账户信息</div>
+            <div class="profile-row"><span class="profile-row-label">邮箱</span><span class="profile-row-value" id="account-email">已登录</span><span class="profile-row-state">已验证</span></div>
+            <div class="profile-row"><span class="profile-row-label">密码</span><span class="profile-row-value" id="account-password">••••••••</span><button class="profile-row-state" id="set-password-btn" type="button">已设置</button></div>
+          </div>
+          <div class="profile-actions">
+            <button class="btn primary" id="open-plans-btn" type="button">去充值</button>
+            <button class="btn" id="refresh-btn" type="button">刷新数据</button>
+            <button class="btn" id="logout-btn" type="button">退出登录</button>
+          </div>
+        </section>
 
-          <div class="plans" id="plans"></div>
-
-          <div class="account-strip">
-            <div class="account-chip">
-              <p class="account-email" id="account-email">未登录</p>
-              <div class="money" id="balance">¥0.00</div>
-              <div class="account-actions">
-                <button class="btn" id="refresh-btn" type="button">刷新</button>
-                <button class="btn" id="logout-btn" type="button">退出登录</button>
-              </div>
+        <section id="account-panel" class="topup-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="topup-title">
+          <div class="modal topup-modal">
+            <button class="modal-close" id="topup-close-btn" type="button" aria-label="关闭充值弹窗">×</button>
+            <div class="modal-title" id="topup-title">充值余额</div>
+            <div class="topup-promo-badge"><span>按需充值 · 余额长期有效</span></div>
+            <div class="pkg-row" id="plans"></div>
+            <div class="pay-tabs" role="group" aria-label="支付方式">
+              <button class="pay-tab selected" data-provider="wechat" type="button">WeChat Pay</button>
+              <button class="pay-tab" data-provider="card" type="button">Card</button>
             </div>
+            <div class="topup-pricing-note">按实际云端转写时长扣费，充值余额长期有效。</div>
+            <div class="auth-row"><button class="topup-submit" id="pay-selected-btn" type="button">支付</button></div>
+            <div class="topup-feedback" id="account-status"></div>
+            <div class="topup-legal-note">充值即代表您同意本服务的使用协议与隐私政策</div>
+          </div>
+        </section>
+
+        <section id="password-panel" class="topup-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="password-title">
+          <div class="modal topup-modal" style="max-width: 480px;">
+            <button class="modal-close" id="password-close-btn" type="button" aria-label="关闭设置密码弹窗">×</button>
+            <div class="modal-title" id="password-title">设置插件密码</div>
+            <p class="topup-pricing-note">设置后可在 Obsidian 插件中使用邮箱和密码登录。</p>
+            <label class="cnu-auth-field">密码
+              <input id="new-plugin-password" class="cnu-auth-input" type="password" autocomplete="new-password" minlength="8" placeholder="至少 8 个字符">
+            </label>
+            <label class="cnu-auth-field">确认密码
+              <input id="confirm-plugin-password" class="cnu-auth-input" type="password" autocomplete="new-password" minlength="8" placeholder="再次输入密码">
+            </label>
+            <button class="topup-submit" id="save-password-btn" type="button">保存密码</button>
+            <div class="topup-feedback" id="password-status"></div>
           </div>
         </section>
 
@@ -1320,6 +1924,7 @@
           <div class="actions" style="margin-top: 16px;">
             <button id="order-open-btn" class="btn primary" type="button">继续支付</button>
             <button id="order-refresh-btn" class="btn" type="button">刷新订单</button>
+            <button id="order-delete-btn" class="btn danger" type="button">删除订单</button>
           </div>
         </section>
 
@@ -1333,7 +1938,7 @@
           <div class="table-scroll">
             <table>
               <thead>
-                <tr><th>时间</th><th>模型</th><th>时长</th><th>费用</th></tr>
+                <tr><th>时间</th><th>服务</th><th>时长</th><th>费用</th></tr>
               </thead>
               <tbody id="usage-table"></tbody>
             </table>
@@ -1351,7 +1956,8 @@
     let plans = [];
     let providers = [];
     let oauthProviders = [];
-    let selectedProvider = "xunhu";
+    let selectedProvider = "wechat";
+    let selectedPlan = null;
     let authMode = "login";
     let authMethod = "password";
     let loggedIn = false;
@@ -1360,6 +1966,13 @@
     let codeCooldown = 0;
     let codeTimer = null;
     const sessionKey = "ort.billing.browserSession.v2";
+    const tokenKey = "ort.billing.token";
+    const refreshKey = "ort.billing.refreshToken";
+    const emailKey = "ort.billing.email";
+    const orderIdKey = "rtCloudOrderId";
+    const orderUrlKey = "rtCloudOrderPaymentUrl";
+    const orderUrlOrderIdKey = "rtCloudOrderPaymentUrlOrderId";
+    const paymentHosts = new Set(["api.xunhupay.com", "creem.io", "www.creem.io", "checkout.creem.io"]);
     localStorage.removeItem("ort.billing.loggedIn");
     const svgData = (svg) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     const captchaFallback = svgData(`<svg xmlns="http://www.w3.org/2000/svg" width="104" height="38" viewBox="0 0 104 38">
@@ -1374,7 +1987,7 @@
       github: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.2.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 .1.9 2.1 3.4 1.5.1-.8.4-1.3.7-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.3 11.3 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/></svg>`,
     };
     const authPaths = {
-      login: "/api/auth/login",
+      login: "/api/auth/browser-login",
       register: "/api/auth/register",
       code: "/api/auth/verify-code",
     };
@@ -1388,6 +2001,12 @@
       const minutes = Math.floor(total / 60);
       const rest = total % 60;
       return minutes ? `${minutes} 分 ${rest} 秒` : `${rest} 秒`;
+    }
+
+    function planPrice(plan) {
+      const isCard = selectedProvider === "card";
+      const amount = isCard ? plan.amount_usd : plan.amount_yuan;
+      return `${isCard ? "$" : "¥"}${Number(amount || 0).toFixed(2)}`;
     }
 
     function dateLabel(value) {
@@ -1416,16 +2035,56 @@
       if (accountStatus) accountStatus.textContent = text || "";
     }
 
+    function isPaymentUrl(value) {
+      try {
+        const url = new URL(String(value || "").trim());
+        return url.protocol === "https:" && paymentHosts.has(url.hostname);
+      } catch {
+        return false;
+      }
+    }
+
+    function saveOrder(order) {
+      currentOrder = order;
+      if (order?.order_id) localStorage.setItem(orderIdKey, order.order_id);
+      if (order?.order_id && isPaymentUrl(order.url)) {
+        localStorage.setItem(orderUrlKey, order.url);
+        localStorage.setItem(orderUrlOrderIdKey, order.order_id);
+      }
+    }
+
+    function clearSavedOrder() {
+      localStorage.removeItem(orderIdKey);
+      localStorage.removeItem(orderUrlKey);
+      localStorage.removeItem(orderUrlOrderIdKey);
+      currentOrder = null;
+    }
+
+    function continuePayment() {
+      const orderId = currentOrder?.order_id || localStorage.getItem(orderIdKey);
+      const savedUrl = localStorage.getItem(orderUrlOrderIdKey) === orderId
+        ? localStorage.getItem(orderUrlKey)
+        : "";
+      const paymentUrl = currentOrder?.url || savedUrl;
+      if (!isPaymentUrl(paymentUrl)) {
+        status("支付链接已失效，请重新选择套餐后支付");
+        showPlans();
+        return;
+      }
+      if (queryEmbed && window.top !== window) window.top.location.assign(paymentUrl);
+      else window.location.assign(paymentUrl);
+    }
+
     function authNeedsCode() {
-      return authMode === "register" || (authMode === "login" && authMethod === "code");
+      return false;
     }
 
     function authNeedsPassword() {
-      return authMode === "register" || authMethod === "password";
+      return true;
     }
 
     function authNeedsCaptcha() {
-      return authMode === "register" || authMethod === "password";
+      return true;
     }
 
     function renderAuth() {
@@ -1441,7 +2100,7 @@
       $("captcha-field").classList.toggle("hidden", !authNeedsCaptcha());
       $("auth-submit-btn").textContent = isRegister ? "注册" : "登录";
       $("password").autocomplete = isRegister ? "new-password" : "current-password";
-      $("auth-method-btn").classList.toggle("hidden", isRegister);
+      $("auth-method-btn").classList.add("hidden");
       $("auth-method-btn").textContent = authMethod === "code" ? "使用密码登录" : "换用邮箱验证码登录";
       $("send-code-btn").textContent = codeCooldown > 0 ? `${codeCooldown}s` : "发送验证码";
       $("send-code-btn").disabled = codeCooldown > 0;
@@ -1471,29 +2130,65 @@
       }, 1000);
     }
 
+    function saveSession(data = {}, email = "") {
+      localStorage.removeItem(tokenKey);
+      localStorage.removeItem(refreshKey);
+      if (email) localStorage.setItem(emailKey, email);
+      localStorage.setItem(sessionKey, "1");
+    }
+
+    function clearSession() {
+      localStorage.removeItem(sessionKey);
+      localStorage.removeItem(tokenKey);
+      localStorage.removeItem(refreshKey);
+      localStorage.removeItem(emailKey);
+    }
+
     async function api(path, options = {}, retry = true) {
+      const token = localStorage.getItem(tokenKey);
+      const headers = {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      };
+      if (token && !headers.Authorization) headers.Authorization = `Bearer ${token}`;
       const resp = await fetch(path, {
         ...options,
         credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          ...(options.headers || {}),
-        },
+        headers,
       });
-      if (resp.status === 401 && retry) {
+      if (resp.status === 401 && retry && path.startsWith("/api/billing/")) {
+        const refreshToken = localStorage.getItem(refreshKey);
         const refreshed = await fetch("/api/auth/refresh", {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: "{}",
+          body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
         });
-        if (refreshed.ok) return api(path, options, false);
+        if (refreshed.ok) {
+          saveSession(await refreshed.json());
+          return api(path, options, false);
+        }
+        clearSession();
       }
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
-        throw new Error(data.error || data.message || resp.statusText);
+        const error = new Error(data.error || data.message || resp.statusText);
+        error.status = resp.status;
+        throw error;
       }
       return resp.json();
+    }
+
+    async function migrateLegacySession() {
+      const refreshToken = localStorage.getItem(refreshKey);
+      if (!refreshToken) return;
+      const response = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (response.ok) saveSession(await response.json());
     }
 
     function setLoggedIn(loggedIn) {
@@ -1501,17 +2196,41 @@
       document.body.classList.remove("is-auth");
       document.body.classList.toggle("is-logged-in", loggedIn);
       $("login-panel").classList.add("hidden");
-      $("account-panel").classList.remove("hidden");
+      $("recharge-panel").classList.toggle("hidden", !loggedIn);
+      $("account-panel").classList.add("hidden");
+      document.body.classList.remove("topup-open");
       $("usage-panel").classList.toggle("hidden", !loggedIn);
       $("account-email").textContent = loggedIn ? $("account-email").textContent : "未登录";
       $("balance").textContent = loggedIn ? $("balance").textContent : "登录后查看余额";
     }
 
+    function showRecharge() {
+      $("recharge-panel").classList.remove("hidden");
+      $("account-panel").classList.add("hidden");
+      $("usage-panel").classList.remove("hidden");
+      document.body.classList.remove("topup-open");
+    }
+
+    function showPlans() {
+      $("account-panel").classList.remove("hidden");
+      document.body.classList.add("topup-open");
+    }
+
+    function closePlans() {
+      if (queryEmbed && window.parent !== window) {
+        window.parent.postMessage({ type: "ort-topup-close" }, location.origin);
+        return;
+      }
+      showRecharge();
+    }
+
     function showLogin(message = "请先登录后再购买套餐") {
       document.body.classList.add("is-auth");
       $("login-panel").classList.remove("hidden");
+      $("recharge-panel").classList.add("hidden");
       $("account-panel").classList.add("hidden");
       $("usage-panel").classList.add("hidden");
+      document.body.classList.remove("topup-open");
       status(message);
     }
 
@@ -1523,13 +2242,19 @@
       const records = usage.records || [];
       setLoggedIn(true);
       $("account-email").textContent = account.email || "已登录";
+      $("account-password").textContent = account.password_set ? "••••••••" : "未设置插件密码";
+      $("set-password-btn").textContent = account.password_set ? "已设置" : "设置密码";
+      $("set-password-btn").disabled = Boolean(account.password_set);
       $("balance").textContent = money(account.balance_cents);
+      $("stat-count").textContent = String(records.length);
+      $("stat-duration").textContent = duration(usage.total_seconds);
+      $("stat-cost").textContent = money(usage.total_cost_cents);
       $("usage-summary").textContent = `最近 ${records.length} 条用量，共 ${duration(usage.total_seconds)}，费用 ${money(usage.total_cost_cents)}`;
       $("usage-table").replaceChildren(...records.map((record) => {
         const tr = document.createElement("tr");
         [
           dateLabel(record.created_at),
-          record.engine_model || "-",
+          "云端实时转写",
           duration(record.duration_seconds),
           money(record.cost_cents),
         ].forEach((text) => {
@@ -1542,11 +2267,36 @@
       $("usage-empty").classList.toggle("hidden", records.length > 0);
     }
 
+    function closePasswordPanel() {
+      $("password-panel").classList.add("hidden");
+      $("new-plugin-password").value = "";
+      $("confirm-plugin-password").value = "";
+      $("password-status").textContent = "";
+    }
+
+    async function savePluginPassword() {
+      const password = $("new-plugin-password").value;
+      const confirmation = $("confirm-plugin-password").value;
+      if (password.length < 8) throw new Error("密码至少需要 8 个字符");
+      if (password !== confirmation) throw new Error("两次密码不一致");
+      await api("/api/auth/password", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      closePasswordPanel();
+      await loadAccount();
+      status("插件登录密码已设置");
+    }
+
     async function loadPlans() {
       const data = await api("/api/billing/plans");
       plans = data.plans || [];
       providers = data.providers || [];
-      selectedProvider = providers.includes(data.default_provider) ? data.default_provider : (providers[0] || "xunhu");
+      selectedProvider = providers.includes(data.default_provider) ? data.default_provider : (providers[0] || "wechat");
+      selectedPlan = plans[0] || null;
+      document.querySelectorAll("[data-provider]").forEach((button) => {
+        button.classList.toggle("selected", button.dataset.provider === selectedProvider);
+      });
       renderPlans();
     }
 
@@ -1569,50 +2319,38 @@
     }
 
     async function oauthLogin(provider) {
-      const returnUrl = `${location.origin}/account`;
+      const returnUrl = `${location.origin}/account?${queryEmbed ? "topup=embed" : queryTopup ? "topup=1" : "auth=login"}`;
       const data = await api(`/api/auth/oauth/${provider}/authorize?return_url=${encodeURIComponent(returnUrl)}`);
       location.href = data.url;
     }
 
     function renderPlans() {
-      $("plans").replaceChildren(...plans.map((plan, index) => {
+      $("plans").replaceChildren(...plans.map((plan) => {
         const card = document.createElement("article");
-        const copy = [
-          {
-            outcome: "解锁云端转写，轻量试用",
-            includes: "包含：",
-            features: ["腾讯云实时 ASR", `约 ${plan.minutes} 分钟转写额度`, "Obsidian 插件内直接使用", "按实际识别时长扣费", "支付后自动到账"],
-          },
-          {
-            outcome: "覆盖课堂、会议和访谈的日常记录",
-            includes: "体验包中的所有内容，以及：",
-            features: ["更适合连续长段录音", `约 ${plan.minutes} 分钟转写额度`, "减少频繁充值打断", "余额长期保留", "最近用量和费用明细"],
-          },
-          {
-            outcome: "面向高频转写，集中处理更省心",
-            includes: "常用包中的所有内容，以及：",
-            features: ["适合课程、访谈和批量记录", `约 ${plan.minutes} 分钟转写额度`, "重度使用成本更稳定", "云端免密钥配置", "随时追加充值"],
-          },
-        ][index] || {
-          outcome: "云端实时转写额度",
-          includes: "包含：",
-          features: [`约 ${plan.minutes} 分钟转写额度`, "按实际使用扣费", "余额长期保留"],
-        };
-        const price = Number(plan.amount_yuan || 0).toFixed(2).replace(/\.00$/, "");
-        const badge = index === 1 ? `<span class="plan-badge">推荐</span>` : "";
-        card.className = `plan ${index === 1 ? "featured" : ""}`;
+        const price = planPrice(plan);
+        const isSelected = selectedPlan?.id === plan.id;
+        card.className = `pkg-card ${isSelected ? "selected" : ""}`;
+        card.tabIndex = 0;
+        card.setAttribute("role", "radio");
+        card.setAttribute("aria-checked", String(isSelected));
         card.innerHTML = `
-          <div class="plan-title-row">
-            <strong>${escapeHTML(plan.name)}</strong>
-            ${badge}
-          </div>
-          <div class="price"><span class="currency">¥</span>${escapeHTML(price)} <small>一次充值</small></div>
-          <p class="plan-outcome">${escapeHTML(copy.outcome)}</p>
-          <button class="btn ${index === 1 ? "primary" : ""}" type="button">选择 ${escapeHTML(plan.name)}</button>
-          <p class="plan-includes">${escapeHTML(copy.includes)}</p>
-          <ul class="plan-features">${copy.features.map((item) => `<li><span class="feature-icon" aria-hidden="true">✦</span><span>${escapeHTML(item)}</span></li>`).join("")}</ul>
+          <div class="pkg-card-price">${escapeHTML(price)}</div>
+          <div class="pkg-card-label">充值金额</div>
+          <div class="pkg-card-credits">${escapeHTML(plan.minutes)}分钟</div>
+          <div class="pkg-card-label">转写额度</div>
+          <div class="pkg-card-estimate">${escapeHTML(plan.name)} · 余额长期有效</div>
         `;
-        card.querySelector("button").onclick = () => createOrder(plan).catch((e) => status(e.message));
+        const select = () => {
+          selectedPlan = plan;
+          renderPlans();
+        };
+        card.onclick = select;
+        card.onkeydown = (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            select();
+          }
+        };
         return card;
       }));
     }
@@ -1639,7 +2377,7 @@
       if (authNeedsCode() && !code) throw new Error("请输入邮箱验证码");
       if (authNeedsCaptcha() && (!captchaId || !captchaAnswer)) throw new Error("请输入图形验证码");
       const path = authMode === "login" && authMethod === "code" ? authPaths.code : authPaths[authMode];
-      await api(path, {
+      const data = await api(path, {
         method: "POST",
         body: JSON.stringify({
           email,
@@ -1650,25 +2388,30 @@
           browser_session: true,
         }),
       });
-      localStorage.setItem(sessionKey, "1");
+      saveSession(data, email);
       await Promise.all([loadAccount(), loadPlans()]);
+      if (queryTopup || queryEmbed) showPlans();
       status("");
     }
 
-    async function createOrder(plan) {
+    async function createOrder(plan = selectedPlan) {
       if (!window.loggedIn) {
         showLogin();
         return;
       }
-      currentOrder = await api("/api/billing/create-order", {
+      if (!plan) throw new Error("请选择充值套餐");
+      const order = await api("/api/billing/create-order", {
         method: "POST",
-        body: JSON.stringify({ plan_id: plan.id, provider: selectedProvider }),
+        body: JSON.stringify({
+          plan_id: plan.id,
+          provider: selectedProvider,
+        }),
       });
-      localStorage.setItem("rtCloudOrderId", currentOrder.order_id);
+      if (!isPaymentUrl(order.url)) throw new Error("支付服务未返回有效跳转地址，请稍后重试");
+      saveOrder(order);
       $("order-panel").classList.remove("hidden");
-      $("order-text").textContent = `订单 ${currentOrder.order_id} 已创建，金额 ¥${plan.amount_yuan}`;
-      $("order-open-btn").onclick = () => window.open(currentOrder.url, "_self");
-      window.open(currentOrder.url, "_self");
+      $("order-text").textContent = `订单 ${order.order_id} 已创建，金额 ${planPrice(plan)}`;
+      continuePayment();
     }
 
     async function refreshOrder(orderId) {
@@ -1676,7 +2419,25 @@
       $("order-panel").classList.remove("hidden");
       $("order-text").textContent = `订单 ${order.order_id || orderId} 状态：${order.status}，当前余额 ${money(order.balance_cents)}`;
       await loadAccount();
-      if (order.status === "CREDITED") localStorage.removeItem("rtCloudOrderId");
+      if (order.status === "CREDITED") clearSavedOrder();
+    }
+
+    async function refreshSavedOrder(orderId) {
+      try {
+        await refreshOrder(orderId);
+      } catch (error) {
+        if (error.status !== 404) throw error;
+        clearSavedOrder();
+        $("order-panel").classList.add("hidden");
+        status("");
+      }
+    }
+
+    async function deleteOrder(orderId) {
+      await api(`/api/billing/orders/${encodeURIComponent(orderId)}`, { method: "DELETE" });
+      clearSavedOrder();
+      $("order-panel").classList.add("hidden");
+      status("订单已删除");
     }
 
     document.querySelectorAll("[data-auth-mode]").forEach((button) => {
@@ -1712,23 +2473,76 @@
       await loadCaptcha().catch(() => null);
     });
     $("refresh-btn").onclick = () => loadAccount().catch((e) => status(e.message));
+    $("open-plans-btn").onclick = showPlans;
+    $("set-password-btn").onclick = () => {
+      if ($("set-password-btn").disabled) return;
+      $("password-panel").classList.remove("hidden");
+      $("new-plugin-password").focus();
+    };
+    $("password-close-btn").onclick = closePasswordPanel;
+    $("password-panel").onclick = (event) => {
+      if (event.target === $("password-panel")) closePasswordPanel();
+    };
+    $("save-password-btn").onclick = () => savePluginPassword().catch((error) => {
+      $("password-status").textContent = error.message;
+    });
+    $("topup-close-btn").onclick = closePlans;
+    $("account-panel").onclick = (event) => {
+      if (event.target === $("account-panel")) closePlans();
+    };
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !$("account-panel").classList.contains("hidden")) closePlans();
+    });
+    document.querySelectorAll("[data-provider]").forEach((button) => {
+      button.onclick = () => {
+        selectedProvider = button.dataset.provider;
+        document.querySelectorAll("[data-provider]").forEach((item) => {
+          item.classList.toggle("selected", item === button);
+        });
+        renderPlans();
+      };
+    });
+    $("pay-selected-btn").onclick = () => createOrder().catch((e) => {
+      if (e.status === 401) {
+        clearSession();
+        setLoggedIn(false);
+        showLogin("登录已失效，请重新登录后支付");
+        return;
+      }
+      status(e.message);
+    });
     $("logout-btn").onclick = async () => {
       await api("/api/auth/logout", { method: "POST" }).catch(() => null);
-      localStorage.removeItem(sessionKey);
-      localStorage.removeItem("rtCloudOrderId");
-      currentOrder = null;
+      clearSession();
+      clearSavedOrder();
       setLoggedIn(false);
       $("order-panel").classList.add("hidden");
       status("已退出登录");
     };
     $("order-refresh-btn").onclick = () => {
-      const orderId = currentOrder?.order_id || localStorage.getItem("rtCloudOrderId");
+      const orderId = currentOrder?.order_id || localStorage.getItem(orderIdKey);
       if (!orderId) return status("没有待刷新订单");
-      refreshOrder(orderId).catch((e) => status(e.message));
+      refreshSavedOrder(orderId).catch((e) => status(e.message));
+    };
+    $("order-open-btn").onclick = continuePayment;
+    $("order-delete-btn").onclick = () => {
+      const orderId = currentOrder?.order_id || localStorage.getItem(orderIdKey);
+      if (!orderId) return status("没有待删除订单");
+      deleteOrder(orderId).catch((e) => status(e.message));
     };
 
-    const queryOrder = new URLSearchParams(location.search).get("order");
-    if (queryOrder) localStorage.setItem("rtCloudOrderId", queryOrder);
+    const queryParams = new URLSearchParams(location.search);
+    const queryOrder = queryParams.get("order");
+    const queryTopup = queryParams.get("topup") === "1";
+    const queryEmbed = queryParams.get("topup") === "embed";
+    if (queryParams.get("auth") === "register") authMode = "register";
+    if (queryOrder) {
+      if (localStorage.getItem(orderIdKey) !== queryOrder) {
+        localStorage.removeItem(orderUrlKey);
+        localStorage.removeItem(orderUrlOrderIdKey);
+      }
+      localStorage.setItem(orderIdKey, queryOrder);
+    }
     renderAuth();
     const oauthError = sessionStorage.getItem("ort.billing.oauthError");
     if (oauthError) {
@@ -1741,19 +2555,18 @@
     });
     loadCaptcha().catch(() => null);
     loadPlans().catch((e) => status(e.message));
-    if (localStorage.getItem(sessionKey)) {
-      loadAccount()
-        .then(() => {
-          const orderId = queryOrder || localStorage.getItem("rtCloudOrderId");
-          if (orderId) refreshOrder(orderId).catch((e) => status(e.message));
-        })
-        .catch(() => {
-          localStorage.removeItem(sessionKey);
-          setLoggedIn(false);
-        });
-    } else {
-      setLoggedIn(false);
-    }
+    migrateLegacySession()
+      .then(loadAccount)
+      .then(() => {
+        if (queryTopup || queryEmbed) showPlans();
+        const orderId = queryOrder || localStorage.getItem(orderIdKey);
+        if (orderId) refreshSavedOrder(orderId).catch((e) => status(e.message));
+      })
+      .catch(() => {
+        clearSession();
+        setLoggedIn(false);
+        showLogin(queryTopup || queryEmbed ? "请先登录后再充值" : "");
+      });
   </script>
 </body>
 </html>

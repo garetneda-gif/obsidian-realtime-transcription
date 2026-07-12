@@ -24,8 +24,8 @@ test("clearEntries resets transient transcript and summary state", () => {
 });
 
 test("in-flight summaries are discarded after clearEntries changes session version", () => {
-  assert.match(source, /const sessionVersion = this\.transcriptSessionVersion;[\s\S]*?summaryService\.summarize\(source\);[\s\S]*?sessionVersion !== this\.transcriptSessionVersion/);
-  assert.match(source, /const sessionVersion = this\.transcriptSessionVersion;[\s\S]*?summaryService\.metaSummarize\(texts\);[\s\S]*?sessionVersion !== this\.transcriptSessionVersion/);
+  assert.match(source, /const sessionVersion = this\.transcriptSessionVersion;[\s\S]*?summaryService\.summarize\(source, this\.outputLanguageName\(\)\);[\s\S]*?sessionVersion !== this\.transcriptSessionVersion/);
+  assert.match(source, /const sessionVersion = this\.transcriptSessionVersion;[\s\S]*?summaryService\.metaSummarize\(texts, this\.outputLanguageName\(\)\);[\s\S]*?sessionVersion !== this\.transcriptSessionVersion/);
 });
 
 test("summary queues are checked again after stale in-flight requests finish", () => {
