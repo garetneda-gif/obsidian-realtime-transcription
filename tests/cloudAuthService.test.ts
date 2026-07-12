@@ -90,14 +90,14 @@ test("hosted cloud auth migration clears credentials from old server URL", () =>
     balanceCents: 999,
   }));
 
-  assert.equal(migrated.serverUrl, "https://obsidian-realtime-transcriber.vercel.app");
+  assert.equal(migrated.serverUrl, "https://transcribe.songrong.org");
   assert.equal(migrated.token, "");
   assert.equal(migrated.refreshToken, "");
   assert.equal(migrated.tokenExpiresAt, "");
   assert.equal(migrated.balanceCents, 0);
 });
 
-test("hosted cloud auth migration keeps credentials for fixed server URL", () => {
+test("hosted cloud auth migration preserves credentials from the legacy Vercel domain", () => {
   const migrated = normalizeHostedCloudAuthSettings(authSettings({
     serverUrl: "obsidian-realtime-transcriber.vercel.app/",
     token: "token",
@@ -106,7 +106,23 @@ test("hosted cloud auth migration keeps credentials for fixed server URL", () =>
     balanceCents: 123,
   }));
 
-  assert.equal(migrated.serverUrl, "https://obsidian-realtime-transcriber.vercel.app");
+  assert.equal(migrated.serverUrl, "https://transcribe.songrong.org");
+  assert.equal(migrated.token, "token");
+  assert.equal(migrated.refreshToken, "refresh");
+  assert.equal(migrated.tokenExpiresAt, "2099-01-01T00:00:00.000Z");
+  assert.equal(migrated.balanceCents, 123);
+});
+
+test("hosted cloud auth migration keeps credentials for the custom domain", () => {
+  const migrated = normalizeHostedCloudAuthSettings(authSettings({
+    serverUrl: "transcribe.songrong.org/",
+    token: "token",
+    refreshToken: "refresh",
+    tokenExpiresAt: "2099-01-01T00:00:00.000Z",
+    balanceCents: 123,
+  }));
+
+  assert.equal(migrated.serverUrl, "https://transcribe.songrong.org");
   assert.equal(migrated.token, "token");
   assert.equal(migrated.refreshToken, "refresh");
   assert.equal(migrated.tokenExpiresAt, "2099-01-01T00:00:00.000Z");

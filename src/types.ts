@@ -221,7 +221,12 @@ export function normalizeHostedCloudAuthSettings(
 ): CloudAuthSettings {
   const fixedServerUrl = DEFAULT_SETTINGS.cloudAuth.serverUrl;
   const merged = { ...DEFAULT_SETTINGS.cloudAuth, ...value };
-  if (normalizeCloudServerUrl(merged.serverUrl) === fixedServerUrl) {
+  const normalizedServerUrl = normalizeCloudServerUrl(merged.serverUrl);
+  const trustedServerUrls = new Set([
+    fixedServerUrl,
+    "https://obsidian-realtime-transcriber.vercel.app",
+  ]);
+  if (trustedServerUrls.has(normalizedServerUrl)) {
     return { ...merged, serverUrl: fixedServerUrl };
   }
   return {
@@ -246,7 +251,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     engineModelType: "16k_zh",
   },
   cloudAuth: {
-    serverUrl: "https://obsidian-realtime-transcriber.vercel.app",
+    serverUrl: "https://transcribe.songrong.org",
     token: "",
     refreshToken: "",
     tokenExpiresAt: "",
