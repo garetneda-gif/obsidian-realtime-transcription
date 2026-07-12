@@ -1,17 +1,20 @@
 """数据库初始化和会话管理"""
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 import config
 from models import Base
 
 database_url = config.DATABASE_URL
+is_postgresql = database_url.startswith("postgresql://") or database_url.startswith("postgresql+psycopg://")
 if database_url.startswith("postgresql://"):
     database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 engine = create_engine(
     database_url,
-    connect_args={"check_same_thread": False} if "sqlite" in database_url else {},
+    connect_args={"prepare_threshold": None} if is_postgresql else {"check_same_thread": False},
+    poolclass=NullPool if is_postgresql else None,
     echo=False,
 )
 
