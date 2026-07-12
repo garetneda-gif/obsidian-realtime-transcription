@@ -25,6 +25,18 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertTrue((public_assets / "footer-qr-qq.png").is_file())
         self.assertTrue((public_assets / "footer-qr-discord.png").is_file())
 
+    def test_landing_pages_keep_full_language_switcher(self):
+        for html in (HOME_HTML, PUBLIC_HOME_HTML):
+            self.assertIn('class="ort-language J-language-switcher"', html)
+            self.assertIn('data-lang="zh-CN"', html)
+            self.assertIn('data-lang="en-US"', html)
+            self.assertIn('data-zwz-text="heroTitle"', html)
+            self.assertIn('/static/js/i18n/language-switcher.js', html)
+        language_script = SERVER_DIR / "static" / "static" / "js" / "i18n" / "language-switcher.js"
+        script = language_script.read_text(encoding="utf-8")
+        self.assertIn("Every conversation<br>recorded, transcribed, refined", script)
+        self.assertIn("recharge: 'Top up'", script)
+
     def test_username_entry_still_targets_personal_center(self):
         self.assertIn('accountLink.href = "/account"', HOME_HTML)
 
