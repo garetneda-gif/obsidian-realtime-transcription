@@ -3,7 +3,7 @@
   "fluid": true,
   "functions": {
     "api/asr-proxy.ts": {
-      "maxDuration": 1800
+      "maxDuration": 300
     }
   },
   "rewrites": [

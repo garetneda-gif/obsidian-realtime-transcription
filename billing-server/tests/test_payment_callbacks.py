@@ -887,7 +887,7 @@ class PaymentCallbackTests(unittest.TestCase):
         first = self.client.post("/api/asr/proxy/authorize", json={"token": token})
         second = self.client.post("/api/asr/proxy/authorize", json={"token": token})
         self.assertEqual(first.status_code, 200)
-        self.assertEqual(first.get_json()["max_seconds"], config.PRECHARGE_MINUTES * 60)
+        self.assertEqual(first.get_json()["max_seconds"], config.CLOUD_SESSION_MAX_SECONDS)
         self.assertEqual(second.status_code, 409)
 
         connected = self.client.post("/api/asr/proxy/connected", json={"token": token})

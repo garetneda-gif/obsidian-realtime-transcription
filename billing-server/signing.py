@@ -305,7 +305,7 @@ def authorize_proxy():
     return jsonify({
         "session_id": sign_req.id,
         "language": sign_req.language,
-        "max_seconds": config.PRECHARGE_MINUTES * 60,
+        "max_seconds": config.CLOUD_SESSION_MAX_SECONDS,
     }), 200
 
 
