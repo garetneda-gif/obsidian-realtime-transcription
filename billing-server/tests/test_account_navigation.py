@@ -5,6 +5,7 @@ import unittest
 SERVER_DIR = Path(__file__).resolve().parents[1]
 ACCOUNT_HTML = (SERVER_DIR / "account_center.html").read_text(encoding="utf-8")
 HOME_HTML = (SERVER_DIR / "static" / "index.html").read_text(encoding="utf-8")
+PUBLIC_HOME_HTML = (SERVER_DIR.parent / "public" / "index.html").read_text(encoding="utf-8")
 SETTINGS_TS = (SERVER_DIR.parent / "src" / "settings.ts").read_text(encoding="utf-8")
 
 
@@ -13,6 +14,16 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn('id="ort-recharge-link" href="/account?topup=1"', HOME_HTML)
         self.assertIn('topupFrame.src = "/account?topup=embed"', HOME_HTML)
         self.assertIn('id="ort-topup-layer" hidden', HOME_HTML)
+
+    def test_public_landing_keeps_repository_and_group_footer(self):
+        for html in (HOME_HTML, PUBLIC_HOME_HTML):
+            self.assertIn("https://github.com/garetneda-gif/obsidian-realtime-transcription", html)
+            self.assertIn("footer-qr-qq.png", html)
+            self.assertIn("footer-qr-discord.png", html)
+            self.assertIn('class="ort-footer__inner"', html)
+        public_assets = SERVER_DIR.parent / "public" / "static" / "imgs" / "zhuanwenzi2026"
+        self.assertTrue((public_assets / "footer-qr-qq.png").is_file())
+        self.assertTrue((public_assets / "footer-qr-discord.png").is_file())
 
     def test_username_entry_still_targets_personal_center(self):
         self.assertIn('accountLink.href = "/account"', HOME_HTML)
