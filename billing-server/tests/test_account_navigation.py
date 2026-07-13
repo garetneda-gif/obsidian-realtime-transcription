@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -43,6 +44,39 @@ class AccountNavigationTests(unittest.TestCase):
             self.assertIn(f'rel="icon" type="image/png" sizes="256x256" href="{icon_path}"', html)
             self.assertIn(f'<img src="{icon_path}" alt="">', html)
             self.assertNotIn("brand-recording-icon.svg", html)
+
+    def test_public_landing_serves_every_local_asset_from_the_static_edge(self):
+        public_root = SERVER_DIR.parent / "public"
+        asset_urls = set(re.findall(r'(?:src|href)="(/static/[^"?]+)', PUBLIC_HOME_HTML))
+        for asset_url in asset_urls:
+            self.assertTrue((public_root / asset_url.removeprefix("/")).is_file(), asset_url)
+
+        stylesheet = public_root / "static" / "css" / "newHomepage.css"
+        css = stylesheet.read_text(encoding="utf-8")
+        for relative_url in re.findall(r'url\(["\']?([^"\')?]+)', css):
+            if relative_url.startswith("data:"):
+                continue
+            asset_path = (stylesheet.parent / relative_url.split("?", 1)[0]).resolve()
+            self.assertTrue(asset_path.is_file(), relative_url)
+
+    def test_below_fold_landing_images_are_lazy_loaded(self):
+        lazy_assets = (
+            "thinking-record-card@2x.png",
+            "thinking-insight-card@2x.png",
+            "thinking-asset-card-brand@2x.png",
+            "tool-visual-multilang@2x.png",
+            "tool-visual-ask-claudian@2x.png",
+            "tool-visual-realtime-obsidian@2x.png",
+            "tool-visual-summary-ai@2x.png",
+            "footer-qr-qq.png",
+            "footer-qr-discord.png",
+        )
+        for html in (HOME_HTML, PUBLIC_HOME_HTML):
+            for asset in lazy_assets:
+                tag = next(line for line in html.splitlines() if asset in line)
+                self.assertIn('loading="lazy"', tag, asset)
+                self.assertIn('decoding="async"', tag, asset)
+            self.assertIn('fetchpriority="high"', html)
 
     def test_username_entry_still_targets_personal_center(self):
         self.assertIn('accountLink.href = "/account"', HOME_HTML)
