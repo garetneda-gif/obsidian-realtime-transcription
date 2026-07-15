@@ -157,8 +157,10 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertNotIn("主要面向海外用户", ACCOUNT_HTML)
         self.assertIn('id="domestic-balance"', ACCOUNT_HTML)
         self.assertIn('id="overseas-balance"', ACCOUNT_HTML)
-        self.assertIn("境内套餐 · 微信支付", ACCOUNT_HTML)
-        self.assertIn("境外套餐 · 银行卡", ACCOUNT_HTML)
+        self.assertIn('data-provider="wechat" type="button">境内套餐</button>', ACCOUNT_HTML)
+        self.assertIn('data-provider="card" type="button">境外套餐</button>', ACCOUNT_HTML)
+        self.assertNotIn("境内套餐 · 微信支付", ACCOUNT_HTML)
+        self.assertNotIn("境外套餐 · 银行卡", ACCOUNT_HTML)
         self.assertIn("境内额度仅限中国大陆网络使用", ACCOUNT_HTML)
         self.assertIn("境外额度仅限中国大陆以外网络使用", ACCOUNT_HTML)
 
