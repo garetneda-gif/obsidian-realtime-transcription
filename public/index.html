@@ -99,6 +99,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        box-sizing: border-box;
         width: 84px;
         height: 34px;
         border: 1px solid #1d5cff;
@@ -108,6 +109,18 @@
         text-decoration: none;
         font-size: 14px;
         font-weight: 600;
+      }
+
+      .ort-login.is-user {
+        width: auto;
+        max-width: 180px;
+        padding: 0 14px;
+      }
+
+      .ort-login.is-user span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .ort-menu {
@@ -294,7 +307,7 @@
               <li data-lang="zh-TW" data-label-zh="繁體中文" data-label-en="Traditional Chinese" data-label-tw="繁體中文"><span class="lang-primary">繁體中文</span><span class="lang-secondary" data-zh="繁体中文" data-en="Traditional Chinese" data-tw="繁體中文">繁体中文</span></li>
             </ul>
           </div>
-          <a class="ort-login" href="/pricing"><span data-i18n="header.login">登录</span></a>
+          <a class="ort-login" id="ort-account-link" href="/account?auth=login"><span id="ort-account-label" data-i18n="header.login">登录</span></a>
           <span class="ort-menu" aria-hidden="true"></span>
         </div>
       </div>
@@ -418,5 +431,33 @@
       </div>
     </footer>
     <script src="/static/js/i18n/language-switcher.js?v=20260713-1"></script>
+    <script>
+      async function loadHeaderAccount(retry = true) {
+        const response = await fetch("/api/billing/me", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+        if (response.status === 401 && retry) {
+          const refreshed = await fetch("/api/auth/refresh", {
+            method: "POST",
+            credentials: "same-origin",
+          });
+          if (refreshed.ok) return loadHeaderAccount(false);
+        }
+        return response.ok ? response.json() : null;
+      }
+
+      loadHeaderAccount().then((account) => {
+        if (!account?.email) return;
+        const email = String(account.email);
+        const accountLink = document.getElementById("ort-account-link");
+        const accountLabel = document.getElementById("ort-account-label");
+        accountLabel.removeAttribute("data-i18n");
+        accountLabel.textContent = email.split("@", 1)[0] || email;
+        accountLink.href = "/account";
+        accountLink.title = email;
+        accountLink.classList.add("is-user");
+      }).catch((error) => console.error("[HeaderAccount]", error));
+    </script>
   </body>
 </html>
