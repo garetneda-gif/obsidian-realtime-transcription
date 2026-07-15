@@ -81,7 +81,7 @@ class AccountNavigationTests(unittest.TestCase):
 
     def test_below_fold_landing_images_are_lazy_loaded(self):
         lazy_assets = (
-            "thinking-record-card@2x.png",
+            "thinking-record-card-v2@2x.webp",
             "thinking-insight-card@2x.png",
             "thinking-asset-card-brand@2x.png",
             "tool-visual-multilang@2x.png",

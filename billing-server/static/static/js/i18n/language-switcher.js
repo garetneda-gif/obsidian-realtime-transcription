@@ -48,9 +48,8 @@
                 heroDesc: '边录边转文字，随时插入照片和添加批注。AI同步理解言外之<br>意，给到风险预判与建议。对话结束即刻生成全面直观的图文<br>纪要，并帮你自动分类存好，成为随时可翻阅的知识积累。',
                 primaryCta: '免费体验',
                 thinkingTitle: '更懂你的<br>AI语音记录助手',
-                thinkingRecordTitle: '录音 / 转写 / 总结',
-                thinkingRecordDesc: '1小时音频最快5分钟出稿 • 98%准确率',
-                accuracyTip: '*98%数据来源：安徽电子产品监督检验所。',
+                thinkingRecordTitle: '实时录音 / 多语转写 / AI 摘要',
+                thinkingRecordDesc: '支持 5 种语言 • 直接沉淀到 Obsidian',
                 thinkingInsightTitle: '洞察与启发',
                 thinkingInsightDesc: '风险识别 • 决策建议 • 知识拓展',
                 thinkingAssetTitle: '知识资产沉淀',
@@ -75,7 +74,7 @@
                 realtimeVisual: '实时洞察界面',
                 summaryVisual: '图文纪要界面',
                 archiveVisual: '录音自动分类与分享界面',
-                thinkingRecordMetric: '5分钟',
+                thinkingRecordMetric: '5 语种',
                 thinkingInsightMetricAsset: '聪明'
             }
         },
@@ -126,8 +125,7 @@
                 primaryCta: 'Try free',
                 thinkingTitle: 'An AI voice assistant<br>built for your workflow',
                 thinkingRecordTitle: 'Record / transcribe / summarize',
-                thinkingRecordDesc: 'One-hour audio can become a draft in 5 minutes • 98% accuracy',
-                accuracyTip: '*98% based on third-party product testing.',
+                thinkingRecordDesc: '5 languages • Saved in Obsidian',
                 thinkingInsightTitle: 'Insights and prompts',
                 thinkingInsightDesc: 'Risk detection • decisions • knowledge expansion',
                 thinkingAssetTitle: 'Knowledge asset archive',
@@ -152,7 +150,7 @@
                 realtimeVisual: 'Live insight preview',
                 summaryVisual: 'Visual notes preview',
                 archiveVisual: 'Auto archive and sharing preview',
-                thinkingRecordMetric: '5 minutes',
+                thinkingRecordMetric: '5 languages',
                 thinkingInsightMetricAsset: 'Smart'
             }
         },
@@ -202,9 +200,8 @@
                 heroDesc: '邊錄邊轉文字，隨時插入照片和添加批註。AI 同步理解言外之意，給到風險預判與建議。對話結束即刻生成全面直觀的圖文紀要，並幫你自動分類存好。',
                 primaryCta: '免費體驗',
                 thinkingTitle: '更懂你的<br>AI語音記錄助手',
-                thinkingRecordTitle: '錄音 / 轉寫 / 總結',
-                thinkingRecordDesc: '1小時音頻最快5分鐘出稿 • 98%準確率',
-                accuracyTip: '*98%數據來源：安徽電子產品監督檢驗所。',
+                thinkingRecordTitle: '即時錄音 / 多語轉寫 / AI 摘要',
+                thinkingRecordDesc: '支援 5 種語言 • 直接沉澱到 Obsidian',
                 thinkingInsightTitle: '洞察與啟發',
                 thinkingInsightDesc: '風險識別 • 決策建議 • 知識拓展',
                 thinkingAssetTitle: '知識資產沉澱',
@@ -229,7 +226,7 @@
                 realtimeVisual: '即時洞察界面',
                 summaryVisual: '圖文紀要界面',
                 archiveVisual: '錄音自動分類與分享界面',
-                thinkingRecordMetric: '5分鐘',
+                thinkingRecordMetric: '5 語種',
                 thinkingInsightMetricAsset: '聰明'
             }
         }

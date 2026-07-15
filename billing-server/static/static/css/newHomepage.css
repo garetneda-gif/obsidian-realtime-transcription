@@ -502,6 +502,20 @@ html, body, .content_bg {
 .zwz2026-thinking__card .zwz2026-thinking__card-metric-icon--insight {
   height: 50px; }
 
+.zwz2026-thinking__card-metric-text {
+  position: relative;
+  z-index: 2;
+  display: block;
+  padding: 0 14px;
+  background: #fff;
+  color: #1768ff;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1; }
+
+.zwz2026-lang-en-US .zwz2026-thinking__card-metric-text {
+  font-size: 32px; }
+
 .zwz2026-thinking__card .zwz2026-thinking__card-metric-icon[data-zwz-swapping="true"] {
   visibility: hidden; }
 
