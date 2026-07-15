@@ -120,7 +120,7 @@ class AccountNavigationTests(unittest.TestCase):
 
     def test_pending_order_and_usage_cards_share_full_width_rule(self):
         self.assertIn(
-            "body:not(.is-auth) #order-panel,\n    body:not(.is-auth) #usage-panel",
+            "body:not(.is-auth) #order-panel,\n    body:not(.is-auth) #dashboard-panel,\n    body:not(.is-auth) #usage-panel",
             ACCOUNT_HTML,
         )
 
@@ -184,6 +184,8 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn('api("/api/auth/password"', ACCOUNT_HTML)
 
     def test_account_dashboard_uses_existing_usage_records(self):
+        self.assertIn('id="dashboard-panel" class="panel hidden"', ACCOUNT_HTML)
+        self.assertIn('</section>\n\n        <section id="dashboard-panel"', ACCOUNT_HTML)
         self.assertIn('id="trend-chart"', ACCOUNT_HTML)
         self.assertIn('id="route-donut"', ACCOUNT_HTML)
         self.assertIn('renderDashboard(records)', ACCOUNT_HTML)
