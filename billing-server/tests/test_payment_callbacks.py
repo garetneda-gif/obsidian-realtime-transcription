@@ -1,4 +1,4 @@
-# pyright: reportImplicitRelativeImport=false, reportUninitializedInstanceVariable=false, reportAttributeAccessIssue=false, reportArgumentType=false, reportIndexIssue=false
+# pyright: reportImplicitRelativeImport=false, reportMissingImports=false, reportUninitializedInstanceVariable=false, reportAttributeAccessIssue=false, reportArgumentType=false, reportIndexIssue=false
 import base64
 import hashlib
 import hmac
@@ -25,6 +25,7 @@ import config
 import auth
 import billing
 import captcha
+import captcha_token
 import database
 import deepgram
 import payment_creem
@@ -121,6 +122,17 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(base64.b64decode(image.split(",", 1)[1])[:8], b"\x89PNG\r\n\x1a\n")
         self.assertEqual(captcha.verify_image_captcha(captcha_id, answer), (True, "ok"))
         self.assertEqual(captcha.verify_image_captcha(captcha_id, answer), (False, "not_found"))
+
+    def test_stateless_captcha_token_is_signed_and_single_use(self):
+        answer = "A2B3"
+        challenge = captcha_token.generate_stateless_image_captcha(answer)
+        captcha_id = challenge["captcha_id"]
+
+        self.assertTrue(challenge["image"].startswith("data:image/png;base64,"))
+        self.assertEqual(captcha.verify_image_captcha(captcha_id, "WRNG"), (False, "mismatch"))
+        self.assertEqual(captcha.verify_image_captcha(captcha_id, answer), (True, "ok"))
+        self.assertEqual(captcha.verify_image_captcha(captcha_id, answer), (False, "used"))
+        self.assertEqual(captcha.verify_image_captcha(captcha_id + "x", answer), (False, "invalid_token"))
 
     def test_captcha_issuance_is_rate_limited(self):
         original_limit = config.CAPTCHA_RATE_LIMIT_PER_MINUTE

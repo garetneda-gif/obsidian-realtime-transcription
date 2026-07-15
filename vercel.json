@@ -8,6 +8,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/auth/captcha/image",
+      "destination": "/api/captcha"
+    },
+    {
       "source": "/api/asr/proxy",
       "destination": "/api/asr-proxy"
     },
