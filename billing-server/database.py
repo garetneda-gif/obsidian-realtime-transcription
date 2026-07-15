@@ -79,9 +79,10 @@ def init_db() -> None:
 
 
 def _migrate_scoped_balances(connection) -> None:
+    lock_clause = " FOR UPDATE" if engine.dialect.name == "postgresql" else ""
     users = connection.execute(text(
         "SELECT id, balance_cents, overseas_balance_cents "
-        "FROM users WHERE balance_scope_migrated = 0"
+        f"FROM users WHERE balance_scope_migrated = 0{lock_clause}"
     )).mappings().all()
     for user in users:
         overseas_credits = connection.execute(text(
