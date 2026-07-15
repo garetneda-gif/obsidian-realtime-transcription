@@ -15,6 +15,7 @@ class AccountNavigationTests(unittest.TestCase):
     def test_landing_login_opens_auth_immediately_from_an_edge_cached_shell(self):
         for html in (HOME_HTML, PUBLIC_HOME_HTML):
             self.assertIn('href="/account?auth=login"', html)
+            self.assertIn('rel="prefetch" href="/account?auth=login"', html)
         self.assertIn('if (queryAuth === "login" || queryAuth === "register")', ACCOUNT_HTML)
         self.assertIn('showLogin("");', ACCOUNT_HTML)
         self.assertIn("s-maxage=86400", ACCOUNT_ROUTE_PY)
