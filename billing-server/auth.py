@@ -280,6 +280,7 @@ def set_password():
         return err
     data = request.get_json(silent=True) or {}
     password = str(data.get("password") or "")
+    current_password = str(data.get("current_password") or "")
     if len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters"}), 400
     db = SessionLocal()
@@ -288,10 +289,52 @@ def set_password():
         if not user:
             return jsonify({"error": "User not found"}), 404
         if user.password_hash.startswith(("$2a$", "$2b$", "$2y$")):
-            return jsonify({"error": "Password already set"}), 409
+            if not current_password:
+                return jsonify({"error": "Current password required"}), 400
+            if not bcrypt.checkpw(current_password.encode(), user.password_hash.encode()):
+                return jsonify({"error": "Current password is incorrect"}), 401
         user.password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
         db.commit()
         return jsonify({"ok": True}), 200
+    finally:
+        db.close()
+
+
+@auth_bp.route("/email", methods=["PATCH"])
+def change_email():
+    user_id, err = require_auth()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email") or "").strip().lower()
+    current_password = str(data.get("current_password") or "")
+    if not email or "@" not in email:
+        return jsonify({"error": "Invalid email"}), 400
+    if not current_password:
+        return jsonify({"error": "Current password required"}), 400
+    if not _check_rate_limit("change-email", user_id or "", config.LOGIN_RATE_LIMIT_PER_MINUTE):
+        return jsonify({"error": "Too many email change attempts, try again later"}), 429
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).with_for_update().first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        if not user.password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+            return jsonify({"error": "Set a password before changing email"}), 409
+        if not bcrypt.checkpw(current_password.encode(), user.password_hash.encode()):
+            return jsonify({"error": "Current password is incorrect"}), 401
+        if user.email == email:
+            return jsonify({"email": user.email}), 200
+        if db.query(User).filter(User.email == email).first():
+            return jsonify({"error": "Email already registered"}), 409
+        user.email = email
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return jsonify({"error": "Email already registered"}), 409
+        return jsonify({"email": user.email}), 200
     finally:
         db.close()
 
