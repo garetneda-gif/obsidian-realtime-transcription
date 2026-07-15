@@ -20,6 +20,15 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn('showLogin("");', ACCOUNT_HTML)
         self.assertIn("s-maxage=86400", ACCOUNT_ROUTE_PY)
 
+    def test_login_background_uses_optimized_webp(self):
+        asset = "imgs/zhuanwenzi2026/login-bg-light-gptimage2.webp"
+        self.assertIn(f'url("static/{asset}")', ACCOUNT_HTML)
+        self.assertNotIn("login-bg-light-gptimage2.png", ACCOUNT_HTML)
+        for static_root in (SERVER_DIR / "static", SERVER_DIR.parent / "public" / "static"):
+            image = static_root / asset
+            self.assertTrue(image.is_file())
+            self.assertLess(image.stat().st_size, 100_000)
+
     def test_recharge_entries_use_topup_deep_link(self):
         self.assertIn('id="ort-recharge-link" href="/account?topup=1"', HOME_HTML)
         self.assertIn('topupFrame.src = "/account?topup=embed"', HOME_HTML)
