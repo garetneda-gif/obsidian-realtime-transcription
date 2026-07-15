@@ -1448,6 +1448,128 @@
       font-size: 12px;
       font-weight: 650;
     }
+    .usage-dashboard {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(250px, .8fr);
+      margin-bottom: 22px;
+      border: 1px solid #e1e7f0;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .dashboard-section {
+      min-width: 0;
+      padding: 20px 22px;
+    }
+    .dashboard-section + .dashboard-section { border-left: 1px solid #e8edf4; }
+    .dashboard-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .dashboard-title {
+      color: #111827;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .dashboard-caption {
+      color: #98a2b3;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .trend-chart {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 10px;
+      height: 142px;
+    }
+    .trend-column {
+      display: grid;
+      grid-template-rows: 18px 1fr 18px;
+      gap: 6px;
+      min-width: 0;
+      text-align: center;
+    }
+    .trend-value,
+    .trend-label {
+      overflow: hidden;
+      color: #667085;
+      font-size: 10px;
+      line-height: 18px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .trend-track {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      min-height: 0;
+      border-radius: 5px;
+      background: #f1f4f8;
+    }
+    .trend-bar {
+      width: min(24px, 62%);
+      min-height: 0;
+      border-radius: 4px 4px 1px 1px;
+      background: #1768ff;
+    }
+    .route-chart {
+      display: grid;
+      grid-template-columns: 128px minmax(0, 1fr);
+      align-items: center;
+      gap: 20px;
+      min-height: 142px;
+    }
+    .route-donut {
+      position: relative;
+      width: 128px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: #edf1f6;
+    }
+    .route-donut::after {
+      content: "";
+      position: absolute;
+      inset: 20px;
+      border-radius: 50%;
+      background: #fff;
+    }
+    .route-total {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      display: grid;
+      place-content: center;
+      color: #111827;
+      font-size: 16px;
+      font-weight: 750;
+      text-align: center;
+    }
+    .route-total small {
+      margin-top: 3px;
+      color: #98a2b3;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .route-legend { display: grid; gap: 14px; }
+    .route-legend-row {
+      display: grid;
+      grid-template-columns: 9px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      color: #667085;
+      font-size: 12px;
+    }
+    .route-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      background: #1768ff;
+    }
+    .route-dot.overseas { background: #58b9d6; }
+    .route-legend-row strong { color: #111827; font-size: 12px; }
     .profile-account {
       margin-bottom: 24px;
       padding: 6px 24px;
@@ -1764,6 +1886,10 @@
       .profile-heading h1,
       .pricing-clone-title { font-size: 29px; }
       .profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .usage-dashboard { grid-template-columns: 1fr; }
+      .dashboard-section + .dashboard-section { border-top: 1px solid #e8edf4; border-left: 0; }
+      .route-chart { grid-template-columns: 112px minmax(0, 1fr); }
+      .route-donut { width: 112px; }
       .pricing-clone .plans { grid-template-columns: 1fr; }
       .pricing-clone .plan { min-height: 240px; }
       .payment-methods { grid-template-columns: 1fr; }
@@ -1896,6 +2022,30 @@
             <div class="profile-stat"><div class="profile-stat-label">转写次数</div><div class="profile-stat-value" id="stat-count">0</div></div>
             <div class="profile-stat"><div class="profile-stat-label">累计时长</div><div class="profile-stat-value" id="stat-duration">0 秒</div></div>
             <div class="profile-stat"><div class="profile-stat-label">累计费用</div><div class="profile-stat-value" id="stat-cost">¥0.00</div></div>
+          </div>
+          <div class="usage-dashboard" aria-label="云端转写用量仪表板">
+            <section class="dashboard-section">
+              <div class="dashboard-heading">
+                <div class="dashboard-title">近 7 日转写时长</div>
+                <div class="dashboard-caption" id="trend-caption">合计 0 秒</div>
+              </div>
+              <div class="trend-chart" id="trend-chart" role="img" aria-label="近 7 日转写时长均为 0 秒"></div>
+            </section>
+            <section class="dashboard-section">
+              <div class="dashboard-heading">
+                <div class="dashboard-title">线路用量占比</div>
+                <div class="dashboard-caption">最近 50 次</div>
+              </div>
+              <div class="route-chart">
+                <div class="route-donut" id="route-donut" role="img" aria-label="暂无线路用量">
+                  <div class="route-total"><span id="route-total">0 秒</span><small>转写时长</small></div>
+                </div>
+                <div class="route-legend">
+                  <div class="route-legend-row"><span class="route-dot"></span><span>境内线路</span><strong id="domestic-usage">0 秒</strong></div>
+                  <div class="route-legend-row"><span class="route-dot overseas"></span><span>境外线路</span><strong id="overseas-usage">0 秒</strong></div>
+                </div>
+              </div>
+            </section>
           </div>
           <div class="profile-account">
             <div class="profile-account-title">账户信息</div>
@@ -2317,6 +2467,7 @@
       $("stat-count").textContent = String(records.length);
       $("stat-duration").textContent = duration(usage.total_seconds);
       $("stat-cost").textContent = money(usage.total_cost_cents);
+      renderDashboard(records);
       $("usage-summary").textContent = `最近 ${records.length} 条用量，共 ${duration(usage.total_seconds)}，费用 ${money(usage.total_cost_cents)}`;
       $("usage-table").replaceChildren(...records.map((record) => {
         const tr = document.createElement("tr");
@@ -2333,6 +2484,57 @@
         return tr;
       }));
       $("usage-empty").classList.toggle("hidden", records.length > 0);
+    }
+
+    function renderDashboard(records) {
+      const dayKey = (date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      const days = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - (6 - index));
+        return { date, seconds: 0 };
+      });
+      const byDay = new Map(days.map((day) => [dayKey(day.date), day]));
+      let domesticSeconds = 0;
+      let overseasSeconds = 0;
+      records.forEach((record) => {
+        const seconds = Math.max(0, Number(record.duration_seconds) || 0);
+        const day = byDay.get(dayKey(new Date(record.created_at)));
+        if (day) day.seconds += seconds;
+        if (record.provider === "deepgram") overseasSeconds += seconds;
+        else domesticSeconds += seconds;
+      });
+
+      const maxSeconds = Math.max(0, ...days.map((day) => day.seconds));
+      const sevenDaySeconds = days.reduce((sum, day) => sum + day.seconds, 0);
+      $("trend-caption").textContent = `合计 ${duration(sevenDaySeconds)}`;
+      $("trend-chart").setAttribute("aria-label", `近 7 日转写时长合计 ${duration(sevenDaySeconds)}`);
+      $("trend-chart").replaceChildren(...days.map((day) => {
+        const column = document.createElement("div");
+        column.className = "trend-column";
+        const height = maxSeconds > 0 ? (day.seconds / maxSeconds) * 100 : 0;
+        column.innerHTML = `
+          <span class="trend-value">${escapeHTML(duration(day.seconds))}</span>
+          <span class="trend-track"><span class="trend-bar" style="height:${height}%"></span></span>
+          <span class="trend-label">${day.date.getMonth() + 1}/${day.date.getDate()}</span>
+        `;
+        return column;
+      }));
+
+      const totalSeconds = domesticSeconds + overseasSeconds;
+      const domesticShare = totalSeconds > 0 ? domesticSeconds / totalSeconds * 100 : 0;
+      $("route-total").textContent = duration(totalSeconds);
+      $("domestic-usage").textContent = duration(domesticSeconds);
+      $("overseas-usage").textContent = duration(overseasSeconds);
+      $("route-donut").style.background = totalSeconds > 0
+        ? `conic-gradient(#1768ff 0 ${domesticShare}%, #58b9d6 ${domesticShare}% 100%)`
+        : "#edf1f6";
+      $("route-donut").setAttribute(
+        "aria-label",
+        totalSeconds > 0
+          ? `境内线路 ${duration(domesticSeconds)}，境外线路 ${duration(overseasSeconds)}`
+          : "暂无线路用量",
+      );
     }
 
     function closePasswordPanel() {

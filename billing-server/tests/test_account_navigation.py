@@ -183,5 +183,12 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn('id="password-panel"', ACCOUNT_HTML)
         self.assertIn('api("/api/auth/password"', ACCOUNT_HTML)
 
+    def test_account_dashboard_uses_existing_usage_records(self):
+        self.assertIn('id="trend-chart"', ACCOUNT_HTML)
+        self.assertIn('id="route-donut"', ACCOUNT_HTML)
+        self.assertIn('renderDashboard(records)', ACCOUNT_HTML)
+        self.assertIn('record.provider === "deepgram"', ACCOUNT_HTML)
+        self.assertNotIn("腾讯云", ACCOUNT_HTML)
+
 if __name__ == "__main__":
     unittest.main()
