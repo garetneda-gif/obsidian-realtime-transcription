@@ -12,6 +12,10 @@
       "destination": "/api/captcha"
     },
     {
+      "source": "/api/auth/oauth/providers",
+      "destination": "/api/oauth_providers"
+    },
+    {
       "source": "/api/asr/proxy",
       "destination": "/api/asr-proxy"
     },

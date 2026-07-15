@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import json
 import unittest
 
 
@@ -9,6 +10,7 @@ HOME_HTML = (SERVER_DIR / "static" / "index.html").read_text(encoding="utf-8")
 PUBLIC_HOME_HTML = (SERVER_DIR.parent / "public" / "index.html").read_text(encoding="utf-8")
 SETTINGS_TS = (SERVER_DIR.parent / "src" / "settings.ts").read_text(encoding="utf-8")
 ACCOUNT_ROUTE_PY = (SERVER_DIR / "account_center.py").read_text(encoding="utf-8")
+VERCEL_CONFIG = json.loads((SERVER_DIR.parent / "vercel.json").read_text(encoding="utf-8"))
 
 
 class AccountNavigationTests(unittest.TestCase):
@@ -135,6 +137,14 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn('/api/auth/captcha/image', ACCOUNT_HTML)
         self.assertIn('captcha_id: captchaId', ACCOUNT_HTML)
         self.assertIn('captcha_answer: captchaAnswer', ACCOUNT_HTML)
+
+    def test_login_dependencies_use_lightweight_functions(self):
+        rewrites = {
+            rewrite["source"]: rewrite["destination"]
+            for rewrite in VERCEL_CONFIG["rewrites"]
+        }
+        self.assertEqual(rewrites["/api/auth/captcha/image"], "/api/captcha")
+        self.assertEqual(rewrites["/api/auth/oauth/providers"], "/api/oauth_providers")
 
     def test_captcha_placeholder_cannot_be_submitted_as_a_real_challenge(self):
         self.assertNotIn(">R7K4</text>", ACCOUNT_HTML)
