@@ -1,7 +1,7 @@
 {
   "id": "realtime-transcription",
   "name": "Realtime Transcription",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "minAppVersion": "1.4.0",
   "description": "Real-time speech-to-text powered by SenseVoice-Small. Supports Chinese, English, Japanese, Korean, and Cantonese with auto-translation, AI summarization, and text polishing.",
   "author": "garetneda-gif",

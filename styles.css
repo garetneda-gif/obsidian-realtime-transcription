@@ -1554,14 +1554,27 @@ button.realtime-settings-nav-item.is-active:active .realtime-settings-nav-icon {
   max-width: 780px;
 }
 
-.realtime-settings-section h2 {
+.realtime-settings-section .realtime-settings-heading.setting-item {
   margin: 17px 0 2px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  column-gap: 0;
+}
+
+.realtime-settings-section .realtime-settings-heading .setting-item-info {
+  padding: 0;
+}
+
+.realtime-settings-section .realtime-settings-heading .setting-item-name {
   font-size: 16px;
   font-weight: 750;
   color: var(--text-normal);
 }
 
-.realtime-settings-section h2:first-child {
+.realtime-settings-section .realtime-settings-heading:first-child {
   margin-top: 0;
 }
 
@@ -1647,6 +1660,13 @@ button.realtime-settings-nav-item.is-active:active .realtime-settings-nav-icon {
 .realtime-settings-section .setting-item-control select,
 .realtime-settings-section .dropdown {
   max-width: 320px;
+}
+
+.realtime-cloud-captcha-image {
+  display: block;
+  width: 200px;
+  height: 70px;
+  margin: 16px auto;
 }
 
 @media (max-width: 760px) {

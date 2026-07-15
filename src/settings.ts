@@ -5,7 +5,8 @@ import type { RealtimeProfile, RecognitionMode, ExportMode, ExportTitleMode, Exp
 import { DEFAULT_SETTINGS, HOSTED_CLOUD_ENABLED, isHostedCloud, normalizeAiBackendSettings } from "./types";
 import { t, setLocale } from "./i18n";
 import { CloudAuthService } from "./services/CloudAuthService";
-import { getDefaultAiBackendModelOptions, isAiBackendCliPathCompatible } from "./services/AgentBackendService";
+import { getAiBackendModelOptions, isAiBackendCliPathCompatible } from "./services/AgentBackendService";
+import type { AiBackendModelOption } from "./utils/codexModelCache";
 import { CloudLoginCaptchaModal } from "./views/CloudLoginCaptchaModal";
 
 type SettingsSection = "general" | "recognition" | "ai" | "output";
@@ -72,7 +73,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── ASR 引擎选择 ──
-    containerEl.createEl("h2", { text: t("settings.asr.title") });
+    this.createSettingsHeading(containerEl, t("settings.asr.title"));
 
     new Setting(containerEl)
       .setName(t("settings.asr.provider.name"))
@@ -95,7 +96,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     if (provider === "local") {
     // ── 后端设置 ──
-    containerEl.createEl("h2", { text: t("settings.backend.title") });
+    this.createSettingsHeading(containerEl, t("settings.backend.title"));
 
     new Setting(containerEl)
       .setName(t("settings.backend.pythonPath.name"))
@@ -128,7 +129,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── 模型设置 ──
-    containerEl.createEl("h2", { text: t("settings.model.title") });
+    this.createSettingsHeading(containerEl, t("settings.model.title"));
 
     new Setting(containerEl)
       .setName(t("settings.model.dir.name"))
@@ -252,7 +253,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     if (provider === "tencent") {
       // ── 腾讯云 BYOK 设置 ──
-      containerEl.createEl("h2", { text: t("settings.tencent.title") });
+      this.createSettingsHeading(containerEl, t("settings.tencent.title"));
 
       containerEl.createEl("p", {
         cls: "realtime-settings-note",
@@ -319,7 +320,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     if (HOSTED_CLOUD_ENABLED && isHostedCloud(provider)) {
       // ── 云端付费账户设置 ──
-      containerEl.createEl("h2", { text: t("settings.cloud.title") });
+      this.createSettingsHeading(containerEl, t("settings.cloud.title"));
 
       const cloudAuth = this.plugin.settings.cloudAuth;
       const isLoggedIn = Boolean(cloudAuth.token && cloudAuth.serverUrl);
@@ -454,12 +455,12 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     }
 
-    containerEl.createEl("h2", { text: t("settings.aiBackend.title") });
+    this.createSettingsHeading(containerEl, t("settings.aiBackend.title"));
     this.renderAiBackendProfileSettings(containerEl, "fast");
     this.renderAiBackendProfileSettings(containerEl, "smart");
 
     // ── 翻译设置 ──
-    containerEl.createEl("h2", { text: t("settings.translation.title") });
+    this.createSettingsHeading(containerEl, t("settings.translation.title"));
 
     new Setting(containerEl)
       .setName(t("settings.translation.enabled.name"))
@@ -474,7 +475,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── AI 摘要设置 ──
-    containerEl.createEl("h2", { text: t("settings.summary.title") });
+    this.createSettingsHeading(containerEl, t("settings.summary.title"));
 
     new Setting(containerEl)
       .setName(t("settings.summary.enabled.name"))
@@ -503,7 +504,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── 二次摘要设置 ──
-    containerEl.createEl("h2", { text: t("settings.metaSummary.title") });
+    this.createSettingsHeading(containerEl, t("settings.metaSummary.title"));
 
     new Setting(containerEl)
       .setName(t("settings.metaSummary.enabled.name"))
@@ -532,7 +533,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       );
 
     // ── 导出设置 ──
-    containerEl.createEl("h2", { text: t("settings.export.title") });
+    this.createSettingsHeading(containerEl, t("settings.export.title"));
 
     new Setting(containerEl)
       .setName(t("settings.export.mode.name"))
@@ -577,7 +578,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
           });
       });
 
-    containerEl.createEl("h2", { text: t("settings.copyHandoff.title") });
+    this.createSettingsHeading(containerEl, t("settings.copyHandoff.title"));
 
     new Setting(containerEl)
       .setName(t("settings.copy.content.name"))
@@ -623,7 +624,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
       });
 
     // ── 高级设置 ──
-    containerEl.createEl("h2", { text: t("settings.advanced.title") });
+    this.createSettingsHeading(containerEl, t("settings.advanced.title"));
 
     new Setting(containerEl)
       .setName(t("settings.advanced.profile.name"))
@@ -708,7 +709,7 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     let currentSection: SettingsSection = "general";
 
     for (const node of originalNodes) {
-      if (node instanceof HTMLElement && node.tagName === "H2") {
+      if (node instanceof HTMLElement && node.hasClass("realtime-settings-heading")) {
         currentSection = titleSections.get(node.textContent?.trim() ?? "") ?? currentSection;
       }
       sections.get(currentSection)?.appendChild(node);
@@ -746,6 +747,12 @@ export class TranscriptionSettingTab extends PluginSettingTab {
     if (activeContent) content.appendChild(activeContent);
 
     this.bindHeaderCollapse(header, scrollEl);
+  }
+
+  private createSettingsHeading(containerEl: HTMLElement, title: string): Setting {
+    const heading = new Setting(containerEl).setName(title).setHeading();
+    heading.settingEl.addClass("realtime-settings-heading");
+    return heading;
   }
 
   private bindHeaderCollapse(header: HTMLElement, scrollEl = this.findScrollParent(this.containerEl)): void {
@@ -1002,8 +1009,14 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   private renderAiBackendCliModelSetting(containerEl: HTMLElement, profile: AiBackendProfileSettings): void {
     const customValue = "__custom__";
     const currentModel = profile.model.trim();
-    const options = uniqueStrings(getDefaultAiBackendModelOptions(profile.provider));
-    const isCustomModel = !currentModel || !options.includes(currentModel);
+    const options = uniqueModelOptions(getAiBackendModelOptions(profile.provider));
+    const matchedOption = options.find((option) => option.value.toLowerCase() === currentModel.toLowerCase());
+    const selectedModel = matchedOption?.value ?? currentModel;
+    const isCustomModel = !matchedOption;
+    if (matchedOption && profile.model !== matchedOption.value) {
+      profile.model = matchedOption.value;
+      void this.plugin.saveSettings();
+    }
 
     const setting = new Setting(containerEl)
       .setName(t("settings.aiBackend.model.name"))
@@ -1011,10 +1024,10 @@ export class TranscriptionSettingTab extends PluginSettingTab {
 
     setting.addDropdown((dropdown) => {
       for (const option of options) {
-        dropdown.addOption(option, option);
+        dropdown.addOption(option.value, option.label);
       }
       dropdown.addOption(customValue, t("settings.aiBackend.model.custom"));
-      dropdown.setValue(isCustomModel ? customValue : currentModel).onChange(async (value) => {
+      dropdown.setValue(isCustomModel ? customValue : selectedModel).onChange(async (value) => {
         profile.model = value === customValue ? "" : value.trim();
         await this.plugin.saveSettings();
         this.display();
@@ -1087,14 +1100,14 @@ export class TranscriptionSettingTab extends PluginSettingTab {
   }
 }
 
-function uniqueStrings(values: string[]): string[] {
+function uniqueModelOptions(values: AiBackendModelOption[]): AiBackendModelOption[] {
   const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const normalized = value.trim();
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    result.push(normalized);
+  const result: AiBackendModelOption[] = [];
+  for (const option of values) {
+    const value = option.value.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    result.push({ value, label: option.label.trim() || value });
   }
   return result;
 }

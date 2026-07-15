@@ -352,7 +352,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
     }
 
     if (leaf) {
-      workspace.revealLeaf(leaf);
+      workspace.setActiveLeaf(leaf, { focus: true });
       const view = this.getView();
       if (view) {
         this.bindViewCallbacks(view);
@@ -1215,7 +1215,7 @@ export default class RealtimeTranscriptionPlugin extends Plugin {
         active: wasActive,
       });
       if (wasActive) {
-        this.app.workspace.revealLeaf(targetLeaf);
+        this.app.workspace.setActiveLeaf(targetLeaf, { focus: true });
       }
     }
   }

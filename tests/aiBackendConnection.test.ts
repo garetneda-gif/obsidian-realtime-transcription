@@ -13,7 +13,7 @@ test("AI backend settings expose structured fast and smart model profiles", () =
   assert.ok(settingsSource.includes('this.renderAiBackendProfileSettings(containerEl, "smart")'));
   assert.ok(settingsSource.includes("this.plugin.testAiBackendConnection(role)"));
   assert.ok(settingsSource.includes("this.plugin.detectAiBackendCliPath(provider, role)"));
-  assert.ok(settingsSource.includes("getDefaultAiBackendModelOptions(profile.provider)"));
+  assert.ok(settingsSource.includes("getAiBackendModelOptions(profile.provider)"));
   assert.match(settingsSource, /setting\.addDropdown\([\s\S]*?setting\.addText/);
   assert.ok(settingsSource.includes('setPlaceholder(t("settings.aiBackend.model.placeholder"))'));
   assert.ok(settingsSource.includes('dropdown.addOption(customValue, t("settings.aiBackend.model.custom"))'));
@@ -42,6 +42,7 @@ test("AI backend connection test uses the selected fast or smart profile", () =>
   assert.ok(mainSource.includes("role === \"fast\""));
   assert.ok(mainSource.includes("return service.testConnection()"));
   assert.ok(agentSource.includes("async testConnection(): Promise<string>"));
+  assert.ok(agentSource.includes('path.join(home, "models_cache.json")'));
   assert.match(agentSource, /const result = await this\.run\(\{\s+systemPrompt:/);
   assert.ok(agentSource.includes("private async runApi(request: AgentRequest): Promise<string>"));
   assert.ok(agentSource.includes("requestUrl({"));

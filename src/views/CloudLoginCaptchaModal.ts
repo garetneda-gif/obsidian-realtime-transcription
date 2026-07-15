@@ -27,16 +27,13 @@ export class CloudLoginCaptchaModal extends Modal {
     contentEl.createEl("h3", { text: t("settings.cloud.captcha.title") });
     contentEl.createEl("p", { text: t("settings.cloud.captcha.desc"), cls: "setting-item-description" });
 
-    const image = contentEl.createEl("img", {
+    contentEl.createEl("img", {
+      cls: "realtime-cloud-captcha-image",
       attr: {
         alt: t("settings.cloud.captcha.title"),
         src: this.captcha?.image || "",
       },
     });
-    image.style.display = "block";
-    image.style.width = "200px";
-    image.style.height = "70px";
-    image.style.margin = "16px auto";
 
     new Setting(contentEl)
       .setName(t("settings.cloud.captcha.answer"))

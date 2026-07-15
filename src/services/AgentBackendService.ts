@@ -1,6 +1,7 @@
 import { requestUrl } from "obsidian";
 import type { AiBackendProvider, AiBackendProfileSettings } from "../types";
 import { extractTextFromResponse } from "../utils/llmResponse";
+import { parseCodexModelCache, type AiBackendModelOption } from "../utils/codexModelCache";
 
 const { spawn } = require("child_process") as typeof import("child_process");
 const fs = require("fs") as typeof import("fs");
@@ -216,13 +217,48 @@ export function getDefaultAiBackendModelOptions(provider: AiBackendProvider): st
     case "claude":
       return ["sonnet", "opus", "haiku", "claude-sonnet-4-6", "claude-opus-4-6"];
     case "codex":
-      return ["gpt-5.5", "gpt-5.4-mini", "gpt-5.4", "gpt-5.2-codex", "gpt-5.1-codex"];
+      return [
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.5",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.3-codex-spark",
+      ];
     case "opencode":
       return [];
     case "openai-compatible":
     default:
       return [];
   }
+}
+
+export function getAiBackendModelOptions(provider: AiBackendProvider): AiBackendModelOption[] {
+  if (provider === "codex") {
+    for (const cachePath of codexModelCachePaths()) {
+      try {
+        const models = parseCodexModelCache(JSON.parse(fs.readFileSync(cachePath, "utf8")));
+        if (models.length > 0) return models;
+      } catch {}
+    }
+  }
+
+  return getDefaultAiBackendModelOptions(provider).map((value) => ({
+    value,
+    label: value
+      .replace(/^gpt-/i, "")
+      .split("-")
+      .map((part) => /^[a-z]+$/.test(part) ? part[0].toUpperCase() + part.slice(1) : part)
+      .join(" "),
+  }));
+}
+
+function codexModelCachePaths(): string[] {
+  const homes = [process.env.CODEX_HOME, path.join(os.homedir(), ".codex")];
+  return [...new Set(homes
+    .map((home) => home ? path.join(home, "models_cache.json") : "")
+    .filter(Boolean))];
 }
 
 function normalizeApiUrl(url: string): string {
