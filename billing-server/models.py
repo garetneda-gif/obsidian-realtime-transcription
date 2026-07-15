@@ -1,4 +1,5 @@
 """数据模型：User, Order, UsageRecord, SignRequest"""
+# pyright: reportMissingImports=false
 import uuid
 from datetime import datetime, timezone
 
@@ -25,6 +26,8 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     balance_cents = Column(Integer, nullable=False, default=0)
+    overseas_balance_cents = Column(Integer, nullable=False, default=0)
+    balance_scope_migrated = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
@@ -45,6 +48,7 @@ class Order(Base):
     trade_order_id = Column(String(64), unique=True, nullable=False)
     amount_cents = Column(Integer, nullable=False)
     credit_cents = Column(Integer, nullable=True)
+    credit_scope = Column(String(16), nullable=False, default="domestic")
     provider_product_id = Column(String(64), nullable=True)
     provider_transaction_id = Column(String(64), unique=True, nullable=True)
     status = Column(String(16), nullable=False, default=OrderStatus.CREATED)
@@ -61,6 +65,7 @@ class SignRequest(Base):
     voice_id = Column(String(32), nullable=False)
     engine_model = Column(String(32), nullable=False)
     provider = Column(String(16), nullable=False, default="tencent")
+    billing_scope = Column(String(16), nullable=False, default="domestic")
     language = Column(String(16), nullable=False, default="auto")
     client_session_id = Column(String(64), nullable=True)
     provider_request_id = Column(String(64), nullable=True)
@@ -118,3 +123,42 @@ class RateLimitEvent(Base):
     __table_args__ = (
         Index("ix_rate_limit_scope_key_created", "scope", "key_digest", "created_at"),
     )
+
+
+DOMESTIC_SCOPE = "domestic"
+OVERSEAS_SCOPE = "overseas"
+
+
+def normalize_credit_scope(scope: str | None) -> str:
+    return OVERSEAS_SCOPE if scope == OVERSEAS_SCOPE else DOMESTIC_SCOPE
+
+
+def balance_column(scope: str | None):
+    if normalize_credit_scope(scope) == OVERSEAS_SCOPE:
+        return User.overseas_balance_cents
+    return User.balance_cents
+
+
+def scoped_balance(user: User, scope: str | None) -> int:
+    if normalize_credit_scope(scope) == OVERSEAS_SCOPE:
+        return int(getattr(user, "overseas_balance_cents", 0) or 0)
+    return int(user.balance_cents or 0)
+
+
+def total_balance(user: User) -> int:
+    return int(user.balance_cents or 0) + int(getattr(user, "overseas_balance_cents", 0) or 0)
+
+
+def balance_payload(user: User) -> dict[str, int]:
+    return {
+        "balance_cents": total_balance(user),
+        "domestic_balance_cents": scoped_balance(user, DOMESTIC_SCOPE),
+        "overseas_balance_cents": scoped_balance(user, OVERSEAS_SCOPE),
+    }
+
+
+def adjust_balance(user: User, scope: str | None, amount_cents: int) -> None:
+    if normalize_credit_scope(scope) == OVERSEAS_SCOPE:
+        user.overseas_balance_cents = int(user.overseas_balance_cents or 0) + amount_cents
+    else:
+        user.balance_cents = int(user.balance_cents or 0) + amount_cents

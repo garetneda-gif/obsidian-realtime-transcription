@@ -8,9 +8,17 @@ ACCOUNT_HTML = (SERVER_DIR / "account_center.html").read_text(encoding="utf-8")
 HOME_HTML = (SERVER_DIR / "static" / "index.html").read_text(encoding="utf-8")
 PUBLIC_HOME_HTML = (SERVER_DIR.parent / "public" / "index.html").read_text(encoding="utf-8")
 SETTINGS_TS = (SERVER_DIR.parent / "src" / "settings.ts").read_text(encoding="utf-8")
+ACCOUNT_ROUTE_PY = (SERVER_DIR / "account_center.py").read_text(encoding="utf-8")
 
 
 class AccountNavigationTests(unittest.TestCase):
+    def test_landing_login_opens_auth_immediately_from_an_edge_cached_shell(self):
+        for html in (HOME_HTML, PUBLIC_HOME_HTML):
+            self.assertIn('href="/account?auth=login"', html)
+        self.assertIn('if (queryAuth === "login" || queryAuth === "register")', ACCOUNT_HTML)
+        self.assertIn('showLogin("");', ACCOUNT_HTML)
+        self.assertIn("s-maxage=86400", ACCOUNT_ROUTE_PY)
+
     def test_recharge_entries_use_topup_deep_link(self):
         self.assertIn('id="ort-recharge-link" href="/account?topup=1"', HOME_HTML)
         self.assertIn('topupFrame.src = "/account?topup=embed"', HOME_HTML)
@@ -85,7 +93,7 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn('this.openExternalUrl(svc.getAccountCenterUrl())', SETTINGS_TS)
 
     def test_account_bootstrap_checks_cookie_session_before_showing_login(self):
-        self.assertIn("migrateLegacySession()\n      .then(loadAccount)", ACCOUNT_HTML)
+        self.assertIn("migrateLegacySession()\n        .then(loadAccount)", ACCOUNT_HTML)
         self.assertNotIn(
             "if (localStorage.getItem(sessionKey) || localStorage.getItem(tokenKey))",
             ACCOUNT_HTML,
@@ -112,7 +120,7 @@ class AccountNavigationTests(unittest.TestCase):
     def test_registration_shows_security_captcha(self):
         self.assertIn('id="captcha-field"', ACCOUNT_HTML)
         self.assertIn('return true;', ACCOUNT_HTML)
-        self.assertIn('if (queryParams.get("auth") === "register") authMode = "register";', ACCOUNT_HTML)
+        self.assertIn('if (queryAuth === "register") authMode = "register";', ACCOUNT_HTML)
         self.assertIn('login: "/api/auth/browser-login"', ACCOUNT_HTML)
         self.assertIn('/api/auth/captcha/image', ACCOUNT_HTML)
         self.assertIn('captcha_id: captchaId', ACCOUNT_HTML)
@@ -125,8 +133,14 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn('$("auth-submit-btn").disabled = authNeedsCaptcha() && !captchaReady;', ACCOUNT_HTML)
         self.assertIn('图形验证码正在加载，请稍候', ACCOUNT_HTML)
 
-    def test_card_payment_has_no_overseas_subtitle(self):
+    def test_topup_packages_and_balances_are_region_scoped(self):
         self.assertNotIn("主要面向海外用户", ACCOUNT_HTML)
+        self.assertIn('id="domestic-balance"', ACCOUNT_HTML)
+        self.assertIn('id="overseas-balance"', ACCOUNT_HTML)
+        self.assertIn("境内套餐 · 微信支付", ACCOUNT_HTML)
+        self.assertIn("境外套餐 · 银行卡", ACCOUNT_HTML)
+        self.assertIn("境内额度仅限中国大陆网络使用", ACCOUNT_HTML)
+        self.assertIn("境外额度仅限中国大陆以外网络使用", ACCOUNT_HTML)
 
     def test_oauth_account_can_set_plugin_password(self):
         self.assertIn('id="set-password-btn"', ACCOUNT_HTML)

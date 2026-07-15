@@ -1431,6 +1431,23 @@
       font-weight: 750;
       line-height: 1.15;
     }
+    .profile-balance-split {
+      display: grid;
+      gap: 6px;
+      font-size: 17px;
+      line-height: 1.25;
+    }
+    .profile-balance-line {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .profile-balance-line span:first-child {
+      color: #667085;
+      font-size: 12px;
+      font-weight: 650;
+    }
     .profile-account {
       margin-bottom: 24px;
       padding: 6px 24px;
@@ -1869,7 +1886,13 @@
             <p>管理账户余额与云端转写使用记录</p>
           </div>
           <div class="profile-stats">
-            <div class="profile-stat"><div class="profile-stat-label">当前余额</div><div class="profile-stat-value" id="balance">¥0.00</div></div>
+            <div class="profile-stat">
+              <div class="profile-stat-label">当前余额</div>
+              <div class="profile-stat-value profile-balance-split">
+                <div class="profile-balance-line"><span>境内</span><strong id="domestic-balance">¥0.00</strong></div>
+                <div class="profile-balance-line"><span>境外</span><strong id="overseas-balance">¥0.00</strong></div>
+              </div>
+            </div>
             <div class="profile-stat"><div class="profile-stat-label">转写次数</div><div class="profile-stat-value" id="stat-count">0</div></div>
             <div class="profile-stat"><div class="profile-stat-label">累计时长</div><div class="profile-stat-value" id="stat-duration">0 秒</div></div>
             <div class="profile-stat"><div class="profile-stat-label">累计费用</div><div class="profile-stat-value" id="stat-cost">¥0.00</div></div>
@@ -1890,13 +1913,13 @@
           <div class="modal topup-modal">
             <button class="modal-close" id="topup-close-btn" type="button" aria-label="关闭充值弹窗">×</button>
             <div class="modal-title" id="topup-title">充值余额</div>
-            <div class="topup-promo-badge"><span>按需充值 · 余额长期有效</span></div>
+            <div class="topup-promo-badge"><span id="topup-scope-badge">境内套餐 · 余额长期有效</span></div>
             <div class="pkg-row" id="plans"></div>
             <div class="pay-tabs" role="group" aria-label="支付方式">
-              <button class="pay-tab selected" data-provider="wechat" type="button">WeChat Pay</button>
-              <button class="pay-tab" data-provider="card" type="button">Card</button>
+              <button class="pay-tab selected" data-provider="wechat" type="button">境内套餐 · 微信支付</button>
+              <button class="pay-tab" data-provider="card" type="button">境外套餐 · 银行卡</button>
             </div>
-            <div class="topup-pricing-note">按实际云端转写时长扣费，充值余额长期有效。</div>
+            <div class="topup-pricing-note" id="topup-scope-note">境内额度仅限中国大陆网络使用，按实际云端转写时长扣费。</div>
             <div class="auth-row"><button class="topup-submit" id="pay-selected-btn" type="button">支付</button></div>
             <div class="topup-feedback" id="account-status"></div>
             <div class="topup-legal-note">充值即代表您同意本服务的使用协议与隐私政策</div>
@@ -2219,7 +2242,10 @@
       document.body.classList.remove("topup-open");
       $("usage-panel").classList.toggle("hidden", !loggedIn);
       $("account-email").textContent = loggedIn ? $("account-email").textContent : "未登录";
-      $("balance").textContent = loggedIn ? $("balance").textContent : "登录后查看余额";
+      if (!loggedIn) {
+        $("domestic-balance").textContent = "登录后查看";
+        $("overseas-balance").textContent = "登录后查看";
+      }
     }
 
     function showRecharge() {
@@ -2263,7 +2289,8 @@
       $("account-password").textContent = account.password_set ? "••••••••" : "未设置插件密码";
       $("set-password-btn").textContent = account.password_set ? "已设置" : "设置密码";
       $("set-password-btn").disabled = Boolean(account.password_set);
-      $("balance").textContent = money(account.balance_cents);
+      $("domestic-balance").textContent = money(account.domestic_balance_cents);
+      $("overseas-balance").textContent = money(account.overseas_balance_cents);
       $("stat-count").textContent = String(records.length);
       $("stat-duration").textContent = duration(usage.total_seconds);
       $("stat-cost").textContent = money(usage.total_cost_cents);
@@ -2343,6 +2370,13 @@
     }
 
     function renderPlans() {
+      const isOverseas = selectedProvider === "card";
+      $("topup-scope-badge").textContent = isOverseas
+        ? "境外套餐 · 余额长期有效"
+        : "境内套餐 · 余额长期有效";
+      $("topup-scope-note").textContent = isOverseas
+        ? "境外额度仅限中国大陆以外网络使用，按实际云端转写时长扣费。"
+        : "境内额度仅限中国大陆网络使用，按实际云端转写时长扣费。";
       $("plans").replaceChildren(...plans.map((plan) => {
         const card = document.createElement("article");
         const price = planPrice(plan);
@@ -2356,7 +2390,7 @@
           <div class="pkg-card-label">充值金额</div>
           <div class="pkg-card-credits">${escapeHTML(plan.minutes)}分钟</div>
           <div class="pkg-card-label">转写额度</div>
-          <div class="pkg-card-estimate">${escapeHTML(plan.name)} · 余额长期有效</div>
+          <div class="pkg-card-estimate">${escapeHTML(plan.name)} · ${isOverseas ? "境外专用" : "境内专用"}</div>
         `;
         const select = () => {
           selectedPlan = plan;
@@ -2555,7 +2589,8 @@
     const queryOrder = queryParams.get("order");
     const queryTopup = queryParams.get("topup") === "1";
     const queryEmbed = queryParams.get("topup") === "embed";
-    if (queryParams.get("auth") === "register") authMode = "register";
+    const queryAuth = queryParams.get("auth");
+    if (queryAuth === "register") authMode = "register";
     if (queryOrder) {
       if (localStorage.getItem(orderIdKey) !== queryOrder) {
         localStorage.removeItem(orderUrlKey);
@@ -2575,18 +2610,23 @@
     });
     loadCaptcha().catch(() => null);
     loadPlans().catch((e) => status(e.message));
-    migrateLegacySession()
-      .then(loadAccount)
-      .then(() => {
-        if (queryTopup || queryEmbed) showPlans();
-        const orderId = queryOrder || localStorage.getItem(orderIdKey);
-        if (orderId) refreshSavedOrder(orderId).catch((e) => status(e.message));
-      })
-      .catch(() => {
-        clearSession();
-        setLoggedIn(false);
-        showLogin(queryTopup || queryEmbed ? "请先登录后再充值" : "");
-      });
+    if (queryAuth === "login" || queryAuth === "register") {
+      setLoggedIn(false);
+      showLogin("");
+    } else {
+      migrateLegacySession()
+        .then(loadAccount)
+        .then(() => {
+          if (queryTopup || queryEmbed) showPlans();
+          const orderId = queryOrder || localStorage.getItem(orderIdKey);
+          if (orderId) refreshSavedOrder(orderId).catch((e) => status(e.message));
+        })
+        .catch(() => {
+          clearSession();
+          setLoggedIn(false);
+          showLogin(queryTopup || queryEmbed ? "请先登录后再充值" : "");
+        });
+    }
   </script>
 </body>
 </html>

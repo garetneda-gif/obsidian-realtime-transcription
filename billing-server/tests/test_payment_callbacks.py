@@ -1,4 +1,4 @@
-# pyright: reportImplicitRelativeImport=false
+# pyright: reportImplicitRelativeImport=false, reportUninitializedInstanceVariable=false, reportAttributeAccessIssue=false, reportArgumentType=false, reportIndexIssue=false
 import base64
 import hashlib
 import hmac
@@ -207,6 +207,7 @@ class PaymentCallbackTests(unittest.TestCase):
             trade_order_id=trade_order_id,
             amount_cents=amount_cents,
             credit_cents=credit_cents,
+            credit_scope="overseas" if trade_order_id.startswith("CR-") else "domestic",
             provider_product_id="prod_trial",
             status=OrderStatus.CREATED,
             idempotency_key=f"ch_{trade_order_id}" if trade_order_id.startswith("CR-") else trade_order_id,
@@ -219,7 +220,14 @@ class PaymentCallbackTests(unittest.TestCase):
     def balance(self, user_id: str) -> int:
         db = database.SessionLocal()
         user = db.query(User).filter(User.id == user_id).first()
-        value = user.balance_cents
+        value = user.balance_cents + user.overseas_balance_cents
+        db.close()
+        return value
+
+    def scoped_balance(self, user_id: str, scope: str) -> int:
+        db = database.SessionLocal()
+        user = db.query(User).filter(User.id == user_id).first()
+        value = user.overseas_balance_cents if scope == "overseas" else user.balance_cents
         db.close()
         return value
 
@@ -236,14 +244,15 @@ class PaymentCallbackTests(unittest.TestCase):
         self.addCleanup(setattr, signing, "require_auth", original_signing_auth)
         self.addCleanup(setattr, billing, "require_auth", original_billing_auth)
 
-    def create_asr_user(self, balance_cents: int = 500) -> str:
+    def create_asr_user(self, balance_cents: int = 500, scope: str = "domestic") -> str:
         user_id = new_uuid()
         db = database.SessionLocal()
         db.add(User(
             id=user_id,
             email=f"asr-{user_id}@example.invalid",
             password_hash="x",
-            balance_cents=balance_cents,
+            balance_cents=balance_cents if scope == "domestic" else 0,
+            overseas_balance_cents=balance_cents if scope == "overseas" else 0,
         ))
         db.commit()
         db.close()
@@ -253,6 +262,7 @@ class PaymentCallbackTests(unittest.TestCase):
         self.authenticate_asr_as(user_id)
         response = self.client.post(
             "/api/asr/session",
+            headers={"x-vercel-ip-country": "US"},
             json={
                 "client_session_id": client_session_id,
                 "provider": "deepgram",
@@ -343,6 +353,45 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.post_creem(raw).status_code, 200)
         self.assertEqual(self.post_creem(raw).status_code, 200)
         self.assertEqual(self.balance(user_id), 490)
+        self.assertEqual(self.scoped_balance(user_id, "domestic"), 0)
+        self.assertEqual(self.scoped_balance(user_id, "overseas"), 490)
+
+    def test_legacy_card_balance_migration_is_scoped_and_idempotent(self):
+        user_id = new_uuid()
+        trade_order_id = "CR-legacy-migration"
+        db = database.SessionLocal()
+        db.add(User(
+            id=user_id,
+            email=f"{user_id}@example.invalid",
+            password_hash="x",
+            balance_cents=800,
+            overseas_balance_cents=0,
+            balance_scope_migrated=0,
+        ))
+        db.add(Order(
+            id=new_uuid(),
+            user_id=user_id,
+            trade_order_id=trade_order_id,
+            amount_cents=499,
+            credit_cents=490,
+            credit_scope="domestic",
+            status=OrderStatus.CREDITED,
+            idempotency_key=f"ch_{trade_order_id}",
+        ))
+        db.commit()
+        db.close()
+
+        database.init_db()
+        database.init_db()
+
+        self.assertEqual(self.scoped_balance(user_id, "domestic"), 310)
+        self.assertEqual(self.scoped_balance(user_id, "overseas"), 490)
+        db = database.SessionLocal()
+        user = db.query(User).filter(User.id == user_id).one()
+        order = db.query(Order).filter(Order.trade_order_id == trade_order_id).one()
+        self.assertEqual(user.balance_scope_migrated, 1)
+        self.assertEqual(order.credit_scope, "overseas")
+        db.close()
 
     def test_creem_concurrent_callbacks_credit_once(self):
         trade_order_id = "CR-concurrent"
@@ -459,7 +508,7 @@ class PaymentCallbackTests(unittest.TestCase):
         user_id = self.create_order(trade_order_id)
         self.assertEqual(self.post_creem(self.creem_payload(trade_order_id)).status_code, 200)
         db = database.SessionLocal()
-        db.query(User).filter(User.id == user_id).update({User.balance_cents: 100})
+        db.query(User).filter(User.id == user_id).update({User.overseas_balance_cents: 100})
         db.commit()
         db.close()
 
@@ -520,6 +569,8 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/billing/callback/xunhu", data=params).status_code, 200)
         self.assertEqual(self.client.post("/api/billing/callback/xunhu", data=params).status_code, 200)
         self.assertEqual(self.balance(user_id), 490)
+        self.assertEqual(self.scoped_balance(user_id, "domestic"), 490)
+        self.assertEqual(self.scoped_balance(user_id, "overseas"), 0)
 
         params["status"] = "CD"
         params["time"] = str(int(time.time()))
@@ -739,7 +790,10 @@ class PaymentCallbackTests(unittest.TestCase):
         )
         self.assertEqual(china.status_code, 200)
         self.assertEqual(china.get_json()["provider"], "tencent")
+        self.assertEqual(china.get_json()["billing_scope"], "domestic")
         self.assertEqual(china.get_json()["engine_model"], "16k_yue")
+        self.assertEqual(self.scoped_balance(china_user, "domestic"), 400)
+        self.assertEqual(self.scoped_balance(china_user, "overseas"), 0)
 
         default_user = self.create_asr_user()
         self.authenticate_asr_as(default_user)
@@ -754,7 +808,7 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(default.status_code, 200)
         self.assertEqual(default.get_json()["provider"], "tencent")
 
-        overseas_user = self.create_asr_user()
+        overseas_user = self.create_asr_user(scope="overseas")
         self.authenticate_asr_as(overseas_user)
         overseas = self.client.post(
             "/api/asr/session",
@@ -767,18 +821,77 @@ class PaymentCallbackTests(unittest.TestCase):
         )
         self.assertEqual(overseas.status_code, 200)
         self.assertEqual(overseas.get_json()["provider"], "deepgram")
+        self.assertEqual(overseas.get_json()["billing_scope"], "overseas")
         self.assertEqual(overseas.get_json()["auth_type"], "proxy")
         self.assertTrue(overseas.get_json()["websocket_url"].endswith("/api/asr/proxy"))
         self.assertNotIn("api.deepgram.com", overseas.get_json()["websocket_url"])
         self.assertTrue(overseas.get_json()["proxy_token"])
+        self.assertEqual(self.scoped_balance(overseas_user, "domestic"), 0)
+        self.assertEqual(self.scoped_balance(overseas_user, "overseas"), 400)
+
+    def test_cloud_session_cannot_spend_domestic_balance_abroad(self):
+        user_id = self.create_asr_user(balance_cents=500, scope="domestic")
+        self.authenticate_asr_as(user_id)
+
+        response = self.client.post(
+            "/api/asr/session",
+            headers={"x-vercel-ip-country": "US"},
+            json={
+                "client_session_id": "domestic-abroad-01",
+                "provider": "auto",
+                "language": "en",
+            },
+        )
+
+        self.assertEqual(response.status_code, 402)
+        self.assertEqual(response.get_json()["billing_scope"], "overseas")
+        self.assertEqual(response.get_json()["scope_balance_cents"], 0)
+        self.assertEqual(self.scoped_balance(user_id, "domestic"), 500)
+        self.assertEqual(self.scoped_balance(user_id, "overseas"), 0)
+
+    def test_cloud_session_rejects_manual_region_mismatch_before_precharge(self):
+        user_id = self.create_asr_user(balance_cents=500, scope="domestic")
+        self.authenticate_asr_as(user_id)
+
+        response = self.client.post(
+            "/api/asr/session",
+            headers={"x-vercel-ip-country": "US"},
+            json={
+                "client_session_id": "forced-domestic-01",
+                "provider": "tencent",
+                "language": "zh-CN",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["billing_scope"], "overseas")
+        self.assertEqual(self.balance(user_id), 500)
+
+    def test_balance_endpoint_returns_total_and_region_balances(self):
+        user_id = self.create_asr_user(balance_cents=490, scope="domestic")
+        db = database.SessionLocal()
+        db.query(User).filter(User.id == user_id).update({User.overseas_balance_cents: 899})
+        db.commit()
+        db.close()
+        self.authenticate_asr_as(user_id)
+
+        response = self.client.get("/api/billing/balance")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {
+            "balance_cents": 1389,
+            "domestic_balance_cents": 490,
+            "overseas_balance_cents": 899,
+        })
 
     def test_cloud_session_rejects_unavailable_manual_provider_without_precharge(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         self.authenticate_asr_as(user_id)
         config.DEEPGRAM_API_KEY = ""
 
         response = self.client.post(
             "/api/asr/session",
+            headers={"x-vercel-ip-country": "US"},
             json={
                 "client_session_id": "unavailable-dg-01",
                 "provider": "deepgram",
@@ -806,11 +919,12 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.balance(user_id), 99)
 
     def test_deepgram_grant_failure_refunds_precharge(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         self.authenticate_asr_as(user_id)
         with patch.object(deepgram, "create_proxy_token", side_effect=deepgram.DeepgramProviderError()):
             response = self.client.post(
                 "/api/asr/session",
+                headers={"x-vercel-ip-country": "US"},
                 json={
                     "client_session_id": "grant-failure-001",
                     "provider": "deepgram",
@@ -826,7 +940,7 @@ class PaymentCallbackTests(unittest.TestCase):
         db.close()
 
     def test_deepgram_provider_failure_refunds_precharge(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "provider-failure-01")
         request_id = "99999999-aaaa-4bbb-8ccc-dddddddddddd"
         failed = self.deepgram_usage_record(session["session_id"], request_id)
@@ -848,11 +962,12 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.balance(user_id), 500)
 
     def test_deepgram_client_session_cannot_issue_credentials_twice(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         first = self.create_deepgram_session(user_id, "idempotent-session-1")
         with patch.object(deepgram, "create_proxy_token") as grant:
             second = self.client.post(
                 "/api/asr/session",
+                headers={"x-vercel-ip-country": "US"},
                 json={
                     "client_session_id": "idempotent-session-1",
                     "provider": "deepgram",
@@ -870,6 +985,7 @@ class PaymentCallbackTests(unittest.TestCase):
 
         blocked = self.client.post(
             "/api/asr/session",
+            headers={"x-vercel-ip-country": "US"},
             json={
                 "client_session_id": "idempotent-session-2",
                 "provider": "deepgram",
@@ -880,7 +996,7 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.balance(user_id), 400)
 
     def test_deepgram_proxy_token_allows_only_one_upstream_connection(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "single-proxy-session")
         token = session["proxy_token"]
 
@@ -900,7 +1016,7 @@ class PaymentCallbackTests(unittest.TestCase):
         db.close()
 
     def test_deepgram_proxy_startup_failure_refunds_precharge(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "proxy-startup-failure")
         token = session["proxy_token"]
 
@@ -915,7 +1031,7 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.balance(user_id), 500)
 
     def test_unconfirmed_deepgram_proxy_is_refunded_on_expiry(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "proxy-expiry-refund")
         token = session["proxy_token"]
         self.assertEqual(
@@ -932,7 +1048,7 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.balance(user_id), 500)
 
     def test_deepgram_report_without_request_id_keeps_precharge_until_timeout(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "abort-no-request-id")
         token = session["proxy_token"]
         self.assertEqual(
@@ -966,7 +1082,7 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.balance(user_id), 400)
 
     def test_deepgram_report_uses_provider_duration_and_is_idempotent(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "settlement-session-1")
         request_id = "11111111-2222-4333-8444-555555555555"
         record = self.deepgram_usage_record(session["session_id"], request_id)
@@ -1005,7 +1121,7 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.balance(user_id), 499)
 
     def test_deepgram_report_calculates_provider_cost_when_request_omits_usd(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "settlement-no-usd-1")
         request_id = "12121212-3434-4567-8787-909090909090"
         record = self.deepgram_usage_record(
@@ -1036,7 +1152,7 @@ class PaymentCallbackTests(unittest.TestCase):
         db.close()
 
     def test_deepgram_pending_report_is_reconciled_on_balance_query(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "pending-session-001")
         request_id = "22222222-3333-4444-8555-666666666666"
 
@@ -1059,7 +1175,7 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(balance_response.get_json()["balance_cents"], 499)
 
     def test_deepgram_forged_session_metadata_is_rejected(self):
-        user_id = self.create_asr_user()
+        user_id = self.create_asr_user(scope="overseas")
         session = self.create_deepgram_session(user_id, "forged-session-0001")
         request_id = "33333333-4444-4555-8666-777777777777"
         forged = self.deepgram_usage_record(
@@ -1087,7 +1203,7 @@ class PaymentCallbackTests(unittest.TestCase):
         db.close()
 
     def test_deepgram_request_cannot_be_billed_to_two_sessions(self):
-        first_user = self.create_asr_user()
+        first_user = self.create_asr_user(scope="overseas")
         first = self.create_deepgram_session(first_user, "unique-request-first")
         request_id = "44444444-5555-4666-8777-888888888888"
         first_record = self.deepgram_usage_record(first["session_id"], request_id)
@@ -1097,7 +1213,7 @@ class PaymentCallbackTests(unittest.TestCase):
                 json={"session_id": first["session_id"], "provider_request_id": request_id},
             ).status_code, 200)
 
-        second_user = self.create_asr_user()
+        second_user = self.create_asr_user(scope="overseas")
         second = self.create_deepgram_session(second_user, "unique-request-second")
         duplicate = self.client.post(
             "/api/billing/report",
@@ -1126,6 +1242,19 @@ class PaymentCallbackTests(unittest.TestCase):
         )
         self.assertEqual(report.status_code, 200)
         self.assertEqual(report.get_json()["balance_cents"], 499)
+
+    def test_legacy_tencent_sign_is_rejected_abroad(self):
+        user_id = self.create_asr_user()
+        self.authenticate_asr_as(user_id)
+
+        response = self.client.post(
+            "/api/asr/sign",
+            headers={"x-vercel-ip-country": "US"},
+            json={"engine_model": "16k_zh"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.balance(user_id), 500)
 
 
 if __name__ == "__main__":

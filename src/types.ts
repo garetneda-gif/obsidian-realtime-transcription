@@ -120,6 +120,7 @@ export interface CloudAuthSettings {
 interface CloudAsrSessionBase {
   session_id: string;
   provider: "tencent" | "deepgram";
+  billing_scope: "domestic" | "overseas";
   language: CloudLanguage;
   engine_model: string;
   voice_id: string;

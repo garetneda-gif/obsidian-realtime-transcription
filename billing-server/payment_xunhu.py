@@ -15,7 +15,7 @@ from sqlalchemy import update
 import config
 from billing import plan_by_id
 from database import SessionLocal
-from models import User, Order, OrderStatus, new_uuid
+from models import DOMESTIC_SCOPE, User, Order, OrderStatus, balance_column, balance_payload, new_uuid
 from payment_common import revoke_order_credit
 
 payment_bp = Blueprint("payment", __name__, url_prefix="/api/billing")
@@ -73,6 +73,7 @@ def create_payment_url(user_id: str, amount_yuan: str, credit_yuan: str, title: 
             trade_order_id=trade_order_id,
             amount_cents=amount_cents,
             credit_cents=_amount_to_cents(credit_yuan),
+            credit_scope=DOMESTIC_SCOPE,
             status=OrderStatus.CREATED,
             idempotency_key=trade_order_id,
         )
@@ -155,10 +156,11 @@ def xunhu_callback():
                 .values(status=OrderStatus.CREDITED)
             )
             if credited.rowcount == 1:
+                column = balance_column(order.credit_scope)
                 db.execute(
                     update(User)
                     .where(User.id == order.user_id)
-                    .values(balance_cents=User.balance_cents + (order.credit_cents or order.amount_cents))
+                    .values({column: column + (order.credit_cents or order.amount_cents)})
                 )
 
         db.commit()
@@ -233,7 +235,11 @@ def refresh_order(trade_order_id: str):
         return jsonify({
             "order_id": order.trade_order_id,
             "status": order.status,
-            "balance_cents": user.balance_cents if user else 0,
+            **(balance_payload(user) if user else {
+                "balance_cents": 0,
+                "domestic_balance_cents": 0,
+                "overseas_balance_cents": 0,
+            }),
         }), 200
     finally:
         db.close()

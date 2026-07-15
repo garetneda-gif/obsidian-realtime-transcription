@@ -1,5 +1,5 @@
 """计费模块：使用报告、结算、余额查询、用量统计"""
-# pyright: reportImplicitRelativeImport=false
+# pyright: reportImplicitRelativeImport=false, reportMissingImports=false
 import math
 import re
 from datetime import timedelta
@@ -11,7 +11,7 @@ import config
 import deepgram
 from auth import require_auth
 from database import SessionLocal
-from models import User, SignRequest, UsageRecord, new_uuid, utcnow
+from models import User, SignRequest, UsageRecord, adjust_balance, balance_payload, new_uuid, total_balance, utcnow
 
 billing_bp = Blueprint("billing", __name__, url_prefix="/api/billing")
 PROVIDER_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{16,64}$")
@@ -67,6 +67,7 @@ def get_me():
     user_id, err = require_auth()
     if err:
         return err
+    assert user_id is not None
 
     reconcile_user_requests(user_id)
     db = SessionLocal()
@@ -76,7 +77,7 @@ def get_me():
             return jsonify({"error": "User not found"}), 404
         return jsonify({
             "email": user.email,
-            "balance_cents": user.balance_cents,
+            **balance_payload(user),
             "password_set": user.password_hash.startswith(("$2a$", "$2b$", "$2y$")),
         }), 200
     finally:
@@ -88,6 +89,7 @@ def get_balance():
     user_id, err = require_auth()
     if err:
         return err
+    assert user_id is not None
 
     reconcile_user_requests(user_id)
     db = SessionLocal()
@@ -95,7 +97,7 @@ def get_balance():
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             return jsonify({"error": "User not found"}), 404
-        return jsonify({"balance_cents": user.balance_cents}), 200
+        return jsonify(balance_payload(user)), 200
     finally:
         db.close()
 
@@ -105,6 +107,7 @@ def get_usage():
     user_id, err = require_auth()
     if err:
         return err
+    assert user_id is not None
 
     reconcile_user_requests(user_id)
     db = SessionLocal()
@@ -145,6 +148,7 @@ def report_usage():
     user_id, err = require_auth()
     if err:
         return err
+    assert user_id is not None
 
     data = request.get_json(silent=True) or {}
     sign_request_id = data.get("session_id") or data.get("sign_request_id")
@@ -407,7 +411,7 @@ def _settle_locked(
 
     user = db.query(User).filter(User.id == sign_req.user_id).with_for_update().first()
     if user and balance_adjustment:
-        user.balance_cents += balance_adjustment
+        adjust_balance(user, sign_req.billing_scope, balance_adjustment)
 
     sign_req.settled = 1
     sign_req.actual_cost_cents = actual_cost
@@ -448,7 +452,7 @@ def _settle_locked(
         "cost_cents": actual_cost,
         "refund_cents": max(0, balance_adjustment),
         "additional_charge_cents": max(0, -balance_adjustment),
-        "balance_cents": user.balance_cents if user else 0,
+        "balance_cents": total_balance(user) if user else 0,
     }
 
 
@@ -457,7 +461,7 @@ def _already_settled_payload(db, sign_req: SignRequest) -> dict[str, int | str]:
     return {
         "message": "Already settled",
         "cost_cents": sign_req.actual_cost_cents or 0,
-        "balance_cents": user.balance_cents if user else 0,
+        "balance_cents": total_balance(user) if user else 0,
     }
 
 

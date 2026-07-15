@@ -15,7 +15,7 @@ from sqlalchemy import update
 import config
 from billing import plan_by_id
 from database import SessionLocal
-from models import Order, OrderStatus, User, new_uuid
+from models import OVERSEAS_SCOPE, Order, OrderStatus, User, balance_column, new_uuid
 from payment_common import revoke_order_credit
 
 creem_bp = Blueprint("creem", __name__, url_prefix="/api/billing")
@@ -79,6 +79,7 @@ def create_creem_checkout(user_id: str, plan_id: str, return_url: str) -> dict[s
             trade_order_id=trade_order_id,
             amount_cents=_amount_to_cents(str(plan["amount_usd"])),
             credit_cents=_amount_to_cents(str(plan["credit_yuan"])),
+            credit_scope=OVERSEAS_SCOPE,
             provider_product_id=product_id,
             status=OrderStatus.CREATED,
             idempotency_key=trade_order_id,
@@ -93,7 +94,12 @@ def create_creem_checkout(user_id: str, plan_id: str, return_url: str) -> dict[s
         "product_id": product_id,
         "request_id": trade_order_id,
         "success_url": _order_success_url(return_url, trade_order_id),
-        "metadata": {"user_id": user_id, "plan_id": plan_id, "order_id": trade_order_id},
+        "metadata": {
+            "user_id": user_id,
+            "plan_id": plan_id,
+            "order_id": trade_order_id,
+            "billing_scope": OVERSEAS_SCOPE,
+        },
     }
     if customer_email:
         payload["customer"] = {"email": customer_email}
@@ -201,10 +207,11 @@ def _credit_completed_checkout(db, order: Order, checkout: dict[str, Any]) -> tu
         .values(status=OrderStatus.CREDITED, provider_transaction_id=transaction_id)
     )
     if credited.rowcount == 1:
+        column = balance_column(order.credit_scope)
         db.execute(
             update(User)
             .where(User.id == order.user_id)
-            .values(balance_cents=User.balance_cents + (order.credit_cents or order.amount_cents))
+            .values({column: column + (order.credit_cents or order.amount_cents)})
         )
     db.commit()
     return True, "success"

@@ -55,6 +55,8 @@ interface UsageRecord {
 interface AccountInfo {
   email?: string;
   balance_cents: number;
+  domestic_balance_cents?: number;
+  overseas_balance_cents?: number;
   created_at?: string;
 }
 

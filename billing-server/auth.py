@@ -1,5 +1,5 @@
 """认证模块：注册、登录、JWT 刷新、rate limiting"""
-# pyright: reportImplicitRelativeImport=false
+# pyright: reportImplicitRelativeImport=false, reportMissingImports=false
 import hashlib
 import hmac
 from collections.abc import Mapping
@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 import config
 from captcha import generate_image_captcha, verify_image_captcha
 from database import SessionLocal
-from models import RateLimitEvent, User, new_uuid, utcnow
+from models import RateLimitEvent, User, new_uuid, total_balance, utcnow
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 ACCESS_COOKIE = "ort_access_token"
@@ -177,7 +177,7 @@ def register():
         db.add(user)
         db.commit()
 
-        tokens = {**_create_tokens(user.id), "balance_cents": user.balance_cents}
+        tokens = {**_create_tokens(user.id), "balance_cents": total_balance(user)}
         return _json_with_cookies(tokens, 201)
     finally:
         db.close()
@@ -219,7 +219,7 @@ def _password_login():
         ):
             return jsonify({"error": "Invalid email or password"}), 401
 
-        tokens = {**_create_tokens(user.id), "balance_cents": user.balance_cents}
+        tokens = {**_create_tokens(user.id), "balance_cents": total_balance(user)}
         return _json_with_cookies(tokens)
     finally:
         db.close()

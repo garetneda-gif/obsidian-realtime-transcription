@@ -1,11 +1,11 @@
-# pyright: reportImplicitRelativeImport=false
+# pyright: reportImplicitRelativeImport=false, reportMissingImports=false
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 from sqlalchemy import update
 
 from billing import PLANS
-from models import Order, OrderStatus, User
+from models import Order, OrderStatus, User, adjust_balance, balance_column
 
 
 def amount_to_cents(amount_yuan: str) -> int:
@@ -36,7 +36,7 @@ def credit_order(db: Any, order: Order) -> None:
     order.status = OrderStatus.CREDITED
     user = db.query(User).filter(User.id == order.user_id).with_for_update().first()
     if user:
-        user.balance_cents += order.credit_cents or order.amount_cents
+        adjust_balance(user, order.credit_scope, order.credit_cents or order.amount_cents)
 
 
 def revoke_order_credit(db: Any, order: Order) -> bool:
@@ -50,9 +50,10 @@ def revoke_order_credit(db: Any, order: Order) -> bool:
     )
     if revoked.rowcount != 1:
         return False
+    column = balance_column(order.credit_scope)
     db.execute(
         update(User)
         .where(User.id == order.user_id)
-        .values(balance_cents=User.balance_cents - (order.credit_cents or order.amount_cents))
+        .values({column: column - (order.credit_cents or order.amount_cents)})
     )
     return True
