@@ -131,6 +131,16 @@ class PaymentCallbackTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/auth/captcha/image").status_code, 200)
         self.assertEqual(self.client.post("/api/auth/captcha/image").status_code, 429)
 
+    def test_captcha_issuance_reuses_one_database_session(self):
+        with (
+            patch.object(auth, "SessionLocal", wraps=database.SessionLocal) as session_factory,
+            patch.object(captcha, "SessionLocal", side_effect=AssertionError("unexpected session")),
+        ):
+            response = self.client.post("/api/auth/captcha/image")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(session_factory.call_count, 1)
+
     def test_login_ip_limit_cannot_be_bypassed_by_rotating_user_agent(self):
         original_ip_limit = config.AUTH_IP_RATE_LIMIT_PER_MINUTE
         config.AUTH_IP_RATE_LIMIT_PER_MINUTE = 1

@@ -65,6 +65,33 @@ def _check_rate_limit(scope: str, value: str, limit: int, window_seconds: int = 
         db.close()
 
 
+def _check_rate_limit_in_session(db, scope: str, value: str, limit: int, window_seconds: int = 60) -> bool:
+    if limit <= 0:
+        return False
+    now = utcnow()
+    window_seconds = max(1, window_seconds)
+    window = int(now.timestamp()) // window_seconds
+    key_digest = _request_fingerprint(f"{scope}:{value}")
+    db.query(RateLimitEvent).filter(RateLimitEvent.created_at < now - timedelta(days=1)).delete(
+        synchronize_session=False
+    )
+    for slot in range(limit):
+        event_id = _request_fingerprint(f"{scope}:{key_digest}:{window}:{slot}")[:36]
+        try:
+            with db.begin_nested():
+                db.add(RateLimitEvent(
+                    id=event_id,
+                    scope=scope,
+                    key_digest=key_digest,
+                    created_at=now,
+                ))
+                db.flush()
+            return True
+        except IntegrityError:
+            continue
+    return False
+
+
 def _check_login_limits(email: str) -> bool:
     return (
         _check_rate_limit("login-ip", _client_ip(), config.AUTH_IP_RATE_LIMIT_PER_MINUTE)
@@ -271,6 +298,18 @@ def set_password():
 
 @auth_bp.route("/captcha/image", methods=["POST"])
 def captcha_image():
-    if not _check_rate_limit("captcha-ip", _client_ip(), config.CAPTCHA_RATE_LIMIT_PER_MINUTE):
-        return jsonify({"error": "Too many captcha requests, try again later"}), 429
-    return jsonify(generate_image_captcha()), 200
+    db = SessionLocal()
+    try:
+        if not _check_rate_limit_in_session(
+            db,
+            "captcha-ip",
+            _client_ip(),
+            config.CAPTCHA_RATE_LIMIT_PER_MINUTE,
+        ):
+            db.rollback()
+            return jsonify({"error": "Too many captcha requests, try again later"}), 429
+        payload = generate_image_captcha(db, commit=False)
+        db.commit()
+        return jsonify(payload), 200
+    finally:
+        db.close()

@@ -80,11 +80,13 @@ def _render_png_data_url(answer: str) -> str:
     return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode("ascii")
 
 
-def generate_image_captcha() -> dict[str, str]:
+def generate_image_captcha(db=None, *, commit: bool = True) -> dict[str, str]:
     answer = "".join(secrets.choice(_CHARSET) for _ in range(_CAPTCHA_LEN))
     captcha_id = new_uuid()
     now = utcnow()
-    db = SessionLocal()
+    owns_session = db is None
+    if owns_session:
+        db = SessionLocal()
     try:
         db.query(CaptchaChallenge).filter(CaptchaChallenge.expires_at < now).delete(
             synchronize_session=False
@@ -95,9 +97,11 @@ def generate_image_captcha() -> dict[str, str]:
             expires_at=now + timedelta(seconds=_TTL_SECONDS),
             fail_count=0,
         ))
-        db.commit()
+        if commit:
+            db.commit()
     finally:
-        db.close()
+        if owns_session:
+            db.close()
     return {"captcha_id": captcha_id, "image": _render_png_data_url(answer)}
 
 
