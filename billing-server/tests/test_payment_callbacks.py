@@ -736,7 +736,39 @@ class PaymentCallbackTests(unittest.TestCase):
             })
         self.assertEqual(plugin.status_code, 200)
 
-    def test_oauth_only_user_can_set_initial_plugin_password_once(self):
+    def test_password_login_reuses_one_database_session(self):
+        email = "single-session-login@example.invalid"
+        password = "password123"
+        db = database.SessionLocal()
+        db.add(User(
+            id=new_uuid(),
+            email=email,
+            password_hash=auth.bcrypt.hashpw(password.encode(), auth.bcrypt.gensalt()).decode(),
+            balance_cents=100,
+        ))
+        db.commit()
+        db.close()
+        challenge = captcha_token.generate_stateless_image_captcha("A2B3")
+
+        with (
+            patch.object(auth, "SessionLocal", wraps=database.SessionLocal) as session_factory,
+            patch.object(captcha, "SessionLocal", side_effect=AssertionError("unexpected session")),
+        ):
+            response = self.client.post("/api/auth/browser-login", json={
+                "email": email,
+                "password": password,
+                "captcha_id": challenge["captcha_id"],
+                "captcha_answer": "A2B3",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(session_factory.call_count, 1)
+        self.assertEqual(
+            captcha.verify_image_captcha(challenge["captcha_id"], "A2B3"),
+            (False, "used"),
+        )
+
+    def test_account_can_set_then_change_password_and_email(self):
         user_id = new_uuid()
         db = database.SessionLocal()
         db.add(User(
@@ -756,12 +788,35 @@ class PaymentCallbackTests(unittest.TestCase):
             "password": "new-password-123",
         })
         self.assertEqual(response.status_code, 200)
-        again = self.client.post("/api/auth/password", headers=headers, json={
+        missing_current = self.client.post("/api/auth/password", headers=headers, json={
             "password": "another-password-123",
         })
-        self.assertEqual(again.status_code, 409)
+        self.assertEqual(missing_current.status_code, 400)
+        wrong_current = self.client.post("/api/auth/password", headers=headers, json={
+            "current_password": "wrong-password",
+            "password": "another-password-123",
+        })
+        self.assertEqual(wrong_current.status_code, 401)
+        changed = self.client.post("/api/auth/password", headers=headers, json={
+            "current_password": "new-password-123",
+            "password": "another-password-123",
+        })
+        self.assertEqual(changed.status_code, 200)
+
+        wrong_email_password = self.client.patch("/api/auth/email", headers=headers, json={
+            "email": "changed@example.invalid",
+            "current_password": "wrong-password",
+        })
+        self.assertEqual(wrong_email_password.status_code, 401)
+        changed_email = self.client.patch("/api/auth/email", headers=headers, json={
+            "email": "changed@example.invalid",
+            "current_password": "another-password-123",
+        })
+        self.assertEqual(changed_email.status_code, 200)
+        self.assertEqual(changed_email.get_json()["email"], "changed@example.invalid")
         after = self.client.get("/api/billing/me", headers=headers)
         self.assertTrue(after.get_json()["password_set"])
+        self.assertEqual(after.get_json()["email"], "changed@example.invalid")
 
     def test_create_order_rejects_invalid_plan(self):
         original_require_auth = auth.require_auth

@@ -145,12 +145,22 @@ class AccountNavigationTests(unittest.TestCase):
         }
         self.assertEqual(rewrites["/api/auth/captcha/image"], "/api/captcha")
         self.assertEqual(rewrites["/api/auth/oauth/providers"], "/api/oauth_providers")
+        self.assertEqual(rewrites["/api/auth/browser-login"], "/api/browser_login")
+
+    def test_login_submit_shows_progress_and_blocks_duplicate_requests(self):
+        self.assertIn('let authSubmitting = false;', ACCOUNT_HTML)
+        self.assertIn('? (isRegister ? "注册中..." : "登录中...")', ACCOUNT_HTML)
+        self.assertIn('if (authSubmitting) return;', ACCOUNT_HTML)
+        self.assertIn('status(authMode === "register" ? "正在注册..." : "正在登录...")', ACCOUNT_HTML)
 
     def test_captcha_placeholder_cannot_be_submitted_as_a_real_challenge(self):
         self.assertNotIn(">R7K4</text>", ACCOUNT_HTML)
         self.assertIn('let captchaLoading = true;', ACCOUNT_HTML)
         self.assertIn('$("captcha-answer").disabled = !captchaReady;', ACCOUNT_HTML)
-        self.assertIn('$("auth-submit-btn").disabled = authNeedsCaptcha() && !captchaReady;', ACCOUNT_HTML)
+        self.assertIn(
+            '$("auth-submit-btn").disabled = authSubmitting || (authNeedsCaptcha() && !captchaReady);',
+            ACCOUNT_HTML,
+        )
         self.assertIn('图形验证码正在加载，请稍候', ACCOUNT_HTML)
 
     def test_topup_packages_and_balances_are_region_scoped(self):
@@ -164,7 +174,11 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertIn("境内额度仅限中国大陆网络使用", ACCOUNT_HTML)
         self.assertIn("境外额度仅限中国大陆以外网络使用", ACCOUNT_HTML)
 
-    def test_oauth_account_can_set_plugin_password(self):
+    def test_account_can_change_email_and_password(self):
+        self.assertIn('id="change-email-btn"', ACCOUNT_HTML)
+        self.assertIn('id="email-panel"', ACCOUNT_HTML)
+        self.assertIn('api("/api/auth/email"', ACCOUNT_HTML)
+        self.assertIn('current_password: currentPassword', ACCOUNT_HTML)
         self.assertIn('id="set-password-btn"', ACCOUNT_HTML)
         self.assertIn('id="password-panel"', ACCOUNT_HTML)
         self.assertIn('api("/api/auth/password"', ACCOUNT_HTML)

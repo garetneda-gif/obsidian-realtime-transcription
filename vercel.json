@@ -16,6 +16,10 @@
       "destination": "/api/oauth_providers"
     },
     {
+      "source": "/api/auth/browser-login",
+      "destination": "/api/browser_login"
+    },
+    {
       "source": "/api/asr/proxy",
       "destination": "/api/asr-proxy"
     },

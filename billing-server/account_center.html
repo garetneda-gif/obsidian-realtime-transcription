@@ -1899,8 +1899,8 @@
           </div>
           <div class="profile-account">
             <div class="profile-account-title">账户信息</div>
-            <div class="profile-row"><span class="profile-row-label">邮箱</span><span class="profile-row-value" id="account-email">已登录</span><span class="profile-row-state">已验证</span></div>
-            <div class="profile-row"><span class="profile-row-label">密码</span><span class="profile-row-value" id="account-password">••••••••</span><button class="profile-row-state" id="set-password-btn" type="button">已设置</button></div>
+            <div class="profile-row"><span class="profile-row-label">邮箱</span><span class="profile-row-value" id="account-email">已登录</span><button class="profile-row-state" id="change-email-btn" type="button">换绑邮箱</button></div>
+            <div class="profile-row"><span class="profile-row-label">密码</span><span class="profile-row-value" id="account-password">••••••••</span><button class="profile-row-state" id="set-password-btn" type="button">修改密码</button></div>
           </div>
           <div class="profile-actions">
             <button class="btn primary" id="open-plans-btn" type="button">去充值</button>
@@ -1926,11 +1926,30 @@
           </div>
         </section>
 
+        <section id="email-panel" class="topup-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="email-title">
+          <div class="modal topup-modal" style="max-width: 480px;">
+            <button class="modal-close" id="email-close-btn" type="button" aria-label="关闭换绑邮箱弹窗">×</button>
+            <div class="modal-title" id="email-title">换绑邮箱</div>
+            <p class="topup-pricing-note">换绑后请使用新邮箱登录，账户余额和转写记录不受影响。</p>
+            <label class="cnu-auth-field">新邮箱
+              <input id="new-account-email" class="cnu-auth-input" type="email" autocomplete="email" placeholder="name@example.com">
+            </label>
+            <label class="cnu-auth-field">当前密码
+              <input id="email-current-password" class="cnu-auth-input" type="password" autocomplete="current-password" placeholder="输入当前密码确认身份">
+            </label>
+            <button class="topup-submit" id="save-email-btn" type="button">确认换绑</button>
+            <div class="topup-feedback" id="email-status"></div>
+          </div>
+        </section>
+
         <section id="password-panel" class="topup-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="password-title">
           <div class="modal topup-modal" style="max-width: 480px;">
             <button class="modal-close" id="password-close-btn" type="button" aria-label="关闭设置密码弹窗">×</button>
             <div class="modal-title" id="password-title">设置插件密码</div>
-            <p class="topup-pricing-note">设置后可在 Obsidian 插件中使用邮箱和密码登录。</p>
+            <p class="topup-pricing-note" id="password-description">设置后可在 Obsidian 插件中使用邮箱和密码登录。</p>
+            <label id="current-password-field" class="cnu-auth-field hidden">当前密码
+              <input id="current-plugin-password" class="cnu-auth-input" type="password" autocomplete="current-password" placeholder="输入当前密码">
+            </label>
             <label class="cnu-auth-field">密码
               <input id="new-plugin-password" class="cnu-auth-input" type="password" autocomplete="new-password" minlength="8" placeholder="至少 8 个字符">
             </label>
@@ -1988,6 +2007,7 @@
     let captchaImage = "";
     let captchaLoading = true;
     let captchaRequestVersion = 0;
+    let authSubmitting = false;
     let codeCooldown = 0;
     let codeTimer = null;
     const sessionKey = "ort.billing.browserSession.v2";
@@ -2121,7 +2141,9 @@
       $("confirm-field").classList.toggle("hidden", !isRegister);
       $("code-field").classList.toggle("hidden", !authNeedsCode());
       $("captcha-field").classList.toggle("hidden", !authNeedsCaptcha());
-      $("auth-submit-btn").textContent = isRegister ? "注册" : "登录";
+      $("auth-submit-btn").textContent = authSubmitting
+        ? (isRegister ? "注册中..." : "登录中...")
+        : (isRegister ? "注册" : "登录");
       $("password").autocomplete = isRegister ? "new-password" : "current-password";
       $("auth-method-btn").classList.add("hidden");
       $("auth-method-btn").textContent = authMethod === "code" ? "使用密码登录" : "换用邮箱验证码登录";
@@ -2131,7 +2153,7 @@
       $("captcha-refresh-btn").disabled = captchaLoading;
       $("captcha-answer").disabled = !captchaReady;
       $("captcha-answer").placeholder = captchaLoading ? "验证码加载中" : (captchaReady ? "输入验证码" : "请点击换一张");
-      $("auth-submit-btn").disabled = authNeedsCaptcha() && !captchaReady;
+      $("auth-submit-btn").disabled = authSubmitting || (authNeedsCaptcha() && !captchaReady);
       $("captcha-image").src = captchaImage || captchaPlaceholder(captchaLoading ? "加载中…" : "请重试");
     }
 
@@ -2197,7 +2219,7 @@
         credentials: "same-origin",
         headers,
       });
-      if (resp.status === 401 && retry && path.startsWith("/api/billing/")) {
+      if (resp.status === 401 && retry && (path.startsWith("/api/billing/") || path === "/api/auth/password" || path === "/api/auth/email")) {
         const refreshToken = localStorage.getItem(refreshKey);
         const refreshed = await fetch("/api/auth/refresh", {
           method: "POST",
@@ -2285,10 +2307,11 @@
       ]);
       const records = usage.records || [];
       setLoggedIn(true);
+      const accountHasPassword = Boolean(account.password_set);
+      $("set-password-btn").dataset.passwordSet = String(accountHasPassword);
       $("account-email").textContent = account.email || "已登录";
-      $("account-password").textContent = account.password_set ? "••••••••" : "未设置插件密码";
-      $("set-password-btn").textContent = account.password_set ? "已设置" : "设置密码";
-      $("set-password-btn").disabled = Boolean(account.password_set);
+      $("account-password").textContent = accountHasPassword ? "••••••••" : "未设置插件密码";
+      $("set-password-btn").textContent = accountHasPassword ? "修改密码" : "设置密码";
       $("domestic-balance").textContent = money(account.domestic_balance_cents);
       $("overseas-balance").textContent = money(account.overseas_balance_cents);
       $("stat-count").textContent = String(records.length);
@@ -2314,23 +2337,49 @@
 
     function closePasswordPanel() {
       $("password-panel").classList.add("hidden");
+      $("current-plugin-password").value = "";
       $("new-plugin-password").value = "";
       $("confirm-plugin-password").value = "";
       $("password-status").textContent = "";
     }
 
     async function savePluginPassword() {
+      const changingPassword = $("set-password-btn").dataset.passwordSet === "true";
+      const currentPassword = $("current-plugin-password").value;
       const password = $("new-plugin-password").value;
       const confirmation = $("confirm-plugin-password").value;
+      if (changingPassword && !currentPassword) throw new Error("请输入当前密码");
       if (password.length < 8) throw new Error("密码至少需要 8 个字符");
       if (password !== confirmation) throw new Error("两次密码不一致");
       await api("/api/auth/password", {
         method: "POST",
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, current_password: currentPassword }),
       });
       closePasswordPanel();
       await loadAccount();
-      status("插件登录密码已设置");
+      status(changingPassword ? "密码已修改" : "插件登录密码已设置");
+    }
+
+    function closeEmailPanel() {
+      $("email-panel").classList.add("hidden");
+      $("new-account-email").value = "";
+      $("email-current-password").value = "";
+      $("email-status").textContent = "";
+    }
+
+    async function saveAccountEmail() {
+      const email = $("new-account-email").value.trim();
+      const currentPassword = $("email-current-password").value;
+      if (!email || !email.includes("@")) throw new Error("请输入有效的新邮箱");
+      if (!currentPassword) throw new Error("请输入当前密码");
+      await api("/api/auth/email", {
+        method: "PATCH",
+        body: JSON.stringify({ email, current_password: currentPassword }),
+      });
+      localStorage.setItem(emailKey, email.toLowerCase());
+      closeEmailPanel();
+      await loadAccount();
+      status("邮箱已换绑");
     }
 
     async function loadPlans() {
@@ -2419,6 +2468,7 @@
     }
 
     async function auth() {
+      if (authSubmitting) return;
       const email = $("email").value.trim();
       const password = $("password").value;
       const code = $("email-code").value.trim();
@@ -2431,21 +2481,29 @@
       if (authNeedsCaptcha() && (!captchaId || !captchaImage)) throw new Error("图形验证码加载失败，请点击换一张");
       if (authNeedsCaptcha() && !captchaAnswer) throw new Error("请输入图形验证码");
       const path = authMode === "login" && authMethod === "code" ? authPaths.code : authPaths[authMode];
-      const data = await api(path, {
-        method: "POST",
-        body: JSON.stringify({
-          email,
-          password,
-          code,
-          captcha_id: captchaId,
-          captcha_answer: captchaAnswer,
-          browser_session: true,
-        }),
-      });
-      saveSession(data, email);
-      await Promise.all([loadAccount(), loadPlans()]);
-      if (queryTopup || queryEmbed) showPlans();
-      status("");
+      authSubmitting = true;
+      renderAuth();
+      status(authMode === "register" ? "正在注册..." : "正在登录...");
+      try {
+        const data = await api(path, {
+          method: "POST",
+          body: JSON.stringify({
+            email,
+            password,
+            code,
+            captcha_id: captchaId,
+            captcha_answer: captchaAnswer,
+            browser_session: true,
+          }),
+        });
+        saveSession(data, email);
+        await Promise.all([loadAccount(), loadPlans()]);
+        if (queryTopup || queryEmbed) showPlans();
+        status("");
+      } finally {
+        authSubmitting = false;
+        renderAuth();
+      }
     }
 
     async function createOrder(plan = selectedPlan) {
@@ -2522,23 +2580,49 @@
       });
     });
     $("send-code-btn").onclick = () => sendCode().catch((e) => status(e.message));
-    $("auth-submit-btn").onclick = () => auth().catch(async (e) => {
-      status(e.message);
-      await loadCaptcha().catch(() => null);
-    });
+    $("auth-submit-btn").onclick = async () => {
+      if (authSubmitting) return;
+      try {
+        await auth();
+      } catch (e) {
+        status(e.message);
+        await loadCaptcha().catch(() => null);
+      }
+    };
     $("refresh-btn").onclick = () => loadAccount().catch((e) => status(e.message));
     $("open-plans-btn").onclick = showPlans;
-    $("set-password-btn").onclick = () => {
-      if ($("set-password-btn").disabled) return;
-      $("password-panel").classList.remove("hidden");
-      $("new-plugin-password").focus();
+    $("change-email-btn").onclick = () => {
+      if ($("set-password-btn").dataset.passwordSet !== "true") {
+        $("set-password-btn").click();
+        $("password-status").textContent = "请先设置密码，再换绑邮箱";
+        return;
+      }
+      $("email-panel").classList.remove("hidden");
+      $("new-account-email").focus();
     };
+    $("set-password-btn").onclick = () => {
+      const accountHasPassword = $("set-password-btn").dataset.passwordSet === "true";
+      $("password-title").textContent = accountHasPassword ? "修改密码" : "设置插件密码";
+      $("password-description").textContent = accountHasPassword
+        ? "验证当前密码后设置新密码。"
+        : "设置后可在 Obsidian 插件中使用邮箱和密码登录。";
+      $("current-password-field").classList.toggle("hidden", !accountHasPassword);
+      $("password-panel").classList.remove("hidden");
+      $(accountHasPassword ? "current-plugin-password" : "new-plugin-password").focus();
+    };
+    $("email-close-btn").onclick = closeEmailPanel;
+    $("email-panel").onclick = (event) => {
+      if (event.target === $("email-panel")) closeEmailPanel();
+    };
+    $("save-email-btn").onclick = () => saveAccountEmail().catch((error) => {
+      $("email-status").textContent = error.status === 401 ? "当前密码不正确" : error.message;
+    });
     $("password-close-btn").onclick = closePasswordPanel;
     $("password-panel").onclick = (event) => {
       if (event.target === $("password-panel")) closePasswordPanel();
     };
     $("save-password-btn").onclick = () => savePluginPassword().catch((error) => {
-      $("password-status").textContent = error.message;
+      $("password-status").textContent = error.status === 401 ? "当前密码不正确" : error.message;
     });
     $("topup-close-btn").onclick = closePlans;
     $("account-panel").onclick = (event) => {
@@ -2546,6 +2630,8 @@
     };
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !$("account-panel").classList.contains("hidden")) closePlans();
+      if (event.key === "Escape" && !$("email-panel").classList.contains("hidden")) closeEmailPanel();
+      if (event.key === "Escape" && !$("password-panel").classList.contains("hidden")) closePasswordPanel();
     });
     document.querySelectorAll("[data-provider]").forEach((button) => {
       button.onclick = () => {

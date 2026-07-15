@@ -92,7 +92,22 @@ def _check_rate_limit_in_session(db, scope: str, value: str, limit: int, window_
     return False
 
 
-def _check_login_limits(email: str) -> bool:
+def _check_login_limits(email: str, db=None) -> bool:
+    if db is not None:
+        return (
+            _check_rate_limit_in_session(
+                db,
+                "login-ip",
+                _client_ip(),
+                config.AUTH_IP_RATE_LIMIT_PER_MINUTE,
+            )
+            and _check_rate_limit_in_session(
+                db,
+                "login-account",
+                email,
+                config.LOGIN_RATE_LIMIT_PER_MINUTE,
+            )
+        )
     return (
         _check_rate_limit("login-ip", _client_ip(), config.AUTH_IP_RATE_LIMIT_PER_MINUTE)
         and _check_rate_limit("login-account", email, config.LOGIN_RATE_LIMIT_PER_MINUTE)
@@ -227,27 +242,36 @@ def _password_login():
 
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
-    if not _check_login_limits(email):
-        return jsonify({"error": "Too many login attempts, try again later"}), 429
-    captcha_ok, _ = verify_image_captcha(
-        str(data.get("captcha_id") or ""),
-        str(data.get("captcha_answer") or ""),
-    )
-    if not captcha_ok:
-        return jsonify({"error": "Invalid or expired captcha"}), 400
-
     db = SessionLocal()
     try:
+        if not _check_login_limits(email, db):
+            db.commit()
+            return jsonify({"error": "Too many login attempts, try again later"}), 429
+        captcha_ok, _ = verify_image_captcha(
+            str(data.get("captcha_id") or ""),
+            str(data.get("captcha_answer") or ""),
+            db=db,
+            commit=False,
+        )
+        if not captcha_ok:
+            db.commit()
+            return jsonify({"error": "Invalid or expired captcha"}), 400
+
         user = db.query(User).filter(User.email == email).first()
         if (
             not user
             or not user.password_hash.startswith(("$2a$", "$2b$", "$2y$"))
             or not bcrypt.checkpw(password.encode(), user.password_hash.encode())
         ):
+            db.commit()
             return jsonify({"error": "Invalid email or password"}), 401
 
         tokens = {**_create_tokens(user.id), "balance_cents": total_balance(user)}
+        db.commit()
         return _json_with_cookies(tokens)
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

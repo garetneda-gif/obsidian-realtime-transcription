@@ -58,16 +58,18 @@ def generate_image_captcha(db=None, *, commit: bool = True) -> dict[str, str]:
     return {"captcha_id": captcha_id, "image": _render_png_data_url(answer)}
 
 
-def verify_image_captcha(captcha_id: str, answer: str) -> tuple[bool, str]:
+def verify_image_captcha(captcha_id: str, answer: str, db=None, *, commit: bool = True) -> tuple[bool, str]:
     normalized = _WHITESPACE_RE.sub("", answer or "").upper()
     if not captcha_id:
         return False, "empty_id"
     if not normalized:
         return False, "empty_answer"
     if captcha_id.startswith("v1."):
-        return _verify_stateless_image_captcha(captcha_id, normalized)
+        return _verify_stateless_image_captcha(captcha_id, normalized, db=db, commit=commit)
 
-    db = SessionLocal()
+    owns_session = db is None
+    if owns_session:
+        db = SessionLocal()
     try:
         challenge = (
             db.query(CaptchaChallenge)
@@ -79,13 +81,15 @@ def verify_image_captcha(captcha_id: str, answer: str) -> tuple[bool, str]:
             return False, "not_found"
         if challenge.expires_at.replace(tzinfo=utcnow().tzinfo) < utcnow():
             db.delete(challenge)
-            db.commit()
+            if commit:
+                db.commit()
             return False, "expired"
 
         actual_digest = _answer_digest(captcha_id, normalized)
         if hmac.compare_digest(actual_digest, challenge.answer_digest):
             db.delete(challenge)
-            db.commit()
+            if commit:
+                db.commit()
             return True, "ok"
 
         challenge.fail_count += 1
@@ -94,13 +98,21 @@ def verify_image_captcha(captcha_id: str, answer: str) -> tuple[bool, str]:
             reason = "destroyed"
         else:
             reason = "mismatch"
-        db.commit()
+        if commit:
+            db.commit()
         return False, reason
     finally:
-        db.close()
+        if owns_session:
+            db.close()
 
 
-def _verify_stateless_image_captcha(captcha_id: str, answer: str) -> tuple[bool, str]:
+def _verify_stateless_image_captcha(
+    captcha_id: str,
+    answer: str,
+    db=None,
+    *,
+    commit: bool = True,
+) -> tuple[bool, str]:
     payload = parse_stateless_captcha(captcha_id)
     if not payload:
         return False, "invalid_token"
@@ -110,7 +122,9 @@ def _verify_stateless_image_captcha(captcha_id: str, answer: str) -> tuple[bool,
     answer_digest = str(payload["d"])
     matches = stateless_answer_matches(payload, answer)
     now = utcnow()
-    db = SessionLocal()
+    owns_session = db is None
+    if owns_session:
+        db = SessionLocal()
     try:
         db.query(CaptchaChallenge).filter(CaptchaChallenge.expires_at < now).delete(
             synchronize_session=False
@@ -134,7 +148,12 @@ def _verify_stateless_image_captcha(captcha_id: str, answer: str) -> tuple[bool,
                 expires_at=expires_at,
                 fail_count=0,
             )
-            db.add(challenge)
+            try:
+                with db.begin_nested():
+                    db.add(challenge)
+                    db.flush()
+            except IntegrityError:
+                return False, "used" if matches else "mismatch"
 
         if matches:
             challenge.fail_count = _MAX_FAILS
@@ -142,10 +161,12 @@ def _verify_stateless_image_captcha(captcha_id: str, answer: str) -> tuple[bool,
         else:
             challenge.fail_count += 1
             reason = "destroyed" if challenge.fail_count >= _MAX_FAILS else "mismatch"
-        db.commit()
+        if commit:
+            db.commit()
         return matches, reason
     except IntegrityError:
         db.rollback()
         return False, "used" if matches else "mismatch"
     finally:
-        db.close()
+        if owns_session:
+            db.close()
