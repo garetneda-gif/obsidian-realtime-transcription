@@ -166,3 +166,10 @@
 - 站点联系页与两个首页入口已切换到品牌邮箱；全量 80 项服务端单测通过，`git diff --check` 通过。
 - 下一步：审计并推送支持邮箱改动，用冻结生产 manifest 创建 Vercel Preview，验收后提升到 Production，再继续 Creem 审核声明。
 - 两名只读审查代理均批准提交；生产源文件逐字核验确认两个首页除品牌邮箱外无其他差异。
+
+## 2026-07-18 20:31 — Production pricing live and Creem onboarding advanced
+
+- 支持邮箱提交 `3176c63` 已推送至 `origin/fix/creem-review-readiness`，远端与本地一致。
+- Vercel Preview 与 Production 均 Ready；公开域名三档定价、双语页面、法律页、品牌邮箱和首页页脚已通过响应与浏览器全页验收。
+- Creem 已选择 Individual、中国税务居住地，并勾选禁售品、审核清单、三个月复审限制三项声明后点击 Next。
+- 当前停在 Business Address：必须提供真实街道地址、城市、省份和邮编，不能猜测 KYC 信息。

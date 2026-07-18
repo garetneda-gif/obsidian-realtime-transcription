@@ -107,3 +107,9 @@
 - 修改 `billing-server/legal_pages.py`：联系页统一使用 `support@songrong.org`。
 - 从当前 Vercel 生产部署恢复 `billing-server/static/index.html` 与 `public/index.html`，仅替换品牌支持邮箱，避免回退线上页脚和法律链接。
 - 更新账户导航与公开定价测试，覆盖品牌邮箱并排除通用个人邮箱。
+
+## 2026-07-18 20:31 — Publish public pricing for Creem review
+
+- 以生产部署 `dpl_9SkBWyFcvrurhcAv6XEYPHwcytHx` 的 152 文件冻结清单为基线，仅替换 5 个已审计源文件。
+- 创建并验收 Preview `dpl_7TyLnjT3rWqCxxT81JQ97ShfhRsK`，再提升为 Production `dpl_3WMQCqBEAnxRD3qyD4MKbbfQBE9z`。
+- 生产域名 `transcribe.songrong.org` 已绑定新部署；健康、定价、法律、联系和套餐 API 路由均返回 200。

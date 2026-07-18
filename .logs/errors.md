@@ -20,3 +20,21 @@
 - 复现：`vercel api /v6/deployments/<id>/files/<uid>` 返回 HTTP 410，提示改用 v8。
 - 根因：Vercel 已停用该 endpoint 的 v6 版本。
 - 解决：改用 `/v8/deployments/<id>/files/<uid>`，再从 JSON 的 Base64 `data` 字段解码文件内容。
+
+## 2026-07-18 20:21 — Vercel Preview curl requires explicit confirmation flag
+
+- 复现：并行执行 `vercel curl ... --deployment <preview>` 时退出码为 1，提示需要确认。
+- 根因：目标 Preview 尚未链接到当前工作树，CLI 的无交互模式仍要求显式确认。
+- 解决：在只读冒烟请求中加入 `--yes` 后重试。
+
+## 2026-07-18 20:22 — Vercel curl auto-linked the worktree to the wrong project
+
+- 复现：在未链接的 worktree 加 `--yes` 后，CLI 按目录名新建并链接了 `obsidian-realtime-transcription-creem-review`，请求因错误项目的保护令牌返回 302。
+- 根因：`vercel curl` 的 `--deployment` 不会替代本地项目链接；`--yes` 同时允许自动链接。
+- 解决：将本地 `.vercel/project.json` 明确指向既有目标项目 `prj_aeHKrl0mifykaQo9A6nBFkIde9Fo` 后再做只读冒烟；未对生产域名做任何切换。
+
+## 2026-07-18 20:25 — Vercel logs positional deployment implies follow mode
+
+- 复现：`vercel logs --deployment <url> --level error --limit 50` 报错称 follow 模式不支持过滤。
+- 根因：指定部署时 CLI 默认开启实时跟随。
+- 解决：改用部署 URL 作为位置参数并加 `--no-follow`；Preview 未发现 error 日志。
