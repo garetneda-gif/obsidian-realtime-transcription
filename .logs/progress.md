@@ -173,3 +173,9 @@
 - Vercel Preview 与 Production 均 Ready；公开域名三档定价、双语页面、法律页、品牌邮箱和首页页脚已通过响应与浏览器全页验收。
 - Creem 已选择 Individual、中国税务居住地，并勾选禁售品、审核清单、三个月复审限制三项声明后点击 Next。
 - 当前停在 Business Address：必须提供真实街道地址、城市、省份和邮编，不能猜测 KYC 信息。
+
+## 2026-07-18 21:05 — Creem address and product-readiness steps completed
+
+- 已查证用户提供的北京地址邮编为 `100031`，并完成 Country、Address、City、State/Province 与 Postal code 表单；项目日志不保存完整居住地址。
+- 已据生产站点验收结果选择产品已准备上线，并确认隐私政策、使用协议及产品说明均可公开访问。
+- 当前停在 Full name：Creem 要求填写与证件一致的完整法定姓名及拉丁字母拼写，不能从账号名推测。
