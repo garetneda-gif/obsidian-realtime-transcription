@@ -34,6 +34,9 @@ class PublicPricingTests(unittest.TestCase):
         self.assertIn("/terms", html)
         self.assertIn("/privacy", html)
         self.assertIn("/contact", html)
+        self.assertIn("RealTime Transcriber", html)
+        self.assertNotIn("Obsidian RealTime Transcriber", html)
+        self.assertIn("独立社区插件", html)
 
         for legal_path in ("/terms", "/privacy", "/contact"):
             with self.subTest(legal_path=legal_path):
@@ -41,6 +44,9 @@ class PublicPricingTests(unittest.TestCase):
         contact_html = self.client.get("/contact").get_data(as_text=True)
         self.assertIn("mailto:support@songrong.org", contact_html)
         self.assertNotIn("rjk2021@163.com", contact_html)
+        self.assertIn("RealTime Transcriber", contact_html)
+        self.assertNotIn("Obsidian RealTime Transcriber", contact_html)
+        self.assertIn("独立社区插件", contact_html)
 
     def test_english_copy_is_available_by_query_parameter(self):
         response = self.client.get("/pricing?lang=en-US")
@@ -55,6 +61,7 @@ class PublicPricingTests(unittest.TestCase):
         self.assertIn("View purchase options", html)
         self.assertNotIn("Sign in to purchase", html)
         self.assertIn("https://transcribe.songrong.org/pricing?lang=en-US", html)
+        self.assertIn("not affiliated with or endorsed by Obsidian", html)
 
     def test_pricing_follows_plan_source_and_handles_new_plan_ids(self):
         custom_plan = {

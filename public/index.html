@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Obsidian RealTime Transcriber</title>
-    <meta name="description" content="Obsidian RealTime Transcriber：把每一场对话记录、转写、沉淀成可复用的知识资产。">
+    <title>RealTime Transcriber</title>
+    <meta name="description" content="RealTime Transcriber：把每一场对话记录、转写、沉淀成可复用的知识资产。">
     <link rel="icon" type="image/png" sizes="256x256" href="/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260712-1">
     <link rel="shortcut icon" type="image/png" href="/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260712-1">
     <link rel="stylesheet" href="/static/css/newHomepage.css?v=20260713-1">
@@ -221,6 +221,14 @@
       .ort-footer__links a { color: inherit; text-decoration: none; }
       .ort-footer__links a:hover { color: #246bfe; }
 
+      .ort-footer__disclaimer {
+        max-width: 680px;
+        margin: 0;
+        color: rgba(18, 24, 38, 0.48);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
       .ort-footer__github {
         display: inline-flex;
         align-items: center;
@@ -344,9 +352,9 @@
   <body>
     <header class="ort-topbar">
       <div class="ort-topbar__inner">
-        <a class="ort-brand" href="/" aria-label="Obsidian RealTime Transcriber">
+        <a class="ort-brand" href="/" aria-label="RealTime Transcriber">
           <img src="/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260712-1" alt="">
-          <span>Obsidian RealTime Transcriber</span>
+          <span>RealTime Transcriber</span>
         </a>
         <div class="ort-actions">
           <div class="ort-language J-language-switcher">
@@ -480,6 +488,7 @@
             <a href="/contact" data-language-url="/contact" data-i18n="footer.support">联系支持</a>
             <a href="mailto:support@songrong.org">support@songrong.org</a>
           </div>
+          <p class="ort-footer__disclaimer" data-i18n="footer.disclaimer">RealTime Transcriber 是独立社区插件，与 Obsidian 无隶属、认可或官方合作关系。</p>
         </div>
         <div class="ort-footer__qrcodes">
           <div class="ort-footer__qr">
@@ -496,7 +505,7 @@
     <div class="ort-topup-layer" id="ort-topup-layer" hidden>
       <iframe id="ort-topup-frame" title="充值余额" allow="payment"></iframe>
     </div>
-    <script src="/static/js/i18n/language-switcher.js?v=20260718-1"></script>
+    <script src="/static/js/i18n/language-switcher.js?v=20260718-2"></script>
     <script>
       async function loadHeaderAccount(retry = true) {
         const response = await fetch("/api/billing/me", {

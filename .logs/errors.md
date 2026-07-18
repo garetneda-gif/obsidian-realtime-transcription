@@ -38,3 +38,9 @@
 - 复现：`vercel logs --deployment <url> --level error --limit 50` 报错称 follow 模式不支持过滤。
 - 根因：指定部署时 CLI 默认开启实时跟随。
 - 解决：改用部署 URL 作为位置参数并加 `--no-follow`；Preview 未发现 error 日志。
+## 2026-07-18 22:06 — Frontend verification missing worktree dependencies
+
+- 现象：`npm test` 报缺少 `ws`，`npm run typecheck` 报 `tsc: command not found`。
+- 根因：当前独立 worktree 尚未安装 `node_modules`，与本次品牌文案改动无关。
+- 处理：按 `package-lock.json` 执行 `npm ci`，完成后重新运行前端测试与类型检查。
+- 结果：依赖安装完成；前端 50 项测试、类型检查与生产构建全部通过。

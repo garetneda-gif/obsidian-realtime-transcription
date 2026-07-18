@@ -51,6 +51,14 @@ class AccountNavigationTests(unittest.TestCase):
             self.assertIn('href="mailto:support@songrong.org"', html)
             self.assertNotIn("rjk2021@163.com", html)
 
+    def test_customer_facing_brand_name_avoids_obsidian_trademark_prefix(self):
+        for html in (HOME_HTML, PUBLIC_HOME_HTML, ACCOUNT_HTML):
+            self.assertIn("RealTime Transcriber", html)
+            self.assertNotIn("Obsidian RealTime Transcriber", html)
+        for html in (HOME_HTML, PUBLIC_HOME_HTML):
+            self.assertIn("独立社区插件", html)
+            self.assertIn("data-i18n=\"footer.disclaimer\"", html)
+
     def test_landing_pages_keep_full_language_switcher(self):
         for html in (HOME_HTML, PUBLIC_HOME_HTML):
             self.assertIn('class="ort-language J-language-switcher"', html)
@@ -62,6 +70,8 @@ class AccountNavigationTests(unittest.TestCase):
         script = language_script.read_text(encoding="utf-8")
         self.assertIn("Every conversation<br>recorded, transcribed, refined", script)
         self.assertIn("recharge: 'Top up'", script)
+        self.assertIn("new URLSearchParams(window.location.search).get('lang')", script)
+        self.assertIn("SUPPORTED_SITE_LANGS.includes(requested)", script)
 
     def test_landing_pages_use_the_waveform_brand_icon(self):
         icon_path = "/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260712-1"

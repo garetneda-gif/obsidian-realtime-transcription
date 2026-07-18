@@ -113,3 +113,10 @@
 - 以生产部署 `dpl_9SkBWyFcvrurhcAv6XEYPHwcytHx` 的 152 文件冻结清单为基线，仅替换 5 个已审计源文件。
 - 创建并验收 Preview `dpl_7TyLnjT3rWqCxxT81JQ97ShfhRsK`，再提升为 Production `dpl_3WMQCqBEAnxRD3qyD4MKbbfQBE9z`。
 - 生产域名 `transcribe.songrong.org` 已绑定新部署；健康、定价、法律、联系和套餐 API 路由均返回 200。
+
+## 2026-07-18 22:03 — Remove the Obsidian trademark prefix from the public brand
+
+- 修改首页、账户中心、公开定价页和法律页：产品名统一为 `RealTime Transcriber`。
+- 修改中英繁三语元数据与界面文案，并在公开页脚加入非官方关联声明。
+- 更新服务端测试，防止旧品牌名重新出现在客户界面。
+- 首页语言初始化改为优先读取有效的 `?lang=` 参数，保持从英文定价/法律页返回首页时的语言连续性。

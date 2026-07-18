@@ -3,9 +3,9 @@
 
     const SITE_TRANSLATIONS = {
         'zh-CN': {
-            title: 'Obsidian RealTime Transcriber',
-            keywords: 'Obsidian realtime transcriber, Obsidian 语音转文字, 实时转写, AI 会议纪要, 录音转文字',
-            description: 'Obsidian RealTime Transcriber 把会议、课堂、访谈和灵感记录实时转写成可检索笔记，支持本地模式与云端 ASR，并可在 Obsidian 工作流中整理和沉淀知识。',
+            title: 'RealTime Transcriber',
+            keywords: 'RealTime Transcriber, Obsidian 语音转文字, 实时转写, AI 会议纪要, 录音转文字',
+            description: 'RealTime Transcriber 把会议、课堂、访谈和灵感记录实时转写成可检索笔记，支持本地模式与云端 ASR，并可在 Obsidian 工作流中整理和沉淀知识。',
             header: {
                 download: '下载',
                 downloadCenter: '下载中心',
@@ -30,18 +30,21 @@
                 accountAbnormal: '账号存在异常'
             },
             privacyPolicy: {
-                title: 'Obsidian RealTime Transcriber 用户使用协议和隐私政策',
+                title: 'RealTime Transcriber 用户使用协议和隐私政策',
                 cancel: '取消',
                 agree: '同意并继续'
             },
-            welcome: '欢迎使用 Obsidian RealTime Transcriber',
+            welcome: '欢迎使用 RealTime Transcriber',
             companyAdded: '你已被添加至{company}团队，云端转写订单现可通过团队进行支付。',
             learnMore: '了解更多',
             payThroughCompany: '通过团队进行支付',
             payDescription: '绑定团队后，你可在使用云端语音转文字服务时，通过团队账户进行支付。',
             gotIt: '我知道了',
-            appTitle: 'Obsidian RealTime Transcriber',
+            appTitle: 'RealTime Transcriber',
             appDescription: '语音转文字、实时记录、AI 图文纪要',
+            footer: {
+                disclaimer: 'RealTime Transcriber 是独立社区插件，与 Obsidian 无隶属、认可或官方合作关系。'
+            },
             downloadNow: '立即下载',
             zwz: {
                 heroTitle: '每一场对话<br>都被记录、转写、沉淀',
@@ -79,9 +82,9 @@
             }
         },
         'en-US': {
-            title: 'Obsidian RealTime Transcriber',
-            keywords: 'Obsidian realtime transcriber, Obsidian speech to text, live transcription, AI meeting notes, audio to text',
-            description: 'Obsidian RealTime Transcriber turns meetings, classes, interviews, and ideas into searchable notes with local mode, cloud ASR, and AI summaries inside your Obsidian workflow.',
+            title: 'RealTime Transcriber',
+            keywords: 'RealTime Transcriber, Obsidian speech to text, live transcription, AI meeting notes, audio to text',
+            description: 'RealTime Transcriber turns meetings, classes, interviews, and ideas into searchable notes with local mode, cloud ASR, and AI summaries inside your Obsidian workflow.',
             header: {
                 download: 'Download',
                 downloadCenter: 'Download Center',
@@ -106,18 +109,21 @@
                 accountAbnormal: 'Account issue'
             },
             privacyPolicy: {
-                title: 'Obsidian RealTime Transcriber Terms and Privacy Policy',
+                title: 'RealTime Transcriber Terms and Privacy Policy',
                 cancel: 'Cancel',
                 agree: 'Agree and continue'
             },
-            welcome: 'Welcome to Obsidian RealTime Transcriber',
+            welcome: 'Welcome to RealTime Transcriber',
             companyAdded: 'You have been added to the {company} team. Cloud transcription orders can now be paid by the team.',
             learnMore: 'Learn more',
             payThroughCompany: 'Pay through team',
             payDescription: 'After binding a team, cloud speech-to-text usage can be paid through the team account.',
             gotIt: 'Got it',
-            appTitle: 'Obsidian RealTime Transcriber',
+            appTitle: 'RealTime Transcriber',
             appDescription: 'Speech to text, live capture, and AI visual notes',
+            footer: {
+                disclaimer: 'RealTime Transcriber is an independent community plugin and is not affiliated with or endorsed by Obsidian.'
+            },
             downloadNow: 'Download',
             zwz: {
                 heroTitle: 'Every conversation<br>recorded, transcribed, refined',
@@ -155,9 +161,9 @@
             }
         },
         'zh-TW': {
-            title: 'Obsidian RealTime Transcriber',
-            keywords: 'Obsidian realtime transcriber, Obsidian 語音轉文字, 即時轉寫, AI 會議紀要, 錄音轉文字',
-            description: 'Obsidian RealTime Transcriber 把會議、課堂、訪談和靈感記錄即時轉寫成可檢索筆記，支援本地模式與雲端 ASR，並可在 Obsidian 工作流中整理和沉澱知識。',
+            title: 'RealTime Transcriber',
+            keywords: 'RealTime Transcriber, Obsidian 語音轉文字, 即時轉寫, AI 會議紀要, 錄音轉文字',
+            description: 'RealTime Transcriber 把會議、課堂、訪談和靈感記錄即時轉寫成可檢索筆記，支援本地模式與雲端 ASR，並可在 Obsidian 工作流中整理和沉澱知識。',
             header: {
                 download: '下載',
                 downloadCenter: '下載中心',
@@ -182,18 +188,21 @@
                 accountAbnormal: '賬號存在異常'
             },
             privacyPolicy: {
-                title: 'Obsidian RealTime Transcriber 用戶使用協議和私隱政策',
+                title: 'RealTime Transcriber 用戶使用協議和私隱政策',
                 cancel: '取消',
                 agree: '同意並繼續'
             },
-            welcome: '歡迎使用 Obsidian RealTime Transcriber',
+            welcome: '歡迎使用 RealTime Transcriber',
             companyAdded: '你已被添加至{company}團隊，雲端轉寫訂單現可通過團隊進行支付。',
             learnMore: '了解更多',
             payThroughCompany: '通過團隊進行支付',
             payDescription: '綁定團隊後，你可在使用雲端語音轉文字服務時，通過團隊賬戶進行支付。',
             gotIt: '我知道了',
-            appTitle: 'Obsidian RealTime Transcriber',
+            appTitle: 'RealTime Transcriber',
             appDescription: '語音轉文字、即時記錄、AI 圖文紀要',
+            footer: {
+                disclaimer: 'RealTime Transcriber 是獨立社群外掛，與 Obsidian 無隸屬、認可或官方合作關係。'
+            },
             downloadNow: '立即下載',
             zwz: {
                 heroTitle: '每一場對話<br>都被記錄、轉寫、沉澱',
@@ -235,6 +244,8 @@
     const SUPPORTED_SITE_LANGS = ['zh-CN', 'en-US', 'zh-TW'];
 
     function getStoredLanguage() {
+        const requested = new URLSearchParams(window.location.search).get('lang');
+        if (requested && SUPPORTED_SITE_LANGS.includes(requested)) return requested;
         try {
             const stored = localStorage.getItem('preferred_language') || localStorage.getItem('i18n_language');
             return SUPPORTED_SITE_LANGS.includes(stored) ? stored : 'zh-CN';

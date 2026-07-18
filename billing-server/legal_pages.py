@@ -11,12 +11,12 @@ PAGE_COPY = {
     "zh-CN": {
         "terms": {
             "title": "使用协议",
-            "subtitle": "使用 Obsidian RealTime Transcriber 前，请阅读并理解以下条款。",
-            "page_title": "使用协议 - Obsidian RealTime Transcriber",
+            "subtitle": "使用 RealTime Transcriber 前，请阅读并理解以下条款。",
+            "page_title": "使用协议 - RealTime Transcriber",
             "updated": "生效日期：2026 年 7 月 18 日",
             "sections": [
                 ("服务说明", [
-                    "Obsidian RealTime Transcriber 提供本地与托管云端语音转写功能，并可将转写结果整理到 Obsidian 中。",
+                    "RealTime Transcriber 提供本地与托管云端语音转写功能，并可将转写结果整理到 Obsidian 中。",
                     "我们可根据设备、地区、可用性和服务质量分配合适的云端处理线路，不保证所有功能在所有地区永久可用。",
                 ]),
                 ("账户与安全", [
@@ -53,11 +53,11 @@ PAGE_COPY = {
         "privacy": {
             "title": "隐私政策",
             "subtitle": "了解我们如何收集、使用和保护您的信息。",
-            "page_title": "隐私政策 - Obsidian RealTime Transcriber",
+            "page_title": "隐私政策 - RealTime Transcriber",
             "updated": "生效日期：2026 年 7 月 18 日",
             "sections": [
                 ("适用范围", [
-                    "本政策适用于 Obsidian RealTime Transcriber 网站、账户与托管云端转写服务。本地转写模式的音频在您的设备上处理。",
+                    "本政策适用于 RealTime Transcriber 网站、账户与托管云端转写服务。本地转写模式的音频在您的设备上处理。",
                 ]),
                 ("我们收集的信息", [
                     "账户信息：邮箱、账户标识、登录方式和安全验证记录。",
@@ -95,7 +95,7 @@ PAGE_COPY = {
         "contact": {
             "title": "联系与支持",
             "subtitle": "账户、订单、充值和云端转写问题，请通过邮件联系我们。",
-            "page_title": "联系与支持 - Obsidian RealTime Transcriber",
+            "page_title": "联系与支持 - RealTime Transcriber",
             "updated": "通常在 2 个工作日内回复",
             "sections": [
                 ("客户支持", [
@@ -109,16 +109,17 @@ PAGE_COPY = {
         },
         "nav": {"home": "首页", "pricing": "定价", "terms": "使用协议", "privacy": "隐私政策", "contact": "联系支持"},
         "email": "发送邮件",
+        "disclaimer": "RealTime Transcriber 是独立社区插件，与 Obsidian 无隶属、认可或官方合作关系。",
     },
     "en-US": {
         "terms": {
             "title": "Terms of Use",
-            "subtitle": "Please read these terms before using Obsidian RealTime Transcriber.",
-            "page_title": "Terms of Use - Obsidian RealTime Transcriber",
+            "subtitle": "Please read these terms before using RealTime Transcriber.",
+            "page_title": "Terms of Use - RealTime Transcriber",
             "updated": "Effective July 18, 2026",
             "sections": [
                 ("Service", [
-                    "Obsidian RealTime Transcriber provides local and hosted cloud speech transcription and can organize results inside Obsidian.",
+                    "RealTime Transcriber provides local and hosted cloud speech transcription and can organize results inside Obsidian.",
                     "We may route hosted requests according to device, region, availability, and service quality. We do not promise that every feature will remain available in every region.",
                 ]),
                 ("Accounts and security", [
@@ -154,11 +155,11 @@ PAGE_COPY = {
         "privacy": {
             "title": "Privacy Policy",
             "subtitle": "How we collect, use, and protect your information.",
-            "page_title": "Privacy Policy - Obsidian RealTime Transcriber",
+            "page_title": "Privacy Policy - RealTime Transcriber",
             "updated": "Effective July 18, 2026",
             "sections": [
                 ("Scope", [
-                    "This policy covers the Obsidian RealTime Transcriber website, account system, and hosted cloud transcription service. Audio in local transcription mode is processed on your device.",
+                    "This policy covers the RealTime Transcriber website, account system, and hosted cloud transcription service. Audio in local transcription mode is processed on your device.",
                 ]),
                 ("Information we collect", [
                     "Account data includes email, account identifiers, login method, and security-verification records.",
@@ -195,7 +196,7 @@ PAGE_COPY = {
         "contact": {
             "title": "Contact and support",
             "subtitle": "Email us about accounts, orders, top-ups, or hosted transcription.",
-            "page_title": "Contact and support - Obsidian RealTime Transcriber",
+            "page_title": "Contact and support - RealTime Transcriber",
             "updated": "We normally reply within two business days",
             "sections": [
                 ("Customer support", [
@@ -209,6 +210,7 @@ PAGE_COPY = {
         },
         "nav": {"home": "Home", "pricing": "Pricing", "terms": "Terms", "privacy": "Privacy", "contact": "Support"},
         "email": "Email support",
+        "disclaimer": "RealTime Transcriber is an independent community plugin and is not affiliated with or endorsed by Obsidian.",
     },
 }
 
@@ -272,7 +274,7 @@ PAGE_TEMPLATE = """<!doctype html>
     <div class="topbar-inner">
       <a class="brand" href="/{{ query_suffix }}">
         <img src="/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260712-1" alt="">
-        <span>Obsidian RealTime Transcriber</span>
+        <span>RealTime Transcriber</span>
       </a>
       <nav class="nav" aria-label="Primary navigation">
         <a class="pricing-link" href="/pricing{{ lang_query }}">{{ copy.nav.pricing }}</a>
@@ -287,7 +289,7 @@ PAGE_TEMPLATE = """<!doctype html>
     </div>
   </header>
   <header class="hero">
-    <span class="eyebrow">Obsidian RealTime Transcriber</span>
+    <span class="eyebrow">RealTime Transcriber</span>
     <h1>{{ page.title }}</h1>
     <p class="subtitle">{{ page.subtitle }}</p>
     <div class="updated">{{ page.updated }}</div>
@@ -308,7 +310,7 @@ PAGE_TEMPLATE = """<!doctype html>
   </main>
   <footer class="legal-footer">
     <div class="legal-footer-inner">
-      <span>© 2026 Obsidian RealTime Transcriber</span>
+      <span>© 2026 RealTime Transcriber · {{ copy.disclaimer }}</span>
       <div class="legal-footer-links">
         <a href="/terms{{ lang_query }}">{{ copy.nav.terms }}</a>
         <a href="/privacy{{ lang_query }}">{{ copy.nav.privacy }}</a>

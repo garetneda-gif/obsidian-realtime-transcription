@@ -9,7 +9,7 @@ SITE_URL = "https://transcribe.songrong.org"
 
 COPY = {
     "zh-CN": {
-        "page_title": "定价 - Obsidian RealTime Transcriber",
+        "page_title": "定价 - RealTime Transcriber",
         "eyebrow": "简单、透明的一次性充值",
         "title": "按需购买云端转写时长",
         "subtitle": "无需订阅。余额不会过期，可在 Obsidian 插件内用于托管云端转写。",
@@ -26,10 +26,11 @@ COPY = {
         "plan_names": {"trial": "体验包", "standard": "常用包", "pro": "高频包"},
         "default_plan_desc": "按需购买的云端转写套餐",
         "popular": "最常用",
+        "disclaimer": "RealTime Transcriber 是独立社区插件，与 Obsidian 无隶属、认可或官方合作关系。",
         "nav": {"home": "首页", "terms": "使用协议", "privacy": "隐私政策", "contact": "联系支持"},
     },
     "en-US": {
-        "page_title": "Pricing - Obsidian RealTime Transcriber",
+        "page_title": "Pricing - RealTime Transcriber",
         "eyebrow": "Simple one-time top-ups",
         "title": "Buy hosted transcription minutes as needed",
         "subtitle": "No subscription. Your balance does not expire and can be used for hosted transcription in the Obsidian plugin.",
@@ -46,6 +47,7 @@ COPY = {
         "plan_names": {"trial": "Starter", "standard": "Standard", "pro": "Pro"},
         "default_plan_desc": "A pay-as-you-go hosted transcription package",
         "popular": "Most popular",
+        "disclaimer": "RealTime Transcriber is an independent community plugin and is not affiliated with or endorsed by Obsidian.",
         "nav": {"home": "Home", "terms": "Terms", "privacy": "Privacy", "contact": "Support"},
     },
 }
@@ -117,7 +119,7 @@ PRICING_TEMPLATE = """<!doctype html>
     <div class="topbar-inner">
       <a class="brand" href="/{{ lang_query }}">
         <img src="/static/imgs/zhuanwenzi2026/brand-recording-icon.png?v=20260712-1" alt="">
-        <span>Obsidian RealTime Transcriber</span>
+        <span>RealTime Transcriber</span>
       </a>
       <nav class="nav" aria-label="Primary navigation">
         <a href="/{{ lang_query }}">{{ copy.nav.home }}</a>
@@ -159,7 +161,7 @@ PRICING_TEMPLATE = """<!doctype html>
   </main>
   <footer>
     <div class="footer-inner">
-      <span>© 2026 Obsidian RealTime Transcriber</span>
+      <span>© 2026 RealTime Transcriber · {{ copy.disclaimer }}</span>
       <div class="footer-links">
         <a href="/terms{{ lang_suffix }}">{{ copy.nav.terms }}</a>
         <a href="/privacy{{ lang_suffix }}">{{ copy.nav.privacy }}</a>
