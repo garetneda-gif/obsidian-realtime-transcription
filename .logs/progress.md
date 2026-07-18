@@ -197,3 +197,10 @@
 - Python 81 项、前端 50 项、TypeScript 类型检查、生产构建及 `git diff --check` 全部通过。
 - 整体代码审查与 Python 专项审查均批准；审查提出的英文跨页语言连续性问题已修复并复核关闭。
 - 下一步：精确暂存改动、提交并推送，然后创建冻结生产基线的 Vercel Preview。
+
+## 2026-07-18 22:35 — Creem submission and payout verification ready
+
+- 提交 `6e620b1` 已推送，Vercel Production `dpl_2dkPMzedVmHp23DhZpKhzvBa6mMm` 已接管公开域名并通过程序化、中文首页、英文首页和英文定价页验收。
+- Creem 三件商品均以 `RealTime Transcriber` 新名称保持 Active；商店显示名和审核问卷品牌信息同步完成。
+- 三项产品合规声明、无虚假使用评价声明、AI wrapper 分类及品牌透明度声明已按当前事实提交。
+- 已复用并链接账户中现有 Approved 身份验证和银行付款验证；当前商店显示身份已验证、支付准备就绪。

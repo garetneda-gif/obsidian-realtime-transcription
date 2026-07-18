@@ -120,3 +120,10 @@
 - 修改中英繁三语元数据与界面文案，并在公开页脚加入非官方关联声明。
 - 更新服务端测试，防止旧品牌名重新出现在客户界面。
 - 首页语言初始化改为优先读取有效的 `?lang=` 参数，保持从英文定价/法律页返回首页时的语言连续性。
+
+## 2026-07-18 22:35 — Publish the renamed brand and submit Creem review
+
+- Vercel Preview `dpl_EER3sZfrZvvA2ArwJpqS4CAcmvDc` 通过响应验收后提升为 Production `dpl_2dkPMzedVmHp23DhZpKhzvBa6mMm`。
+- 生产域名 `transcribe.songrong.org` 已显示新品牌、三档公开定价和独立性声明；中英文浏览器验收通过。
+- Creem 商店显示名、三件 Active 商品、业务介绍和产品说明均改为 `RealTime Transcriber`，三项合规声明及后续真实性/AI wrapper 声明已如实提交。
+- 已将账户中现有的 Approved 身份验证和银行付款验证链接到新商店；状态为身份已验证、支付准备就绪。
