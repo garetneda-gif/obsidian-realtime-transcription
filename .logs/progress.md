@@ -151,3 +151,10 @@
 - 根据截图反馈重做设置页常驻顶部栏：顶部为长条标题，滚动后动画折叠为麦克风 SVG 小按钮。
 - 修复圆角标题条遮挡关闭按钮和右侧下拉控件的问题。
 - 更新发布元数据到 `1.4.7`，已构建并覆盖本机插件目录。
+
+## 2026-07-18 17:25 — Creem review readiness pricing implementation
+
+- 在 `fix/creem-review-readiness` worktree 完成公开 `/pricing`，并恢复/注册当前生产法律页。
+- 全量执行 `unittest discover` 共 79 项，退出码为 0；关键 Python 文件 `compileall` 通过。
+- 代码审查指出的法律链接 404、未使用导入、未知套餐空文案和 CTA 误导已修复。
+- 尚未部署：需先完成新 Creem Store 的三档产品与生产环境变量，再用冻结 manifest 做 Preview/Production 冒烟。

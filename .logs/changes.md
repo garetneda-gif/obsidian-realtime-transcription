@@ -94,3 +94,10 @@
 - 修改 `src/settings.ts`,`styles.css`：设置页顶部栏在顶部显示长条标题，滚动后动画折叠为与侧边栏同宽的麦克风图标栏。
 - 修复顶部栏遮挡关闭按钮和右侧下拉控件的问题。
 - 更新 `manifest.json`,`package.json`,`package-lock.json`,`versions.json` 到 `1.4.7`。
+
+## 2026-07-18 17:25 — Add public pricing for Creem review
+
+- 新增 `billing-server/public_pricing.py`：匿名中英文定价页，套餐金额和分钟数直接来自 `billing.PLANS`。
+- 修改 `billing-server/app.py`：`/pricing` 改为公开页面，并注册从生产恢复的法律页 Blueprint。
+- 新增 `billing-server/legal_pages.py`：内容与当前生产部署一致，避免法律链接 404 或政策回退。
+- 新增 `billing-server/tests/test_public_pricing.py`：覆盖定价、动态套餐、语言切换及法律/支持路由。
