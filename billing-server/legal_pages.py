@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, render_template_string, request
 
 
-SUPPORT_EMAIL = "rjk2021@163.com"
+SUPPORT_EMAIL = "support@songrong.org"
 SITE_URL = "https://transcribe.songrong.org"
 
 

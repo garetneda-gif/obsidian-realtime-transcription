@@ -46,6 +46,11 @@ class AccountNavigationTests(unittest.TestCase):
         self.assertTrue((public_assets / "footer-qr-qq.png").is_file())
         self.assertTrue((public_assets / "footer-qr-discord.png").is_file())
 
+    def test_landing_pages_use_branded_support_email(self):
+        for html in (HOME_HTML, PUBLIC_HOME_HTML):
+            self.assertIn('href="mailto:support@songrong.org"', html)
+            self.assertNotIn("rjk2021@163.com", html)
+
     def test_landing_pages_keep_full_language_switcher(self):
         for html in (HOME_HTML, PUBLIC_HOME_HTML):
             self.assertIn('class="ort-language J-language-switcher"', html)

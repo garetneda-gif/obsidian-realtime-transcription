@@ -38,6 +38,9 @@ class PublicPricingTests(unittest.TestCase):
         for legal_path in ("/terms", "/privacy", "/contact"):
             with self.subTest(legal_path=legal_path):
                 self.assertEqual(self.client.get(legal_path).status_code, 200)
+        contact_html = self.client.get("/contact").get_data(as_text=True)
+        self.assertIn("mailto:support@songrong.org", contact_html)
+        self.assertNotIn("rjk2021@163.com", contact_html)
 
     def test_english_copy_is_available_by_query_parameter(self):
         response = self.client.get("/pricing?lang=en-US")

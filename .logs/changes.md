@@ -101,3 +101,9 @@
 - 修改 `billing-server/app.py`：`/pricing` 改为公开页面，并注册从生产恢复的法律页 Blueprint。
 - 新增 `billing-server/legal_pages.py`：内容与当前生产部署一致，避免法律链接 404 或政策回退。
 - 新增 `billing-server/tests/test_public_pricing.py`：覆盖定价、动态套餐、语言切换及法律/支持路由。
+
+## 2026-07-18 20:13 — Use branded support email for merchant review
+
+- 修改 `billing-server/legal_pages.py`：联系页统一使用 `support@songrong.org`。
+- 从当前 Vercel 生产部署恢复 `billing-server/static/index.html` 与 `public/index.html`，仅替换品牌支持邮箱，避免回退线上页脚和法律链接。
+- 更新账户导航与公开定价测试，覆盖品牌邮箱并排除通用个人邮箱。

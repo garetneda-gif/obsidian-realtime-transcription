@@ -15,3 +15,8 @@
 - `songrong.org` 的 MX 已指向 Cloudflare Email Routing，但 Air 浏览器没有 Cloudflare 登录态。
 - 对三个 Cloudflare MX 的仅 RCPT 探测均在 SMTP 握手时被远端关闭，无法确认 `support@songrong.org` 是否已配置。
 - 在实际验证可收信前不把网站邮箱改成该地址，也不勾选 Creem 的审核合规声明。
+## 2026-07-18 20:13 — Vercel v6 deployment-file endpoint retired
+
+- 复现：`vercel api /v6/deployments/<id>/files/<uid>` 返回 HTTP 410，提示改用 v8。
+- 根因：Vercel 已停用该 endpoint 的 v6 版本。
+- 解决：改用 `/v8/deployments/<id>/files/<uid>`，再从 JSON 的 Base64 `data` 字段解码文件内容。

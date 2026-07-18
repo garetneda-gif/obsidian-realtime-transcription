@@ -158,3 +158,11 @@
 - 全量执行 `unittest discover` 共 79 项，退出码为 0；关键 Python 文件 `compileall` 通过。
 - 代码审查指出的法律链接 404、未使用导入、未知套餐空文案和 CTA 误导已修复。
 - 尚未部署：需先完成新 Creem Store 的三档产品与生产环境变量，再用冻结 manifest 做 Preview/Production 冒烟。
+
+## 2026-07-18 20:13 — Creem products and branded support route ready
+
+- Creem 新商店三档商品均已创建并处于 Active：147 分钟 `$4.99`、297 分钟 `$8.99`、897 分钟 `$26.99`。
+- Cloudflare Email Routing 已新增 `support@songrong.org` → `garetneda@gmail.com`，状态 Active。
+- 站点联系页与两个首页入口已切换到品牌邮箱；全量 80 项服务端单测通过，`git diff --check` 通过。
+- 下一步：审计并推送支持邮箱改动，用冻结生产 manifest 创建 Vercel Preview，验收后提升到 Production，再继续 Creem 审核声明。
+- 两名只读审查代理均批准提交；生产源文件逐字核验确认两个首页除品牌邮箱外无其他差异。
